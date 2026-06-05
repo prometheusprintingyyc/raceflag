@@ -182,7 +182,26 @@ document.getElementById('btn-update').addEventListener('click', async () => {
   const btn = document.getElementById('btn-update');
   btn.textContent = 'Updating…';
   btn.disabled = true;
-  await fetch('/api/update/apply', { method: 'POST' });
+  try { await fetch('/api/update/apply', { method: 'POST' }); } catch (e) {}
+
+  // Service restarts after update — poll until it comes back, then confirm
+  const versionEl = document.getElementById('update-current');
+  await new Promise(r => setTimeout(r, 5000));
+  let attempts = 0;
+  const poll = setInterval(async () => {
+    attempts++;
+    try {
+      const resp = await fetch('/api/update/check');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      versionEl.textContent = data.current || '—';
+      if (!data.update_available) {
+        clearInterval(poll);
+        btn.textContent = 'Up to date';
+      }
+    } catch (e) { /* still restarting */ }
+    if (attempts >= 40) { clearInterval(poll); location.reload(); }
+  }, 3000);
 });
 
 document.querySelectorAll('[data-effect]').forEach(btn => {
