@@ -211,45 +211,22 @@ class F1Listener:
             self._update_driver_positions(data)
 
     async def _negotiate(self) -> tuple[str, str]:
-        """Returns (connection_token, cookie) using SignalR Core negotiate.
-
-        Step 1: OPTIONS to obtain the AWS load-balancer (AWSALBCORS) cookie.
-        Step 2: POST to obtain the connectionToken, forwarding the cookie.
-        """
-        cookie = ""
+        """Returns (connection_token, cookie) using SignalR Core negotiate."""
         async with httpx.AsyncClient() as client:
-            try:
-                opts = await client.options(
-                    SIGNALR_NEGOTIATE,
-                    params={"negotiateVersion": "1"},
-                    headers={"User-Agent": "BestHTTP"},
-                )
-                for part in opts.headers.get("set-cookie", "").split(","):
-                    part = part.strip()
-                    if "AWSALBCORS=" in part:
-                        cookie = "AWSALBCORS=" + part.split("AWSALBCORS=")[1].split(";")[0]
-                        break
-            except Exception:
-                pass
-
-            headers = {"User-Agent": "BestHTTP"}
-            if cookie:
-                headers["Cookie"] = cookie
             resp = await client.post(
                 SIGNALR_NEGOTIATE,
                 params={"negotiateVersion": "1"},
-                headers=headers,
+                headers={"User-Agent": "BestHTTP"},
             )
             resp.raise_for_status()
             data = resp.json()
             token = data.get("connectionToken") or data.get("ConnectionToken", "")
-            # Some responses set the cookie on the POST rather than OPTIONS
-            if not cookie:
-                for part in resp.headers.get("set-cookie", "").split(","):
-                    part = part.strip()
-                    if "AWSALBCORS=" in part:
-                        cookie = "AWSALBCORS=" + part.split("AWSALBCORS=")[1].split(";")[0]
-                        break
+            cookie = ""
+            for part in resp.headers.get("set-cookie", "").split(","):
+                part = part.strip()
+                if "AWSALBCORS=" in part:
+                    cookie = "AWSALBCORS=" + part.split("AWSALBCORS=")[1].split(";")[0]
+                    break
             return token, cookie
 
     def _process_message(self, raw: str) -> list[str]:
