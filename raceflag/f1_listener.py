@@ -3,6 +3,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime
+from urllib.parse import quote
 
 import httpx
 import websockets
@@ -114,25 +115,31 @@ class F1Listener:
             positions.sort(key=lambda p: p.position)
             self._state.set_driver_positions(positions)
 
+    def _ensure_active(self) -> None:
+        """Mark session active on first feed message — any data means a live session is running."""
+        if not self._state.session.is_active:
+            session = self._state.session
+            self._state.set_session(SessionInfo(
+                name=session.name,
+                circuit=session.circuit,
+                venue=session.venue,
+                country_flag=session.country_flag,
+                session_type=session.session_type,
+                is_active=True,
+                current_lap=session.current_lap,
+                total_laps=session.total_laps,
+                time_remaining=session.time_remaining,
+            ))
+            logger.info("Session marked active from feed topic: will update details as data arrives")
+
     def _handle_feed(self, topic: str, data: dict) -> None:
+        logger.debug("Feed received: %s", topic)
+        # Any incoming message means a live session is running
+        self._ensure_active()
+
         if topic == "TrackStatus":
             status = parse_track_status(data)
             self._state.set_track_status(status)
-            # Mark session active whenever track status arrives — only sent during live sessions
-            if status != "unknown":
-                session = self._state.session
-                if not session.is_active:
-                    self._state.set_session(SessionInfo(
-                        name=session.name,
-                        circuit=session.circuit,
-                        venue=session.venue,
-                        country_flag=session.country_flag,
-                        session_type=session.session_type,
-                        is_active=True,
-                        current_lap=session.current_lap,
-                        total_laps=session.total_laps,
-                        time_remaining=session.time_remaining,
-                    ))
             if self._on_track_status_change:
                 self._on_track_status_change(status)
         elif topic == "SessionInfo":
@@ -195,13 +202,15 @@ class F1Listener:
                 ws_url = (
                     f"{WS_BASE}/connect"
                     f"?transport=webSockets&clientProtocol=1.5"
-                    f"&connectionToken={token}"
-                    f"&connectionData={CONNECTION_DATA}&tid=10"
+                    f"&connectionToken={quote(token, safe='')}"
+                    f"&connectionData={quote(CONNECTION_DATA, safe='')}&tid=10"
                 )
+                logger.info("Connecting to F1 SignalR feed...")
                 async with websockets.connect(
                     ws_url,
                     extra_headers={"User-Agent": "BestHTTP"},
                 ) as ws:
+                    logger.info("SignalR WebSocket connected, subscribing to topics")
                     subscribe = json.dumps({
                         "H": "streaming", "M": "Subscribe",
                         "A": [TOPICS], "I": 1,
