@@ -18,8 +18,11 @@ class Config:
 def load(path: Path = DEFAULT_PATH) -> Config:
     if not path.exists():
         return Config()
-    data = json.loads(path.read_text())
-    known = {f for f in Config.__dataclass_fields__}
+    try:
+        data = json.loads(path.read_text())
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Malformed config file: {path}") from exc
+    known = set(Config.__dataclass_fields__)
     return Config(**{k: v for k, v in data.items() if k in known})
 
 

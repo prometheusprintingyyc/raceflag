@@ -46,3 +46,10 @@ def test_save_load_roundtrip(tmp_path):
     config.save(original, p)
     loaded = config.load(p)
     assert loaded == original
+
+
+def test_load_raises_on_malformed_json(tmp_path):
+    p = tmp_path / "config.json"
+    p.write_text("not json {{{{")
+    with pytest.raises(ValueError, match="Malformed config file"):
+        config.load(p)
