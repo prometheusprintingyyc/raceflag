@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 
 SIGNALR_BASE = "https://livetiming.formula1.com/signalr"
 WS_BASE = "wss://livetiming.formula1.com/signalr"
-CONNECTION_DATA = '[{"name":"streaming"}]'
+# Hub name must be "Streaming" (capital S) — f1_sensor confirms this
+CONNECTION_DATA = '[{"name":"Streaming"}]'
 TOPICS = [
     "TrackStatus", "RaceControlMessages", "SessionInfo", "LapCount",
     "ExtrapolatedClock", "WeatherData", "TimingData", "TimingAppData", "DriverList",
@@ -83,6 +84,23 @@ class F1Listener:
         self._running = False
         self._driver_list: dict = {}
 
+    def _ensure_active(self) -> None:
+        """Mark session active on first feed message — any data means a live session is running."""
+        if not self._state.session.is_active:
+            session = self._state.session
+            self._state.set_session(SessionInfo(
+                name=session.name,
+                circuit=session.circuit,
+                venue=session.venue,
+                country_flag=session.country_flag,
+                session_type=session.session_type,
+                is_active=True,
+                current_lap=session.current_lap,
+                total_laps=session.total_laps,
+                time_remaining=session.time_remaining,
+            ))
+            logger.info("Session marked active from incoming feed data")
+
     def _update_driver_positions(self, data: dict) -> None:
         lines = data.get("Lines", {})
         if not isinstance(lines, dict):
@@ -115,26 +133,8 @@ class F1Listener:
             positions.sort(key=lambda p: p.position)
             self._state.set_driver_positions(positions)
 
-    def _ensure_active(self) -> None:
-        """Mark session active on first feed message — any data means a live session is running."""
-        if not self._state.session.is_active:
-            session = self._state.session
-            self._state.set_session(SessionInfo(
-                name=session.name,
-                circuit=session.circuit,
-                venue=session.venue,
-                country_flag=session.country_flag,
-                session_type=session.session_type,
-                is_active=True,
-                current_lap=session.current_lap,
-                total_laps=session.total_laps,
-                time_remaining=session.time_remaining,
-            ))
-            logger.info("Session marked active from feed topic: will update details as data arrives")
-
     def _handle_feed(self, topic: str, data: dict) -> None:
         logger.debug("Feed received: %s", topic)
-        # Any incoming message means a live session is running
         self._ensure_active()
 
         if topic == "TrackStatus":
@@ -166,7 +166,6 @@ class F1Listener:
                 time_remaining=session.time_remaining,
             ))
         elif topic == "ExtrapolatedClock":
-            remaining = data.get("Remaining", "")
             session = self._state.session
             self._state.set_session(SessionInfo(
                 name=session.name,
@@ -177,42 +176,45 @@ class F1Listener:
                 is_active=session.is_active,
                 current_lap=session.current_lap,
                 total_laps=session.total_laps,
-                time_remaining=str(remaining),
+                time_remaining=str(data.get("Remaining", "")),
             ))
         elif topic == "DriverList":
             self._driver_list = data
         elif topic == "TimingData":
             self._update_driver_positions(data)
 
-    async def _negotiate(self) -> str:
+    async def _negotiate(self) -> tuple[str, str]:
+        """Returns (connection_token, cookie) from the SignalR negotiate endpoint."""
         async with httpx.AsyncClient() as client:
             resp = await client.get(
                 f"{SIGNALR_BASE}/negotiate",
                 params={"connectionData": CONNECTION_DATA, "clientProtocol": "1.5"},
-                headers={"User-Agent": "BestHTTP", "Accept-Encoding": "gzip, identity"},
+                headers={"User-Agent": "BestHTTP", "Accept-Encoding": "gzip,identity"},
             )
             resp.raise_for_status()
-            return resp.json()["ConnectionToken"]
+            token = resp.json()["ConnectionToken"]
+            cookie = resp.headers.get("set-cookie", "")
+            return token, cookie
 
     async def start(self) -> None:
         self._running = True
         while self._running:
             try:
-                token = await self._negotiate()
+                token, cookie = await self._negotiate()
                 ws_url = (
                     f"{WS_BASE}/connect"
                     f"?transport=webSockets&clientProtocol=1.5"
                     f"&connectionToken={quote(token, safe='')}"
                     f"&connectionData={quote(CONNECTION_DATA, safe='')}&tid=10"
                 )
-                logger.info("Connecting to F1 SignalR feed...")
-                async with websockets.connect(
-                    ws_url,
-                    extra_headers={"User-Agent": "BestHTTP"},
-                ) as ws:
-                    logger.info("SignalR WebSocket connected, subscribing to topics")
+                ws_headers = {"User-Agent": "BestHTTP", "Accept-Encoding": "gzip,identity"}
+                if cookie:
+                    ws_headers["Cookie"] = cookie
+                logger.info("Connecting to F1 live timing feed...")
+                async with websockets.connect(ws_url, extra_headers=ws_headers) as ws:
+                    logger.info("Connected — subscribing to timing topics")
                     subscribe = json.dumps({
-                        "H": "streaming", "M": "Subscribe",
+                        "H": "Streaming", "M": "Subscribe",
                         "A": [TOPICS], "I": 1,
                     })
                     await ws.send(subscribe)

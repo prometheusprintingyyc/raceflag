@@ -1,5 +1,5 @@
 import pytest
-from raceflag.f1_listener import F1Listener, parse_track_status, parse_weather, parse_race_control
+from raceflag.f1_listener import F1Listener, parse_track_status, parse_weather, parse_race_control, parse_session_info
 from raceflag.state import AppState
 
 
@@ -52,14 +52,31 @@ def test_parse_race_control_sets_flag_color_for_yellow():
     assert msg.flag_color == "#FFD600"
 
 
-def test_f1_listener_updates_state_on_track_status(mocker):
+def test_parse_session_info_sets_is_active():
+    data = {
+        "Meeting": {
+            "Name": "Monaco Grand Prix",
+            "Location": "Monte Carlo",
+            "Country": {"Name": "Monaco"},
+            "Circuit": {"ShortName": "Monaco"},
+        },
+        "Name": "Practice 1",
+        "Type": "Practice",
+    }
+    session = parse_session_info(data)
+    assert session.is_active is True
+    assert session.name == "Monaco Grand Prix"
+    assert session.session_type == "Practice 1"
+
+
+def test_f1_listener_updates_state_on_track_status():
     state = AppState()
     listener = F1Listener(state=state)
     listener._handle_feed("TrackStatus", {"Status": "2"})
     assert state.track_status == "yellow_flag"
 
 
-def test_f1_listener_updates_state_on_weather(mocker):
+def test_f1_listener_updates_state_on_weather():
     state = AppState()
     listener = F1Listener(state=state)
     listener._handle_feed("WeatherData", {
@@ -67,3 +84,21 @@ def test_f1_listener_updates_state_on_weather(mocker):
         "WindSpeed": "10", "WindDirection": "S", "Rainfall": "0",
     })
     assert state.weather.air_temp == 22.0
+
+
+def test_f1_listener_marks_session_active_on_any_feed():
+    state = AppState()
+    listener = F1Listener(state=state)
+    assert state.session.is_active is False
+    listener._handle_feed("WeatherData", {
+        "AirTemp": "22", "TrackTemp": "35", "Humidity": "70",
+        "WindSpeed": "10", "WindDirection": "S", "Rainfall": "0",
+    })
+    assert state.session.is_active is True
+
+
+def test_connection_data_uses_capital_streaming():
+    from raceflag.f1_listener import CONNECTION_DATA
+    import json
+    data = json.loads(CONNECTION_DATA)
+    assert data[0]["name"] == "Streaming"
