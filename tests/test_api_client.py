@@ -115,3 +115,19 @@ async def test_fetch_next_race_returns_future_race(mock_client, mocker):
     assert race.round_number == 9
     assert race.race_date == "Sunday 15 June 2025"
     assert race.country_flag == COUNTRY_FLAGS.get("Canada", "")
+
+
+@pytest.mark.asyncio
+async def test_fetch_driver_standings_returns_empty_on_network_error(mocker: MockerFixture):
+    client = JolpicaClient()
+    mocker.patch.object(client, "_get", side_effect=Exception("network error"))
+    result = await client.fetch_driver_standings()
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_fetch_next_race_returns_empty_on_network_error(mocker: MockerFixture):
+    client = JolpicaClient()
+    mocker.patch.object(client, "_get", side_effect=Exception("network error"))
+    result = await client.fetch_next_race()
+    assert result.name == ""

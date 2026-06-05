@@ -22,7 +22,10 @@ class JolpicaClient:
             return resp.json()
 
     async def fetch_driver_standings(self) -> list[DriverStanding]:
-        data = await self._get(f"{BASE_URL}/f1/current/driverStandings.json")
+        try:
+            data = await self._get(f"{BASE_URL}/f1/current/driverStandings.json")
+        except Exception:
+            return []
         try:
             rows = data["MRData"]["StandingsTable"]["StandingsLists"][0]["DriverStandings"]
         except (KeyError, IndexError):
@@ -40,7 +43,10 @@ class JolpicaClient:
         return result
 
     async def fetch_constructor_standings(self) -> list[ConstructorStanding]:
-        data = await self._get(f"{BASE_URL}/f1/current/constructorStandings.json")
+        try:
+            data = await self._get(f"{BASE_URL}/f1/current/constructorStandings.json")
+        except Exception:
+            return []
         try:
             rows = data["MRData"]["StandingsTable"]["StandingsLists"][0]["ConstructorStandings"]
         except (KeyError, IndexError):
@@ -57,7 +63,10 @@ class JolpicaClient:
         return result
 
     async def fetch_next_race(self) -> NextRace:
-        data = await self._get(f"{BASE_URL}/f1/current.json")
+        try:
+            data = await self._get(f"{BASE_URL}/f1/current.json")
+        except Exception:
+            return NextRace()
         try:
             races = data["MRData"]["RaceTable"]["Races"]
         except (KeyError, IndexError):
