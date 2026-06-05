@@ -271,10 +271,13 @@ class F1Listener:
                 if target == "feed" and len(arguments) >= 2:
                     self._handle_feed(arguments[0], arguments[1])
             elif msg_type == 3:
-                # Completion: initial state snapshot returned after Subscribe
+                # Completion: initial state snapshot returned after Subscribe.
+                # Process SessionStatus last so a terminated session isn't
+                # overridden by other topics that call _ensure_active().
                 result = payload.get("result")
                 if isinstance(result, dict):
-                    for topic, data in result.items():
+                    items = sorted(result.items(), key=lambda kv: kv[0] == "SessionStatus")
+                    for topic, data in items:
                         if isinstance(data, dict):
                             self._handle_feed(topic, data)
             elif msg_type == 6:
