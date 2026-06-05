@@ -45,12 +45,11 @@ class LEDController:
         self._strip = strip
         self._effects_path = Path(effects_path)
         self._delay_seconds = delay_seconds
-        self._effects: dict = {}
+        self._effects: dict = self._load_effects()
         self._effects_mtime: float = 0.0
         self._queue: queue.Queue = queue.Queue()
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
-        self._effects = self._load_effects()
 
     def start(self) -> None:
         self._stop_event.clear()
@@ -61,6 +60,9 @@ class LEDController:
         self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=2.0)
+            if self._thread.is_alive():
+                import logging
+                logging.getLogger(__name__).warning("LED controller thread did not stop within 2s")
 
     def set_delay(self, seconds: float) -> None:
         self._delay_seconds = seconds
@@ -109,6 +111,7 @@ class LEDController:
 
     def _drain_queue(self) -> None:
         now = time.monotonic()
+        # Snapshot the queue so items not yet due can be re-enqueued without blocking trigger().
         pending = []
         while not self._queue.empty():
             try:
