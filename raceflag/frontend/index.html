@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RaceFlag</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <span class="nav-logo">RaceFlag 🏁</span>
+    <div class="nav-right">
+      <span class="nav-version" id="nav-version">v—</span>
+      <button class="btn-settings" id="btn-settings">⚙ Settings</button>
+    </div>
+  </nav>
+
+  <div class="view-toggle">
+    <button class="view-btn active" id="btn-live">🔴 Live Race</button>
+    <button class="view-btn" id="btn-standings">📊 Standings</button>
+  </div>
+  <div class="auto-label">Switches automatically · Manual override above</div>
+
+  <div class="view active" id="view-live">
+    <div class="flag-banner" id="flag-banner">
+      <div class="flag-dot" id="flag-dot"></div>
+      <div>
+        <div class="flag-label" id="flag-label">—</div>
+        <div class="flag-sub" id="flag-sub"></div>
+      </div>
+    </div>
+
+    <div class="delay-bar">
+      <div><div class="delay-label">LED Delay</div></div>
+      <div class="delay-value" id="delay-value">0</div>
+      <div class="delay-unit">sec</div>
+      <input type="range" class="delay-slider" id="delay-slider" min="0" max="60" value="0">
+    </div>
+
+    <div class="section-title">Session</div>
+    <div class="card-grid">
+      <div class="card wide">
+        <div class="card-label">Circuit</div>
+        <div class="circuit-header">
+          <span class="circuit-flag" id="circuit-flag"></span>
+          <div>
+            <div class="circuit-name" id="circuit-name">—</div>
+            <div class="card-sub" id="circuit-venue"></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-label">Session</div>
+        <div class="card-value" style="font-size:15px" id="session-type">—</div>
+        <div class="card-sub" id="session-lap"></div>
+      </div>
+      <div class="card">
+        <div class="card-label">Remaining</div>
+        <div class="card-value" id="time-remaining">—</div>
+      </div>
+    </div>
+
+    <div class="section-title">Weather</div>
+    <div class="card-grid">
+      <div class="card"><div class="card-label">Air Temp</div><div class="card-value" id="air-temp">—</div></div>
+      <div class="card"><div class="card-label">Track Temp</div><div class="card-value" id="track-temp">—</div></div>
+      <div class="card"><div class="card-label">Humidity</div><div class="card-value" id="humidity">—</div></div>
+      <div class="card"><div class="card-label">Wind</div><div class="card-value" style="font-size:15px" id="wind">—</div><div class="card-sub" id="wind-dir"></div></div>
+      <div class="card"><div class="card-label">Rain</div><div class="card-value" style="font-size:15px" id="rain">—</div></div>
+    </div>
+
+    <div class="section-title">Race Positions <span class="live-pill">LIVE</span></div>
+    <div class="table-wrap">
+      <div class="table-head positions-cols">
+        <span>POS</span><span></span><span>Driver</span><span>Gap</span><span>Tyre</span><span>PIT</span>
+      </div>
+      <div id="positions-body"></div>
+    </div>
+
+    <div class="section-title">Race Control</div>
+    <div class="table-wrap">
+      <div id="rc-messages"></div>
+    </div>
+  </div>
+
+  <div class="view" id="view-standings">
+    <div class="next-race-card">
+      <div class="next-race-label">Next Race</div>
+      <div class="next-race-header">
+        <span class="next-race-flag" id="nr-flag"></span>
+        <div>
+          <div class="next-race-name" id="nr-name">—</div>
+          <div class="next-race-meta" id="nr-meta"></div>
+          <div class="next-race-date" id="nr-date"></div>
+        </div>
+      </div>
+      <div class="next-race-countdown" id="nr-countdown"></div>
+    </div>
+
+    <div class="section-title">Drivers Championship</div>
+    <div class="table-wrap">
+      <div class="table-head drivers-cols"><span>POS</span><span></span><span>Driver</span><span>PTS</span></div>
+      <div id="driver-standings-body"></div>
+    </div>
+
+    <div class="section-title">Constructors Championship</div>
+    <div class="table-wrap">
+      <div class="table-head constructors-cols"><span>POS</span><span>Constructor</span><span>PTS</span></div>
+      <div id="constructor-standings-body"></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="settings-overlay">
+    <div class="settings-panel">
+      <div class="settings-title">
+        SETTINGS
+        <button class="btn-close" id="btn-close-settings">✕</button>
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">Firmware version</span>
+        <span class="settings-val" id="update-current">—</span>
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">WiFi network</span>
+        <span class="settings-val" id="wifi-ssid">—</span>
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">Check for updates</span>
+        <button class="btn-update" id="btn-update" disabled>Up to date</button>
+      </div>
+      <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:8px">
+        <span class="settings-label">Test Effects</span>
+        <div class="effects-grid">
+          <button class="btn-effect" data-effect="track_clear">Track Clear</button>
+          <button class="btn-effect" data-effect="yellow_flag">Yellow</button>
+          <button class="btn-effect" data-effect="safety_car">Safety Car</button>
+          <button class="btn-effect" data-effect="virtual_sc">VSC</button>
+          <button class="btn-effect" data-effect="red_flag">Red Flag</button>
+          <button class="btn-effect" data-effect="checkered">Checkered</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
