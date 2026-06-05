@@ -1,0 +1,39 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set version from tag
+        run: echo "${GITHUB_REF_NAME#v}" > version.txt
+
+      - name: Build release archive
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          ARCHIVE="raceflag-${TAG}.tar.gz"
+          tar --exclude='.git' \
+              --exclude='.github' \
+              --exclude='.superpowers' \
+              --exclude='tests' \
+              --exclude='*.pyc' \
+              --exclude='__pycache__' \
+              -czf "$ARCHIVE" \
+              raceflag/ requirements.txt version.txt install.sh raceflag.service
+          echo "ARCHIVE=$ARCHIVE" >> $GITHUB_ENV
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ARCHIVE }}
+          generate_release_notes: true
