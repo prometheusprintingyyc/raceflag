@@ -15,10 +15,14 @@ from raceflag.state import (
 
 logger = logging.getLogger(__name__)
 
-SIGNALR_BASE = "https://livetiming.formula1.com/signalr"
-WS_BASE = "wss://livetiming.formula1.com/signalr"
-# Hub name must be "Streaming" (capital S) — f1_sensor confirms this
+# SignalR Core endpoint — works without auth for public streams (f1_sensor SIGNALR_USE_CORE=True)
+SIGNALR_NEGOTIATE = "https://livetiming.formula1.com/signalrcore/negotiate"
+SIGNALR_WS = "wss://livetiming.formula1.com/signalrcore"
+RECORD_SEP = "\x1e"
+
+# Kept for test compatibility; not used in the Core connect flow
 CONNECTION_DATA = '[{"name":"Streaming"}]'
+
 TOPICS = [
     "TrackStatus", "RaceControlMessages", "SessionInfo", "SessionStatus",
     "LapCount", "ExtrapolatedClock", "WeatherData", "TimingData",
@@ -207,85 +211,119 @@ class F1Listener:
             self._update_driver_positions(data)
 
     async def _negotiate(self) -> tuple[str, str]:
-        """Returns (connection_token, cookie) from the SignalR negotiate endpoint."""
+        """Returns (connection_token, cookie) using SignalR Core negotiate.
+
+        Step 1: OPTIONS to obtain the AWS load-balancer (AWSALBCORS) cookie.
+        Step 2: POST to obtain the connectionToken, forwarding the cookie.
+        """
+        cookie = ""
         async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                f"{SIGNALR_BASE}/negotiate",
-                params={"connectionData": CONNECTION_DATA, "clientProtocol": "1.5"},
-                headers={"User-Agent": "BestHTTP", "Accept-Encoding": "gzip,identity"},
+            try:
+                opts = await client.options(
+                    SIGNALR_NEGOTIATE,
+                    params={"negotiateVersion": "1"},
+                    headers={"User-Agent": "BestHTTP"},
+                )
+                for part in opts.headers.get("set-cookie", "").split(","):
+                    part = part.strip()
+                    if "AWSALBCORS=" in part:
+                        cookie = "AWSALBCORS=" + part.split("AWSALBCORS=")[1].split(";")[0]
+                        break
+            except Exception:
+                pass
+
+            headers = {"User-Agent": "BestHTTP"}
+            if cookie:
+                headers["Cookie"] = cookie
+            resp = await client.post(
+                SIGNALR_NEGOTIATE,
+                params={"negotiateVersion": "1"},
+                headers=headers,
             )
             resp.raise_for_status()
-            token = resp.json()["ConnectionToken"]
-            cookie = resp.headers.get("set-cookie", "")
+            data = resp.json()
+            token = data.get("connectionToken") or data.get("ConnectionToken", "")
+            # Some responses set the cookie on the POST rather than OPTIONS
+            if not cookie:
+                for part in resp.headers.get("set-cookie", "").split(","):
+                    part = part.strip()
+                    if "AWSALBCORS=" in part:
+                        cookie = "AWSALBCORS=" + part.split("AWSALBCORS=")[1].split(";")[0]
+                        break
             return token, cookie
 
-    async def _heartbeat(self, ws, subscribe_msg: str) -> None:
-        """Re-send subscribe every 5 minutes to prevent Azure SignalR 20-minute timeout."""
-        try:
-            while True:
-                await asyncio.sleep(300)
-                await ws.send(subscribe_msg)
-                logger.debug("Heartbeat: re-subscribed to timing topics")
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            logger.debug("Heartbeat stopped: %s", e)
+    def _process_message(self, raw: str) -> list[str]:
+        """Process a Core protocol frame. Returns any response frames to send (e.g. pong)."""
+        responses: list[str] = []
+        for segment in raw.split(RECORD_SEP):
+            segment = segment.strip()
+            if not segment:
+                continue
+            try:
+                payload = json.loads(segment)
+            except json.JSONDecodeError:
+                continue
+            msg_type = payload.get("type")
+            if msg_type == 1:
+                # Invocation: server pushing feed data
+                target = payload.get("target", "")
+                arguments = payload.get("arguments", [])
+                if target == "feed" and len(arguments) >= 2:
+                    self._handle_feed(arguments[0], arguments[1])
+            elif msg_type == 3:
+                # Completion: initial state snapshot returned after Subscribe
+                result = payload.get("result")
+                if isinstance(result, dict):
+                    for topic, data in result.items():
+                        if isinstance(data, dict):
+                            self._handle_feed(topic, data)
+            elif msg_type == 6:
+                # Ping: respond with pong to keep connection alive
+                responses.append(json.dumps({"type": 6}) + RECORD_SEP)
+            elif msg_type == 7:
+                logger.warning("SignalR Core server closed: %s", payload.get("error", ""))
+        return responses
 
     async def start(self) -> None:
         self._running = True
         while self._running:
-            heartbeat_task = None
             try:
                 token, cookie = await self._negotiate()
-                ws_url = (
-                    f"{WS_BASE}/connect"
-                    f"?transport=webSockets&clientProtocol=1.5"
-                    f"&connectionToken={quote(token, safe='')}"
-                    f"&connectionData={quote(CONNECTION_DATA, safe='')}&tid=10"
-                )
-                ws_headers = {"User-Agent": "BestHTTP", "Accept-Encoding": "gzip,identity"}
+                ws_url = f"{SIGNALR_WS}?id={quote(token, safe='')}"
+                ws_headers = {"User-Agent": "BestHTTP"}
                 if cookie:
                     ws_headers["Cookie"] = cookie
                 logger.info("Connecting to F1 live timing feed...")
                 async with websockets.connect(ws_url, extra_headers=ws_headers) as ws:
-                    logger.info("Connected — subscribing to timing topics")
-                    subscribe = json.dumps({
-                        "H": "Streaming", "M": "Subscribe",
-                        "A": [TOPICS], "I": 1,
-                    })
-                    await ws.send(subscribe)
-                    heartbeat_task = asyncio.create_task(self._heartbeat(ws, subscribe))
+                    # Protocol handshake
+                    await ws.send(json.dumps({"protocol": "json", "version": 1}) + RECORD_SEP)
+                    hs_raw = await ws.recv()
+                    for seg in hs_raw.split(RECORD_SEP):
+                        seg = seg.strip()
+                        if seg:
+                            hs = json.loads(seg)
+                            if "error" in hs:
+                                raise ConnectionError(f"Handshake error: {hs['error']}")
+
+                    # Subscribe to timing topics
+                    await ws.send(json.dumps({
+                        "type": 1,
+                        "target": "Subscribe",
+                        "arguments": [TOPICS],
+                        "invocationId": "0",
+                    }) + RECORD_SEP)
+                    logger.info("Connected — subscribed to timing topics")
+
                     async for raw in ws:
                         if not self._running:
                             break
-                        self._process_message(raw)
+                        responses = self._process_message(raw)
+                        for resp in responses:
+                            await ws.send(resp)
             except Exception as e:
                 logger.warning("SignalR connection lost: %s — reconnecting in 5s", e)
                 if self._running:
                     await asyncio.sleep(5)
-            finally:
-                if heartbeat_task and not heartbeat_task.done():
-                    heartbeat_task.cancel()
-                    try:
-                        await heartbeat_task
-                    except asyncio.CancelledError:
-                        pass
-
-    def _process_message(self, raw: str) -> None:
-        try:
-            envelope = json.loads(raw)
-        except json.JSONDecodeError:
-            return
-        # "R" carries the initial state snapshot returned after Subscribe
-        r_data = envelope.get("R")
-        if isinstance(r_data, dict):
-            for topic, data in r_data.items():
-                if isinstance(data, dict):
-                    self._handle_feed(topic, data)
-        # "M" carries streaming push messages
-        for msg in envelope.get("M", []):
-            if msg.get("M") == "feed" and len(msg.get("A", [])) >= 2:
-                self._handle_feed(msg["A"][0], msg["A"][1])
 
     async def stop(self) -> None:
         self._running = False

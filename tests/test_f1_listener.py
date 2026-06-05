@@ -110,29 +110,58 @@ def test_topics_include_session_status_and_heartbeat():
     assert "Heartbeat" in TOPICS
 
 
-def test_process_message_handles_r_snapshot():
+def test_process_message_handles_type1_feed():
+    from raceflag.f1_listener import RECORD_SEP
     state = AppState()
     listener = F1Listener(state=state)
     raw = json.dumps({
-        "R": {
+        "type": 1,
+        "target": "feed",
+        "arguments": ["TrackStatus", {"Status": "5"}],
+    }) + RECORD_SEP
+    listener._process_message(raw)
+    assert state.track_status == "red_flag"
+
+
+def test_process_message_handles_type3_snapshot():
+    from raceflag.f1_listener import RECORD_SEP
+    state = AppState()
+    listener = F1Listener(state=state)
+    raw = json.dumps({
+        "type": 3,
+        "result": {
             "TrackStatus": {"Status": "2"},
             "WeatherData": {
                 "AirTemp": "25", "TrackTemp": "40", "Humidity": "55",
                 "WindSpeed": "8", "WindDirection": "W", "Rainfall": "0",
             },
-        }
-    })
+        },
+    }) + RECORD_SEP
     listener._process_message(raw)
     assert state.track_status == "yellow_flag"
     assert state.weather.air_temp == 25.0
 
 
-def test_process_message_r_snapshot_ignores_non_dict_values():
+def test_process_message_type3_ignores_non_dict_values():
+    from raceflag.f1_listener import RECORD_SEP
     state = AppState()
     listener = F1Listener(state=state)
-    raw = json.dumps({"R": {"SomeStream": None, "TrackStatus": {"Status": "1"}}})
+    raw = json.dumps({
+        "type": 3,
+        "result": {"SomeStream": None, "TrackStatus": {"Status": "1"}},
+    }) + RECORD_SEP
     listener._process_message(raw)
     assert state.track_status == "track_clear"
+
+
+def test_process_message_responds_to_ping():
+    from raceflag.f1_listener import RECORD_SEP
+    state = AppState()
+    listener = F1Listener(state=state)
+    raw = json.dumps({"type": 6}) + RECORD_SEP
+    responses = listener._process_message(raw)
+    assert len(responses) == 1
+    assert json.loads(responses[0].replace(RECORD_SEP, "")) == {"type": 6}
 
 
 def test_handle_feed_session_status_started_marks_active():
