@@ -294,7 +294,7 @@ class F1Listener:
                 if cookie:
                     ws_headers["Cookie"] = cookie
                 logger.info("Connecting to F1 live timing feed...")
-                async with websockets.connect(ws_url, extra_headers=ws_headers) as ws:
+                async with websockets.connect(ws_url, additional_headers=ws_headers) as ws:
                     # Protocol handshake
                     await ws.send(json.dumps({"protocol": "json", "version": 1}) + RECORD_SEP)
                     hs_raw = await ws.recv()

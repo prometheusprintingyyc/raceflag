@@ -104,6 +104,15 @@ class OTAUpdater:
             # Restart after a short delay so the HTTP response reaches the browser first
             async def _deferred_restart() -> None:
                 await asyncio.sleep(2)
+                # Reinstall Python dependencies in case requirements changed
+                pip = await asyncio.create_subprocess_exec(
+                    "pip3", "install", "-r",
+                    str(self._install_dir / "requirements.txt"),
+                    "--break-system-packages",
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                await pip.wait()
                 proc = await asyncio.create_subprocess_exec(
                     "systemctl", "restart", "raceflag",
                     stdout=asyncio.subprocess.DEVNULL,
