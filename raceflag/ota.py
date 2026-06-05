@@ -67,7 +67,7 @@ class OTAUpdater:
                 return False
 
             archive_path = self._install_dir.parent / f"raceflag-{tag}.tar.gz"
-            async with httpx.AsyncClient(timeout=120.0) as client:
+            async with httpx.AsyncClient(timeout=120.0, follow_redirects=True) as client:
                 async with client.stream("GET", asset["browser_download_url"]) as resp:
                     resp.raise_for_status()
                     with open(archive_path, "wb") as f:
@@ -101,12 +101,17 @@ class OTAUpdater:
 
             self._version_file.write_text(tag.lstrip("v"))
 
-            proc = await asyncio.create_subprocess_exec(
-                "systemctl", "restart", "raceflag",
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-            await proc.wait()
+            # Restart after a short delay so the HTTP response reaches the browser first
+            async def _deferred_restart() -> None:
+                await asyncio.sleep(2)
+                proc = await asyncio.create_subprocess_exec(
+                    "systemctl", "restart", "raceflag",
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                await proc.wait()
+
+            asyncio.create_task(_deferred_restart())
             return True
 
         except Exception as e:
