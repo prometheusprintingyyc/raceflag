@@ -1,0 +1,6 @@
+-- initial prompt --
+hello. Let's start a new project, called RaceFlag. This project will run in python on a raspberry pi zero 2w. It is a lightbox in the shape of a formula 1 logo that reacts to the race control messages (flags) from live and past formula 1 races. It will use the official SignalR
+feed from formula 1. This project should be used as a bases for getting the feed: https://github.com/Nicxe/f1_sensor. This project will be used as a bases for driving the led lights, directly from the raspberry pi gpio: https://github.com/tuanchris/wled_rpi. It will require several
+ key things: 1. Live sync delay to account for the delay between broadcast and live, 2. The ability to query older race data (primarily used for testing purposes), a way to push updates via OTA from Github or similar services (triggered through a update button on the webgui), a
+wifi hotspot that is created when the preconfigured wifi is not available (makes switching wifi's or first time setup easier), a web gui that dynamically formats for web or mobile and shows current race data and upcoming races. Please formulate a plan for this project so we can get
+ started.

@@ -1,0 +1,292 @@
+<h2>RaceFlag Web UI — Layout v2</h2>
+<p class="subtitle">Update button moved to Settings. Country flag added to circuit card.</p>
+
+<style>
+  .rf-body {
+    background: #111;
+    font-family: 'Segoe UI', sans-serif;
+    color: #eee;
+    padding: 0;
+    margin: 0;
+  }
+  .rf-nav {
+    background: #1a1a1a;
+    border-bottom: 2px solid #e10600;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+  }
+  .rf-nav .logo { font-weight: 700; letter-spacing: 2px; color: #e10600; font-size: 15px; }
+  .rf-nav .nav-right { display: flex; gap: 12px; align-items: center; }
+  .rf-nav .nav-btn {
+    background: #2a2a2a; border: 1px solid #333; color: #aaa;
+    padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer;
+  }
+
+  .flag-banner {
+    margin: 12px;
+    border-radius: 8px;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: #1c3a1c;
+    border-left: 5px solid #00c853;
+  }
+  .flag-dot { width: 22px; height: 22px; border-radius: 50%; background: #00c853; flex-shrink: 0; }
+  .flag-label { font-size: 18px; font-weight: 700; letter-spacing: 1px; }
+  .flag-sub { font-size: 11px; color: #aaa; margin-top: 2px; }
+
+  .rf-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
+    margin: 0 12px 12px;
+  }
+  .rf-card {
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .rf-card .card-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #666;
+    margin-bottom: 6px;
+  }
+  .rf-card .card-value { font-size: 22px; font-weight: 700; color: #fff; }
+  .rf-card .card-sub { font-size: 11px; color: #888; margin-top: 3px; }
+
+  .rf-wide { grid-column: span 2; }
+
+  .circuit-header { display: flex; align-items: center; gap: 10px; }
+  .circuit-flag { font-size: 26px; line-height: 1; }
+  .circuit-name { font-size: 15px; font-weight: 700; }
+
+  .rc-messages {
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    margin: 0 12px 12px;
+    overflow: hidden;
+  }
+  .rc-header {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px;
+    color: #666; padding: 10px 14px 6px; border-bottom: 1px solid #222;
+  }
+  .rc-msg {
+    display: flex; gap: 10px; padding: 7px 14px;
+    border-bottom: 1px solid #1e1e1e; font-size: 12px; align-items: flex-start;
+  }
+  .rc-msg:last-child { border-bottom: none; }
+  .rc-time { color: #555; font-size: 10px; flex-shrink: 0; padding-top: 1px; }
+  .rc-text { color: #ccc; }
+  .rc-flag { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+
+  .delay-bar {
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    margin: 0 12px 12px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .delay-label { font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px; color: #666; }
+  .delay-value { font-size: 20px; font-weight: 700; color: #fff; min-width: 40px; }
+  .delay-slider { flex: 1; accent-color: #e10600; }
+  .delay-unit { font-size: 11px; color: #666; }
+
+  .next-race {
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    margin: 0 12px 12px;
+    padding: 12px 14px;
+  }
+  .nr-label { font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px; color: #666; margin-bottom: 8px; }
+  .nr-header { display: flex; align-items: center; gap: 10px; }
+  .nr-flag { font-size: 26px; line-height: 1; }
+  .nr-name { font-size: 16px; font-weight: 700; }
+  .nr-detail { font-size: 11px; color: #888; margin-top: 3px; }
+  .nr-countdown { font-size: 22px; font-weight: 700; color: #e10600; margin-top: 8px; letter-spacing: 1px; }
+
+  .section-title {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px;
+    color: #444; padding: 10px 12px 4px;
+  }
+
+  /* Settings panel (hidden by default, shown on ⚙ click) */
+  .settings-overlay {
+    display: none;
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100;
+    align-items: flex-end; justify-content: center;
+  }
+  .settings-overlay.open { display: flex; }
+  .settings-panel {
+    background: #1a1a1a; border: 1px solid #333; border-radius: 12px 12px 0 0;
+    width: 100%; max-width: 480px; padding: 20px 20px 32px;
+  }
+  .settings-panel h3 { font-size: 13px; font-weight: 700; letter-spacing: 1px; margin: 0 0 16px; }
+  .settings-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 0; border-bottom: 1px solid #222; font-size: 13px;
+  }
+  .settings-row:last-child { border-bottom: none; }
+  .settings-row .s-label { color: #aaa; }
+  .settings-row .s-val { color: #fff; }
+  .update-btn {
+    background: #e10600; color: #fff; border: none; border-radius: 6px;
+    padding: 8px 16px; font-size: 12px; font-weight: 700; cursor: pointer; letter-spacing: 0.5px;
+  }
+  .close-btn {
+    float: right; background: none; border: none; color: #666; font-size: 18px; cursor: pointer; margin-top: -4px;
+  }
+</style>
+
+<div class="rf-body">
+  <!-- Nav -->
+  <div class="rf-nav">
+    <span class="logo">RACEFLAG</span>
+    <div class="nav-right">
+      <span style="color:#555;font-size:11px;">v1.0.0</span>
+      <span class="nav-btn" onclick="document.getElementById('settings').classList.add('open')">⚙ Settings</span>
+    </div>
+  </div>
+
+  <!-- Flag Status Banner -->
+  <div class="flag-banner">
+    <div class="flag-dot"></div>
+    <div>
+      <div class="flag-label">TRACK CLEAR</div>
+      <div class="flag-sub">Last change: 14:32:01 · Track is clear</div>
+    </div>
+  </div>
+
+  <!-- LED Delay Control -->
+  <div class="delay-bar">
+    <div>
+      <div class="delay-label">LED Delay</div>
+    </div>
+    <div class="delay-value">12</div>
+    <div class="delay-unit">sec</div>
+    <input type="range" class="delay-slider" min="0" max="60" value="12"
+      oninput="this.previousElementSibling.previousElementSibling.textContent=this.value">
+  </div>
+
+  <!-- Session -->
+  <div class="section-title">Session</div>
+  <div class="rf-grid">
+    <div class="rf-card rf-wide">
+      <div class="card-label">Circuit</div>
+      <div class="circuit-header">
+        <span class="circuit-flag">🇲🇨</span>
+        <div>
+          <div class="circuit-name">Monaco Grand Prix</div>
+          <div class="card-sub">Circuit de Monaco · Monte Carlo</div>
+        </div>
+      </div>
+    </div>
+    <div class="rf-card">
+      <div class="card-label">Session</div>
+      <div class="card-value" style="font-size:15px;">Race</div>
+      <div class="card-sub">Lap 14 / 78</div>
+    </div>
+    <div class="rf-card">
+      <div class="card-label">Remaining</div>
+      <div class="card-value">1:24:07</div>
+      <div class="card-sub">Time left</div>
+    </div>
+  </div>
+
+  <!-- Weather -->
+  <div class="section-title">Weather</div>
+  <div class="rf-grid">
+    <div class="rf-card">
+      <div class="card-label">Air Temp</div>
+      <div class="card-value">24°C</div>
+    </div>
+    <div class="rf-card">
+      <div class="card-label">Track Temp</div>
+      <div class="card-value">38°C</div>
+    </div>
+    <div class="rf-card">
+      <div class="card-label">Humidity</div>
+      <div class="card-value">62%</div>
+    </div>
+    <div class="rf-card">
+      <div class="card-label">Wind</div>
+      <div class="card-value" style="font-size:15px;">14 km/h</div>
+      <div class="card-sub">NW direction</div>
+    </div>
+    <div class="rf-card">
+      <div class="card-label">Rain</div>
+      <div class="card-value" style="font-size:15px; color:#4fc3f7;">No</div>
+    </div>
+  </div>
+
+  <!-- Race Control Messages -->
+  <div class="section-title">Race Control</div>
+  <div class="rc-messages">
+    <div class="rc-header">Messages</div>
+    <div class="rc-msg">
+      <span class="rc-time">14:32:01</span>
+      <span class="rc-text"><span class="rc-flag" style="background:#00c853"></span>TRACK CLEAR</span>
+    </div>
+    <div class="rc-msg">
+      <span class="rc-time">14:28:44</span>
+      <span class="rc-text"><span class="rc-flag" style="background:#ffd600"></span>YELLOW FLAG IN SECTOR 2</span>
+    </div>
+    <div class="rc-msg">
+      <span class="rc-time">14:28:12</span>
+      <span class="rc-text">DRS DISABLED</span>
+    </div>
+    <div class="rc-msg">
+      <span class="rc-time">14:22:31</span>
+      <span class="rc-text">SAFETY CAR RETURNING TO PITS</span>
+    </div>
+  </div>
+
+  <!-- Next Race -->
+  <div class="section-title">Next Race</div>
+  <div class="next-race">
+    <div class="nr-label">Upcoming Grand Prix</div>
+    <div class="nr-header">
+      <span class="nr-flag">🇨🇦</span>
+      <div>
+        <div class="nr-name">Canadian Grand Prix</div>
+        <div class="nr-detail">Circuit Gilles Villeneuve · Montréal · Round 9</div>
+      </div>
+    </div>
+    <div class="nr-countdown">06d 14h 22m</div>
+  </div>
+
+  <!-- Settings Panel -->
+  <div class="settings-overlay" id="settings" onclick="if(event.target===this)this.classList.remove('open')">
+    <div class="settings-panel">
+      <h3>SETTINGS <button class="close-btn" onclick="document.getElementById('settings').classList.remove('open')">✕</button></h3>
+      <div class="settings-row">
+        <span class="s-label">Firmware version</span>
+        <span class="s-val">v1.0.0</span>
+      </div>
+      <div class="settings-row">
+        <span class="s-label">LED count</span>
+        <span class="s-val">60</span>
+      </div>
+      <div class="settings-row">
+        <span class="s-label">WiFi network</span>
+        <span class="s-val">HomeNetwork</span>
+      </div>
+      <div class="settings-row">
+        <span class="s-label">Check for updates</span>
+        <button class="update-btn">Update Now</button>
+      </div>
+    </div>
+  </div>
+
+</div>

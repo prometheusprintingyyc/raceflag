@@ -1,0 +1,38 @@
+<style>
+  body { background: #111; font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; }
+
+  .nav {
+    background: #1a1a1a;
+    border-bottom: 2px solid #e10600;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .nav-logo {
+    font-weight: 900;
+    letter-spacing: 3px;
+    color: #e10600;
+    font-size: 32px;
+    line-height: 1;
+  }
+  .nav-right { display: flex; gap: 10px; align-items: center; }
+  .nav-version { color: #555; font-size: 11px; }
+  .btn-settings {
+    background: #2a2a2a; border: 1px solid #333; color: #aaa;
+    padding: 5px 12px; border-radius: 4px; font-size: 11px; cursor: pointer;
+  }
+  .label {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px;
+    color: #444; padding: 18px 16px 8px;
+  }
+</style>
+
+<div class="label">Updated logo</div>
+<nav class="nav">
+  <span class="nav-logo">RaceFlag 🏁</span>
+  <div class="nav-right">
+    <span class="nav-version">v0.1.0</span>
+    <button class="btn-settings">⚙ Settings</button>
+  </div>
+</nav>

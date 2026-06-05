@@ -1,0 +1,324 @@
+<h2>RaceFlag Web UI — Live Race vs. Off-Session</h2>
+<p class="subtitle">Toggle between states to see how the driver/championship sections adapt.</p>
+
+<style>
+  .rf-body {
+    background: #111;
+    font-family: 'Segoe UI', sans-serif;
+    color: #eee;
+    padding: 0;
+    margin: 0;
+  }
+  .rf-nav {
+    background: #1a1a1a;
+    border-bottom: 2px solid #e10600;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+  }
+  .rf-nav .logo { font-weight: 700; letter-spacing: 2px; color: #e10600; font-size: 15px; }
+  .rf-nav .nav-right { display: flex; gap: 12px; align-items: center; }
+  .rf-nav .nav-btn {
+    background: #2a2a2a; border: 1px solid #333; color: #aaa;
+    padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer;
+  }
+
+  .state-toggle {
+    display: flex; gap: 8px; margin: 12px 12px 0;
+  }
+  .state-btn {
+    flex: 1; padding: 8px; border-radius: 6px; font-size: 11px;
+    font-weight: 600; letter-spacing: 0.5px; text-align: center; cursor: pointer;
+    border: 1px solid #333; background: #1a1a1a; color: #555;
+    transition: all 0.15s;
+  }
+  .state-btn.active { background: #e10600; color: #fff; border-color: #e10600; }
+
+  .view { display: none; }
+  .view.active { display: block; }
+
+  .flag-banner {
+    margin: 12px;
+    border-radius: 8px;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: #1c3a1c;
+    border-left: 5px solid #00c853;
+  }
+  .flag-dot { width: 22px; height: 22px; border-radius: 50%; background: #00c853; flex-shrink: 0; }
+  .flag-label { font-size: 18px; font-weight: 700; letter-spacing: 1px; }
+  .flag-sub { font-size: 11px; color: #aaa; margin-top: 2px; }
+
+  .rf-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
+    margin: 0 12px 12px;
+  }
+  .rf-card {
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .rf-card .card-label {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px; color: #666; margin-bottom: 6px;
+  }
+  .rf-card .card-value { font-size: 22px; font-weight: 700; color: #fff; }
+  .rf-card .card-sub { font-size: 11px; color: #888; margin-top: 3px; }
+  .rf-wide { grid-column: span 2; }
+
+  .circuit-header { display: flex; align-items: center; gap: 10px; }
+  .circuit-flag { font-size: 26px; line-height: 1; }
+  .circuit-name { font-size: 15px; font-weight: 700; }
+
+  .delay-bar {
+    background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px;
+    margin: 0 12px 12px; padding: 12px 14px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .delay-label { font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px; color: #666; }
+  .delay-value { font-size: 20px; font-weight: 700; color: #fff; min-width: 40px; }
+  .delay-slider { flex: 1; accent-color: #e10600; }
+  .delay-unit { font-size: 11px; color: #666; }
+
+  /* Driver positions table */
+  .positions-table {
+    background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px;
+    margin: 0 12px 12px; overflow: hidden;
+  }
+  .pt-header {
+    display: grid; grid-template-columns: 28px 14px 1fr 70px 40px 32px;
+    padding: 7px 12px; font-size: 9px; text-transform: uppercase;
+    letter-spacing: 1px; color: #555; border-bottom: 1px solid #222;
+    gap: 6px;
+  }
+  .pt-row {
+    display: grid; grid-template-columns: 28px 14px 1fr 70px 40px 32px;
+    padding: 7px 12px; border-bottom: 1px solid #1e1e1e;
+    align-items: center; gap: 6px; font-size: 12px;
+  }
+  .pt-row:last-child { border-bottom: none; }
+  .pt-pos { font-weight: 700; color: #888; font-size: 11px; }
+  .pt-pos.p1 { color: #ffd700; }
+  .pt-pos.p2 { color: #c0c0c0; }
+  .pt-pos.p3 { color: #cd7f32; }
+  .team-bar { width: 4px; height: 16px; border-radius: 2px; }
+  .pt-driver { font-weight: 600; }
+  .pt-driver span { color: #555; font-weight: 400; font-size: 10px; display: block; }
+  .pt-gap { color: #888; font-size: 11px; }
+  .pt-tyre {
+    width: 22px; height: 22px; border-radius: 50%; font-size: 9px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; color: #111;
+  }
+  .tyre-m { background: #ffff00; }
+  .tyre-h { background: #ffffff; }
+  .tyre-s { background: #ff2d2d; }
+  .tyre-i { background: #39c8c8; }
+  .pt-pits { color: #666; font-size: 10px; text-align: center; }
+
+  /* Championship tables */
+  .champ-table {
+    background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px;
+    margin: 0 12px 12px; overflow: hidden;
+  }
+  .champ-header-row {
+    display: grid; padding: 7px 12px; font-size: 9px; text-transform: uppercase;
+    letter-spacing: 1px; color: #555; border-bottom: 1px solid #222; gap: 6px;
+  }
+  .champ-header-row.drivers { grid-template-columns: 28px 14px 1fr 1fr 48px; }
+  .champ-header-row.constructors { grid-template-columns: 28px 1fr 48px; }
+  .champ-row {
+    display: grid; padding: 8px 12px; border-bottom: 1px solid #1e1e1e;
+    align-items: center; gap: 6px; font-size: 12px;
+  }
+  .champ-row:last-child { border-bottom: none; }
+  .champ-row.drivers { grid-template-columns: 28px 14px 1fr 1fr 48px; }
+  .champ-row.constructors { grid-template-columns: 28px 1fr 48px; }
+  .champ-pos { font-weight: 700; color: #888; font-size: 11px; }
+  .champ-pos.p1 { color: #ffd700; }
+  .champ-pos.p2 { color: #c0c0c0; }
+  .champ-pos.p3 { color: #cd7f32; }
+  .champ-name { font-weight: 600; }
+  .champ-team { color: #666; font-size: 10px; }
+  .champ-pts { font-weight: 700; color: #fff; text-align: right; }
+
+  .rc-messages {
+    background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px;
+    margin: 0 12px 12px; overflow: hidden;
+  }
+  .rc-header {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px;
+    color: #666; padding: 10px 14px 6px; border-bottom: 1px solid #222;
+  }
+  .rc-msg {
+    display: flex; gap: 10px; padding: 7px 14px;
+    border-bottom: 1px solid #1e1e1e; font-size: 12px; align-items: flex-start;
+  }
+  .rc-msg:last-child { border-bottom: none; }
+  .rc-time { color: #555; font-size: 10px; flex-shrink: 0; padding-top: 1px; }
+  .rc-text { color: #ccc; }
+  .rc-flag-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+
+  .next-race {
+    background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px;
+    margin: 0 12px 12px; padding: 12px 14px;
+  }
+  .nr-label { font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px; color: #666; margin-bottom: 8px; }
+  .nr-header { display: flex; align-items: center; gap: 10px; }
+  .nr-flag { font-size: 26px; line-height: 1; }
+  .nr-name { font-size: 16px; font-weight: 700; }
+  .nr-detail { font-size: 11px; color: #888; margin-top: 3px; }
+  .nr-countdown { font-size: 22px; font-weight: 700; color: #e10600; margin-top: 8px; letter-spacing: 1px; }
+
+  .section-title {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px;
+    color: #444; padding: 10px 12px 4px;
+  }
+  .live-pill {
+    display: inline-block; background: #e10600; color: #fff;
+    font-size: 9px; font-weight: 700; letter-spacing: 1px;
+    padding: 2px 7px; border-radius: 4px; margin-left: 8px; vertical-align: middle;
+  }
+</style>
+
+<div class="rf-body">
+  <div class="rf-nav">
+    <span class="logo">RACEFLAG</span>
+    <div class="nav-right">
+      <span style="color:#555;font-size:11px;">v1.0.0</span>
+      <span class="rf-nav .nav-btn" style="background:#2a2a2a;border:1px solid #333;color:#aaa;padding:4px 10px;border-radius:4px;font-size:11px;">⚙ Settings</span>
+    </div>
+  </div>
+
+  <!-- State toggle (for mockup demo only — in production this switches automatically) -->
+  <div class="state-toggle">
+    <div class="state-btn active" id="btn-live" onclick="switchView('live')">🔴 Live Race</div>
+    <div class="state-btn" id="btn-off" onclick="switchView('off')">📅 No Active Race</div>
+  </div>
+
+  <!-- LIVE RACE VIEW -->
+  <div class="view active" id="view-live">
+    <div class="flag-banner">
+      <div class="flag-dot"></div>
+      <div>
+        <div class="flag-label">TRACK CLEAR</div>
+        <div class="flag-sub">Last change: 14:32:01 · Track is clear</div>
+      </div>
+    </div>
+
+    <div class="delay-bar">
+      <div><div class="delay-label">LED Delay</div></div>
+      <div class="delay-value" id="dv">12</div>
+      <div class="delay-unit">sec</div>
+      <input type="range" class="delay-slider" min="0" max="60" value="12"
+        oninput="document.getElementById('dv').textContent=this.value">
+    </div>
+
+    <div class="section-title">Session</div>
+    <div class="rf-grid">
+      <div class="rf-card rf-wide">
+        <div class="card-label">Circuit</div>
+        <div class="circuit-header">
+          <span class="circuit-flag">🇲🇨</span>
+          <div>
+            <div class="circuit-name">Monaco Grand Prix</div>
+            <div class="card-sub">Circuit de Monaco · Monte Carlo</div>
+          </div>
+        </div>
+      </div>
+      <div class="rf-card">
+        <div class="card-label">Session</div>
+        <div class="card-value" style="font-size:15px;">Race</div>
+        <div class="card-sub">Lap 14 / 78</div>
+      </div>
+      <div class="rf-card">
+        <div class="card-label">Remaining</div>
+        <div class="card-value">1:24:07</div>
+        <div class="card-sub">Time left</div>
+      </div>
+    </div>
+
+    <div class="section-title">Weather</div>
+    <div class="rf-grid">
+      <div class="rf-card"><div class="card-label">Air Temp</div><div class="card-value">24°C</div></div>
+      <div class="rf-card"><div class="card-label">Track Temp</div><div class="card-value">38°C</div></div>
+      <div class="rf-card"><div class="card-label">Humidity</div><div class="card-value">62%</div></div>
+      <div class="rf-card"><div class="card-label">Wind</div><div class="card-value" style="font-size:15px;">14 km/h</div><div class="card-sub">NW</div></div>
+      <div class="rf-card"><div class="card-label">Rain</div><div class="card-value" style="font-size:15px;color:#4fc3f7;">No</div></div>
+    </div>
+
+    <div class="section-title">Race Positions <span class="live-pill">LIVE</span></div>
+    <div class="positions-table">
+      <div class="pt-header"><span>POS</span><span></span><span>Driver</span><span>Gap</span><span>Tyre</span><span>PIT</span></div>
+      <div class="pt-row"><span class="pt-pos p1">1</span><div class="team-bar" style="background:#3671C6"></div><div class="pt-driver">VER <span>Verstappen</span></div><span class="pt-gap">Leader</span><div class="pt-tyre tyre-m">M</div><span class="pt-pits">1</span></div>
+      <div class="pt-row"><span class="pt-pos p2">2</span><div class="team-bar" style="background:#E8002D"></div><div class="pt-driver">LEC <span>Leclerc</span></div><span class="pt-gap">+3.4s</span><div class="pt-tyre tyre-m">M</div><span class="pt-pits">1</span></div>
+      <div class="pt-row"><span class="pt-pos p3">3</span><div class="team-bar" style="background:#E8002D"></div><div class="pt-driver">SAI <span>Sainz</span></div><span class="pt-gap">+7.1s</span><div class="pt-tyre tyre-h">H</div><span class="pt-pits">1</span></div>
+      <div class="pt-row"><span class="pt-pos">4</span><div class="team-bar" style="background:#FF8000"></div><div class="pt-driver">NOR <span>Norris</span></div><span class="pt-gap">+12.8s</span><div class="pt-tyre tyre-m">M</div><span class="pt-pits">1</span></div>
+      <div class="pt-row"><span class="pt-pos">5</span><div class="team-bar" style="background:#FF8000"></div><div class="pt-driver">PIA <span>Piastri</span></div><span class="pt-gap">+18.2s</span><div class="pt-tyre tyre-s">S</div><span class="pt-pits">2</span></div>
+      <div class="pt-row"><span class="pt-pos">6</span><div class="team-bar" style="background:#27F4D2"></div><div class="pt-driver">HAM <span>Hamilton</span></div><span class="pt-gap">+24.5s</span><div class="pt-tyre tyre-m">M</div><span class="pt-pits">1</span></div>
+      <div class="pt-row"><span class="pt-pos">7</span><div class="team-bar" style="background:#27F4D2"></div><div class="pt-driver">RUS <span>Russell</span></div><span class="pt-gap">+31.0s</span><div class="pt-tyre tyre-h">H</div><span class="pt-pits">1</span></div>
+      <div class="pt-row"><span class="pt-pos">8</span><div class="team-bar" style="background:#6692FF"></div><div class="pt-driver">ALO <span>Alonso</span></div><span class="pt-gap">+38.7s</span><div class="pt-tyre tyre-m">M</div><span class="pt-pits">1</span></div>
+    </div>
+
+    <div class="section-title">Race Control</div>
+    <div class="rc-messages">
+      <div class="rc-header">Messages</div>
+      <div class="rc-msg"><span class="rc-time">14:32:01</span><span class="rc-text"><span class="rc-flag-dot" style="background:#00c853"></span>TRACK CLEAR</span></div>
+      <div class="rc-msg"><span class="rc-time">14:28:44</span><span class="rc-text"><span class="rc-flag-dot" style="background:#ffd600"></span>YELLOW FLAG IN SECTOR 2</span></div>
+      <div class="rc-msg"><span class="rc-time">14:28:12</span><span class="rc-text">DRS DISABLED</span></div>
+      <div class="rc-msg"><span class="rc-time">14:22:31</span><span class="rc-text">SAFETY CAR RETURNING TO PITS</span></div>
+    </div>
+  </div>
+
+  <!-- OFF-SEASON / NO RACE VIEW -->
+  <div class="view" id="view-off">
+    <div class="next-race" style="margin:12px 12px 0;">
+      <div class="nr-label">Next Race</div>
+      <div class="nr-header">
+        <span class="nr-flag">🇨🇦</span>
+        <div>
+          <div class="nr-name">Canadian Grand Prix</div>
+          <div class="nr-detail">Circuit Gilles Villeneuve · Montréal · Round 9</div>
+        </div>
+      </div>
+      <div class="nr-countdown">06d 14h 22m</div>
+    </div>
+
+    <div class="section-title">Drivers Championship</div>
+    <div class="champ-table">
+      <div class="champ-header-row drivers"><span>POS</span><span></span><span>Driver</span><span>Team</span><span>PTS</span></div>
+      <div class="champ-row drivers"><span class="champ-pos p1">1</span><div class="team-bar" style="background:#3671C6"></div><span class="champ-name">Verstappen</span><span class="champ-team">Red Bull</span><span class="champ-pts">195</span></div>
+      <div class="champ-row drivers"><span class="champ-pos p2">2</span><div class="team-bar" style="background:#FF8000"></div><span class="champ-name">Norris</span><span class="champ-team">McLaren</span><span class="champ-pts">171</span></div>
+      <div class="champ-row drivers"><span class="champ-pos p3">3</span><div class="team-bar" style="background:#E8002D"></div><span class="champ-name">Leclerc</span><span class="champ-team">Ferrari</span><span class="champ-pts">150</span></div>
+      <div class="champ-row drivers"><span class="champ-pos">4</span><div class="team-bar" style="background:#E8002D"></div><span class="champ-name">Sainz</span><span class="champ-team">Ferrari</span><span class="champ-pts">144</span></div>
+      <div class="champ-row drivers"><span class="champ-pos">5</span><div class="team-bar" style="background:#FF8000"></div><span class="champ-name">Piastri</span><span class="champ-team">McLaren</span><span class="champ-pts">132</span></div>
+      <div class="champ-row drivers"><span class="champ-pos">6</span><div class="team-bar" style="background:#27F4D2"></div><span class="champ-name">Russell</span><span class="champ-team">Mercedes</span><span class="champ-pts">111</span></div>
+      <div class="champ-row drivers"><span class="champ-pos">7</span><div class="team-bar" style="background:#27F4D2"></div><span class="champ-name">Hamilton</span><span class="champ-team">Mercedes</span><span class="champ-pts">85</span></div>
+      <div class="champ-row drivers"><span class="champ-pos">8</span><div class="team-bar" style="background:#3671C6"></div><span class="champ-name">Pérez</span><span class="champ-team">Red Bull</span><span class="champ-pts">79</span></div>
+    </div>
+
+    <div class="section-title">Constructors Championship</div>
+    <div class="champ-table">
+      <div class="champ-header-row constructors"><span>POS</span><span>Constructor</span><span>PTS</span></div>
+      <div class="champ-row constructors"><span class="champ-pos p1">1</span><div style="display:flex;align-items:center;gap:8px;"><div class="team-bar" style="background:#FF8000"></div><span class="champ-name">McLaren</span></div><span class="champ-pts">303</span></div>
+      <div class="champ-row constructors"><span class="champ-pos p2">2</span><div style="display:flex;align-items:center;gap:8px;"><div class="team-bar" style="background:#E8002D"></div><span class="champ-name">Ferrari</span></div><span class="champ-pts">294</span></div>
+      <div class="champ-row constructors"><span class="champ-pos p3">3</span><div style="display:flex;align-items:center;gap:8px;"><div class="team-bar" style="background:#3671C6"></div><span class="champ-name">Red Bull</span></div><span class="champ-pts">274</span></div>
+      <div class="champ-row constructors"><span class="champ-pos">4</span><div style="display:flex;align-items:center;gap:8px;"><div class="team-bar" style="background:#27F4D2"></div><span class="champ-name">Mercedes</span></div><span class="champ-pts">196</span></div>
+      <div class="champ-row constructors"><span class="champ-pos">5</span><div style="display:flex;align-items:center;gap:8px;"><div class="team-bar" style="background:#6692FF"></div><span class="champ-name">Aston Martin</span></div><span class="champ-pts">94</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+function switchView(v) {
+  document.getElementById('view-live').classList.toggle('active', v === 'live');
+  document.getElementById('view-off').classList.toggle('active', v === 'off');
+  document.getElementById('btn-live').classList.toggle('active', v === 'live');
+  document.getElementById('btn-off').classList.toggle('active', v === 'off');
+}
+</script>
