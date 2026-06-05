@@ -1,0 +1,103 @@
+import json
+import time
+from pathlib import Path
+from unittest.mock import MagicMock
+import pytest
+from raceflag.led_controller import LEDController, MockStrip
+
+
+@pytest.fixture
+def effects_file(tmp_path):
+    data = {
+        "track_clear": {
+            "segments": [{"start": 0, "end": 9, "color": "#00FF00", "pattern": "solid"}],
+            "transition": "fade",
+            "transition_ms": 100,
+        },
+        "red_flag": {
+            "segments": [{"start": 0, "end": 9, "color": "#FF0000", "pattern": "solid"}],
+            "transition": "instant",
+            "transition_ms": 0,
+        },
+    }
+    p = tmp_path / "effects.json"
+    p.write_text(json.dumps(data))
+    return p
+
+
+@pytest.fixture
+def controller(effects_file):
+    strip = MockStrip(10)
+    ctrl = LEDController(strip=strip, effects_path=effects_file, delay_seconds=0.0)
+    return ctrl
+
+
+def test_load_effects_parses_all_flag_states(controller):
+    effects = controller._load_effects()
+    assert "track_clear" in effects
+    assert "red_flag" in effects
+
+
+def test_load_effects_returns_empty_dict_on_missing_file(tmp_path):
+    strip = MockStrip(10)
+    ctrl = LEDController(strip=strip, effects_path=tmp_path / "missing.json", delay_seconds=0.0)
+    assert ctrl._load_effects() == {}
+
+
+def test_load_effects_returns_empty_dict_on_invalid_json(tmp_path):
+    p = tmp_path / "effects.json"
+    p.write_text("not json")
+    strip = MockStrip(10)
+    ctrl = LEDController(strip=strip, effects_path=p, delay_seconds=0.0)
+    assert ctrl._load_effects() == {}
+
+
+def test_hex_to_rgb_converts_correctly(controller):
+    assert controller._hex_to_rgb("#FF0000") == (255, 0, 0)
+    assert controller._hex_to_rgb("#00FF00") == (0, 255, 0)
+    assert controller._hex_to_rgb("#0000FF") == (0, 0, 255)
+    assert controller._hex_to_rgb("#FFD700") == (255, 215, 0)
+
+
+def test_apply_solid_effect_sets_all_pixels(controller, effects_file):
+    controller._effects = controller._load_effects()
+    controller._apply_effect("track_clear")
+    r, g, b = controller._strip.pixels[0]
+    assert (r, g, b) == (0, 255, 0)
+    assert all(p == (0, 255, 0) for p in controller._strip.pixels)
+
+
+def test_apply_unknown_effect_does_not_raise(controller):
+    controller._effects = {}
+    controller._apply_effect("nonexistent")  # must not raise
+
+
+def test_trigger_queues_event(controller):
+    controller.trigger("red_flag")
+    assert not controller._queue.empty()
+    item = controller._queue.get_nowait()
+    assert item[0] == "red_flag"
+
+
+def test_set_delay_updates_delay(controller):
+    controller.set_delay(30.0)
+    assert controller._delay_seconds == 30.0
+
+
+def test_delay_queue_holds_event_until_delay_elapsed(controller):
+    controller._effects = controller._load_effects()
+    controller.set_delay(0.05)
+    controller.trigger("red_flag")
+    controller._drain_queue()
+    assert all(p == (0, 0, 0) for p in controller._strip.pixels)
+    time.sleep(0.1)
+    controller._drain_queue()
+    assert controller._strip.pixels[0] == (255, 0, 0)
+
+
+def test_start_stop(controller):
+    controller._effects = controller._load_effects()
+    controller.start()
+    assert controller._thread is not None and controller._thread.is_alive()
+    controller.stop()
+    assert not controller._thread.is_alive()
