@@ -84,7 +84,16 @@ class OTAUpdater:
                 shutil.rmtree(staging)
             staging.mkdir()
             with tarfile.open(archive_path) as tf:
-                tf.extractall(staging)
+                # filter="data" (Python 3.12+) blocks path traversal; fall back to manual check on 3.11
+                try:
+                    tf.extractall(staging, filter="data")
+                except TypeError:
+                    # Python < 3.12 — manually validate no member escapes staging
+                    for member in tf.getmembers():
+                        dest = (staging / member.name).resolve()
+                        if not str(dest).startswith(str(staging.resolve())):
+                            raise ValueError(f"Unsafe tar member: {member.name}")
+                    tf.extractall(staging)
 
             shutil.rmtree(self._install_dir)
             shutil.move(str(staging), str(self._install_dir))
