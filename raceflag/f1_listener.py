@@ -20,8 +20,9 @@ WS_BASE = "wss://livetiming.formula1.com/signalr"
 # Hub name must be "Streaming" (capital S) — f1_sensor confirms this
 CONNECTION_DATA = '[{"name":"Streaming"}]'
 TOPICS = [
-    "TrackStatus", "RaceControlMessages", "SessionInfo", "LapCount",
-    "ExtrapolatedClock", "WeatherData", "TimingData", "TimingAppData", "DriverList",
+    "TrackStatus", "RaceControlMessages", "SessionInfo", "SessionStatus",
+    "LapCount", "ExtrapolatedClock", "WeatherData", "TimingData",
+    "TimingAppData", "DriverList", "Heartbeat", "SessionData",
 ]
 
 FLAG_COLOR_MAP: dict[str, str] = {
@@ -135,6 +136,28 @@ class F1Listener:
 
     def _handle_feed(self, topic: str, data: dict) -> None:
         logger.debug("Feed received: %s", topic)
+
+        # Session-ending status must be handled before _ensure_active to avoid
+        # briefly marking the session active only to immediately clear it
+        if topic == "SessionStatus":
+            status_msg = str(data.get("Status") or data.get("Message") or "").strip()
+            if status_msg in ("Finished", "Finalised", "Ends"):
+                session = self._state.session
+                self._state.set_session(SessionInfo(
+                    name=session.name,
+                    circuit=session.circuit,
+                    venue=session.venue,
+                    country_flag=session.country_flag,
+                    session_type=session.session_type,
+                    is_active=False,
+                    current_lap=session.current_lap,
+                    total_laps=session.total_laps,
+                    time_remaining=session.time_remaining,
+                ))
+                self._state.set_track_status("unknown")
+                logger.info("Session ended: %s", status_msg)
+                return
+
         self._ensure_active()
 
         if topic == "TrackStatus":
@@ -196,9 +219,22 @@ class F1Listener:
             cookie = resp.headers.get("set-cookie", "")
             return token, cookie
 
+    async def _heartbeat(self, ws, subscribe_msg: str) -> None:
+        """Re-send subscribe every 5 minutes to prevent Azure SignalR 20-minute timeout."""
+        try:
+            while True:
+                await asyncio.sleep(300)
+                await ws.send(subscribe_msg)
+                logger.debug("Heartbeat: re-subscribed to timing topics")
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.debug("Heartbeat stopped: %s", e)
+
     async def start(self) -> None:
         self._running = True
         while self._running:
+            heartbeat_task = None
             try:
                 token, cookie = await self._negotiate()
                 ws_url = (
@@ -218,6 +254,7 @@ class F1Listener:
                         "A": [TOPICS], "I": 1,
                     })
                     await ws.send(subscribe)
+                    heartbeat_task = asyncio.create_task(self._heartbeat(ws, subscribe))
                     async for raw in ws:
                         if not self._running:
                             break
@@ -226,12 +263,26 @@ class F1Listener:
                 logger.warning("SignalR connection lost: %s — reconnecting in 5s", e)
                 if self._running:
                     await asyncio.sleep(5)
+            finally:
+                if heartbeat_task and not heartbeat_task.done():
+                    heartbeat_task.cancel()
+                    try:
+                        await heartbeat_task
+                    except asyncio.CancelledError:
+                        pass
 
     def _process_message(self, raw: str) -> None:
         try:
             envelope = json.loads(raw)
         except json.JSONDecodeError:
             return
+        # "R" carries the initial state snapshot returned after Subscribe
+        r_data = envelope.get("R")
+        if isinstance(r_data, dict):
+            for topic, data in r_data.items():
+                if isinstance(data, dict):
+                    self._handle_feed(topic, data)
+        # "M" carries streaming push messages
         for msg in envelope.get("M", []):
             if msg.get("M") == "feed" and len(msg.get("A", [])) >= 2:
                 self._handle_feed(msg["A"][0], msg["A"][1])
