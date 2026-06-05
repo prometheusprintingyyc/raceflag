@@ -8,8 +8,8 @@ import httpx
 import websockets
 
 from raceflag.state import (
-    AppState, WeatherInfo, RaceControlMessage,
-    TRACK_STATUS_MAP, FLAG_COLORS,
+    AppState, WeatherInfo, RaceControlMessage, SessionInfo, DriverPosition,
+    TRACK_STATUS_MAP, FLAG_COLORS, TEAM_COLORS, COUNTRY_FLAGS,
 )
 
 logger = logging.getLogger(__name__)
@@ -47,6 +47,19 @@ def parse_weather(data: dict) -> WeatherInfo:
     )
 
 
+def parse_session_info(data: dict) -> SessionInfo:
+    meeting = data.get("Meeting", {})
+    country = meeting.get("Country", {}).get("Name", "")
+    return SessionInfo(
+        name=meeting.get("Name", ""),
+        circuit=meeting.get("Circuit", {}).get("ShortName", ""),
+        venue=meeting.get("Location", ""),
+        country_flag=COUNTRY_FLAGS.get(country, ""),
+        session_type=data.get("Name", data.get("Type", "")),
+        is_active=True,
+    )
+
+
 def parse_race_control(data: dict) -> RaceControlMessage:
     utc_str = data.get("Utc", "")
     try:
@@ -67,13 +80,63 @@ class F1Listener:
         self._state = state
         self._on_track_status_change = on_track_status_change
         self._running = False
+        self._driver_list: dict = {}
+
+    def _update_driver_positions(self, data: dict) -> None:
+        lines = data.get("Lines", {})
+        if not isinstance(lines, dict):
+            return
+        positions: list[DriverPosition] = []
+        for racing_number, line in lines.items():
+            if not isinstance(line, dict):
+                continue
+            driver_info = self._driver_list.get(str(racing_number), {})
+            team = driver_info.get("TeamName", "")
+            team_colour = "#" + driver_info.get("TeamColour", "888888")
+            pos_str = line.get("Position", "0")
+            try:
+                pos = int(pos_str)
+            except (ValueError, TypeError):
+                continue
+            if pos == 0:
+                continue
+            positions.append(DriverPosition(
+                position=pos,
+                code=driver_info.get("Tla", str(racing_number)),
+                full_name=driver_info.get("FullName", "").title(),
+                team=team,
+                team_color=TEAM_COLORS.get(team, team_colour),
+                gap=line.get("GapToLeader", line.get("IntervalToPositionAhead", {}).get("Value", "")),
+                tyre="",
+                pit_count=int(line.get("NumberOfPitStops", 0)),
+            ))
+        if positions:
+            positions.sort(key=lambda p: p.position)
+            self._state.set_driver_positions(positions)
 
     def _handle_feed(self, topic: str, data: dict) -> None:
         if topic == "TrackStatus":
             status = parse_track_status(data)
             self._state.set_track_status(status)
+            # Mark session active whenever track status arrives — only sent during live sessions
+            if status != "unknown":
+                session = self._state.session
+                if not session.is_active:
+                    self._state.set_session(SessionInfo(
+                        name=session.name,
+                        circuit=session.circuit,
+                        venue=session.venue,
+                        country_flag=session.country_flag,
+                        session_type=session.session_type,
+                        is_active=True,
+                        current_lap=session.current_lap,
+                        total_laps=session.total_laps,
+                        time_remaining=session.time_remaining,
+                    ))
             if self._on_track_status_change:
                 self._on_track_status_change(status)
+        elif topic == "SessionInfo":
+            self._state.set_session(parse_session_info(data))
         elif topic == "WeatherData":
             self._state.set_weather(parse_weather(data))
         elif topic == "RaceControlMessages":
@@ -82,6 +145,37 @@ class F1Listener:
             for _, msg_data in items:
                 if isinstance(msg_data, dict):
                     self._state.add_race_control_message(parse_race_control(msg_data))
+        elif topic == "LapCount":
+            session = self._state.session
+            self._state.set_session(SessionInfo(
+                name=session.name,
+                circuit=session.circuit,
+                venue=session.venue,
+                country_flag=session.country_flag,
+                session_type=session.session_type,
+                is_active=session.is_active,
+                current_lap=int(data.get("CurrentLap", session.current_lap)),
+                total_laps=int(data.get("TotalLaps", session.total_laps)),
+                time_remaining=session.time_remaining,
+            ))
+        elif topic == "ExtrapolatedClock":
+            remaining = data.get("Remaining", "")
+            session = self._state.session
+            self._state.set_session(SessionInfo(
+                name=session.name,
+                circuit=session.circuit,
+                venue=session.venue,
+                country_flag=session.country_flag,
+                session_type=session.session_type,
+                is_active=session.is_active,
+                current_lap=session.current_lap,
+                total_laps=session.total_laps,
+                time_remaining=str(remaining),
+            ))
+        elif topic == "DriverList":
+            self._driver_list = data
+        elif topic == "TimingData":
+            self._update_driver_positions(data)
 
     async def _negotiate(self) -> str:
         async with httpx.AsyncClient() as client:
