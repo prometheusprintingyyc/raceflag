@@ -210,7 +210,8 @@ def test_handle_feed_session_status_inactive_does_not_reactivate():
     assert state.track_status == "break"
 
 
-def test_handle_feed_session_status_finished_sets_finished():
+def test_handle_feed_session_status_finished_sets_break():
+    """Finished means a segment ended — more segments may follow, so show BREAK not FINISHED."""
     state = AppState()
     listener = F1Listener(state=state)
     listener._handle_feed("WeatherData", {
@@ -218,6 +219,19 @@ def test_handle_feed_session_status_finished_sets_finished():
         "WindSpeed": "10", "WindDirection": "S", "Rainfall": "0",
     })
     listener._handle_feed("SessionStatus", {"Status": "Finished"})
+    assert state.session.is_active is False
+    assert state.track_status == "break"
+
+
+def test_handle_feed_session_status_finalised_sets_finished():
+    """Finalised means the whole session is locked — show FINISHED."""
+    state = AppState()
+    listener = F1Listener(state=state)
+    listener._handle_feed("WeatherData", {
+        "AirTemp": "22", "TrackTemp": "35", "Humidity": "70",
+        "WindSpeed": "10", "WindDirection": "S", "Rainfall": "0",
+    })
+    listener._handle_feed("SessionStatus", {"Status": "Finalised"})
     assert state.session.is_active is False
     assert state.track_status == "finished"
 
@@ -228,7 +242,7 @@ def test_handle_feed_session_status_finished_resets_track_status():
     listener._handle_feed("TrackStatus", {"Status": "2"})
     assert state.track_status == "yellow_flag"
     listener._handle_feed("SessionStatus", {"Status": "Finished"})
-    assert state.track_status == "finished"
+    assert state.track_status == "break"
 
 
 def test_timing_data_incremental_updates_accumulate():

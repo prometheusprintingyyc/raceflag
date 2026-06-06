@@ -220,7 +220,7 @@ class F1Listener:
                     total_laps=session.total_laps,
                     time_remaining=session.time_remaining,
                 ))
-                new_status = "finished" if status_msg in ("Finished", "Finalised") else "break"
+                new_status = "finished" if status_msg == "Finalised" else "break"
                 self._state.set_track_status(new_status)
                 logger.info("Session ended: %s", status_msg)
                 if self._on_track_status_change:
