@@ -89,7 +89,9 @@ async def main() -> None:
 
     listener = F1Listener(state=state, on_track_status_change=on_flag_change)
 
-    app = create_app(state=state, config=config, led=led, config_path=CONFIG_PATH, wifi_manager=wifi, ota=ota)
+    current_version = VERSION_FILE.read_text().strip() if VERSION_FILE.exists() else ""
+    app = create_app(state=state, config=config, led=led, config_path=CONFIG_PATH,
+                     wifi_manager=wifi, ota=ota, version=current_version)
 
     server_config = uvicorn.Config(app, host="0.0.0.0", port=8080, log_level="warning")
     server = uvicorn.Server(server_config)

@@ -3,7 +3,7 @@ from dataclasses import asdict
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
 from raceflag.config import Config, save as save_config
@@ -37,6 +37,7 @@ def create_app(
     config_path=None,
     wifi_manager=None,
     ota=None,
+    version: str = "",
 ) -> FastAPI:
     app = FastAPI(title="RaceFlag")
 
@@ -95,11 +96,20 @@ def create_app(
         await wifi_manager.connect(req.ssid, req.password)
         return {"ok": True}
 
-    @app.get("/setup")
+    @app.get("/", include_in_schema=False)
+    async def index():
+        html = (FRONTEND_DIR / "index.html").read_text()
+        if version:
+            html = html.replace('href="/style.css"', f'href="/style.css?v={version}"')
+            html = html.replace('src="/app.js"', f'src="/app.js?v={version}"')
+        return Response(content=html, media_type="text/html",
+                        headers={"Cache-Control": "no-cache"})
+
+    @app.get("/setup", include_in_schema=False)
     async def setup_page():
         return FileResponse(FRONTEND_DIR / "index.html")
 
     if FRONTEND_DIR.exists():
-        app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="static")
+        app.mount("/", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
     return app
