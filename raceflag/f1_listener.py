@@ -207,7 +207,7 @@ class F1Listener:
         # briefly marking the session active only to immediately clear it
         if topic == "SessionStatus":
             status_msg = str(data.get("Status") or data.get("Message") or "").strip()
-            if status_msg in ("Finished", "Finalised", "Ends"):
+            if status_msg in ("Finished", "Finalised", "Ends", "Inactive"):
                 session = self._state.session
                 self._state.set_session(SessionInfo(
                     name=session.name,
