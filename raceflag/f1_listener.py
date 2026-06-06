@@ -38,6 +38,17 @@ FLAG_COLOR_MAP: dict[str, str] = {
     "VSC": FLAG_COLORS["virtual_sc"],
 }
 
+_TYRE_MAP = {"SOFT": "S", "MEDIUM": "M", "HARD": "H", "INTERMEDIATE": "I", "INTER": "I", "WET": "W"}
+
+
+def _deep_update(base: dict, patch: dict) -> None:
+    """Recursively merge patch into base in-place."""
+    for key, value in patch.items():
+        if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+            _deep_update(base[key], value)
+        else:
+            base[key] = value
+
 
 def parse_track_status(data: dict) -> str:
     return TRACK_STATUS_MAP.get(str(data.get("Status", "")), "unknown")
@@ -88,6 +99,8 @@ class F1Listener:
         self._on_track_status_change = on_track_status_change
         self._running = False
         self._driver_list: dict = {}
+        self._timing_lines: dict = {}
+        self._timing_app_lines: dict = {}
 
     def _ensure_active(self) -> None:
         """Mark session active on first feed message — any data means a live session is running."""
@@ -106,14 +119,44 @@ class F1Listener:
             ))
             logger.info("Session marked active from incoming feed data")
 
-    def _update_driver_positions(self, data: dict) -> None:
+    def _merge_timing_lines(self, data: dict) -> None:
+        """Merge a TimingData update into the accumulated per-driver state."""
         lines = data.get("Lines", {})
         if not isinstance(lines, dict):
             return
-        positions: list[DriverPosition] = []
         for racing_number, line in lines.items():
             if not isinstance(line, dict):
                 continue
+            if racing_number not in self._timing_lines:
+                self._timing_lines[racing_number] = {}
+            _deep_update(self._timing_lines[racing_number], line)
+
+    def _merge_timing_app_lines(self, data: dict) -> None:
+        """Merge a TimingAppData update into the accumulated per-driver state."""
+        lines = data.get("Lines", {})
+        if not isinstance(lines, dict):
+            return
+        for racing_number, line in lines.items():
+            if not isinstance(line, dict):
+                continue
+            if racing_number not in self._timing_app_lines:
+                self._timing_app_lines[racing_number] = {}
+            _deep_update(self._timing_app_lines[racing_number], line)
+
+    def _current_tyre(self, racing_number: str) -> str:
+        stints = self._timing_app_lines.get(racing_number, {}).get("Stints", {})
+        if not stints:
+            return ""
+        try:
+            latest = stints[max(stints, key=lambda k: int(k))]
+            return _TYRE_MAP.get(latest.get("Compound", "").upper(), "")
+        except (ValueError, TypeError):
+            return ""
+
+    def _rebuild_positions(self) -> None:
+        """Rebuild the full driver position list from accumulated timing data."""
+        positions: list[DriverPosition] = []
+        for racing_number, line in self._timing_lines.items():
             driver_info = self._driver_list.get(str(racing_number), {})
             team = driver_info.get("TeamName", "")
             team_colour = "#" + driver_info.get("TeamColour", "888888")
@@ -124,19 +167,34 @@ class F1Listener:
                 continue
             if pos == 0:
                 continue
+            gap = line.get("GapToLeader", "")
+            if isinstance(gap, dict):
+                gap = gap.get("Value", "")
+            if not gap:
+                interval = line.get("IntervalToPositionAhead", {})
+                if isinstance(interval, dict):
+                    gap = interval.get("Value", "")
+            try:
+                pit_count = int(line.get("NumberOfPitStops", 0) or 0)
+            except (ValueError, TypeError):
+                pit_count = 0
             positions.append(DriverPosition(
                 position=pos,
                 code=driver_info.get("Tla", str(racing_number)),
                 full_name=driver_info.get("FullName", "").title(),
                 team=team,
                 team_color=TEAM_COLORS.get(team, team_colour),
-                gap=line.get("GapToLeader", line.get("IntervalToPositionAhead", {}).get("Value", "")),
-                tyre="",
-                pit_count=int(line.get("NumberOfPitStops", 0)),
+                gap=str(gap),
+                tyre=self._current_tyre(racing_number),
+                pit_count=pit_count,
             ))
         if positions:
             positions.sort(key=lambda p: p.position)
             self._state.set_driver_positions(positions)
+
+    def _update_driver_positions(self, data: dict) -> None:
+        self._merge_timing_lines(data)
+        self._rebuild_positions()
 
     def _handle_feed(self, topic: str, data: dict) -> None:
         logger.debug("Feed received: %s", topic)
@@ -206,9 +264,12 @@ class F1Listener:
                 time_remaining=str(data.get("Remaining", "")),
             ))
         elif topic == "DriverList":
-            self._driver_list = data
+            _deep_update(self._driver_list, data)
         elif topic == "TimingData":
             self._update_driver_positions(data)
+        elif topic == "TimingAppData":
+            self._merge_timing_app_lines(data)
+            self._rebuild_positions()
 
     async def _negotiate(self) -> tuple[str, str]:
         """Returns (connection_token, cookie) using SignalR Core negotiate."""

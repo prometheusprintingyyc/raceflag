@@ -191,3 +191,69 @@ def test_handle_feed_session_status_finished_resets_track_status():
     assert state.track_status == "yellow_flag"
     listener._handle_feed("SessionStatus", {"Status": "Finished"})
     assert state.track_status == "unknown"
+
+
+def test_timing_data_incremental_updates_accumulate():
+    """Incremental TimingData must merge — not replace — so all 20 drivers remain visible."""
+    state = AppState()
+    listener = F1Listener(state=state)
+    listener._driver_list = {
+        "1": {"Tla": "VER", "FullName": "Max Verstappen", "TeamName": "Red Bull Racing", "TeamColour": "3671C6"},
+        "44": {"Tla": "HAM", "FullName": "Lewis Hamilton", "TeamName": "Mercedes", "TeamColour": "27F4D2"},
+    }
+    listener._handle_feed("TimingData", {"Lines": {
+        "1": {"Position": "1", "GapToLeader": ""},
+        "44": {"Position": "2", "GapToLeader": "+1.234"},
+    }})
+    assert len(state.driver_positions) == 2
+
+    # Second update only touches driver 44 — driver 1 must stay in the table
+    listener._handle_feed("TimingData", {"Lines": {
+        "44": {"GapToLeader": "+2.100"},
+    }})
+    assert len(state.driver_positions) == 2
+    ver = next(p for p in state.driver_positions if p.code == "VER")
+    ham = next(p for p in state.driver_positions if p.code == "HAM")
+    assert ver.position == 1
+    assert ham.gap == "+2.100"
+
+
+def test_timing_data_gap_dict_format():
+    """GapToLeader can be a dict {Value: '...'} — extract the value string."""
+    state = AppState()
+    listener = F1Listener(state=state)
+    listener._driver_list = {
+        "33": {"Tla": "VER", "FullName": "Max Verstappen", "TeamName": "Red Bull Racing", "TeamColour": "3671C6"},
+    }
+    listener._handle_feed("TimingData", {"Lines": {
+        "33": {"Position": "1", "GapToLeader": {"Value": "+0.000"}},
+    }})
+    assert state.driver_positions[0].gap == "+0.000"
+
+
+def test_timing_app_data_provides_tyre():
+    """TimingAppData stints should populate the tyre field."""
+    state = AppState()
+    listener = F1Listener(state=state)
+    listener._driver_list = {
+        "1": {"Tla": "VER", "FullName": "Max Verstappen", "TeamName": "Red Bull Racing", "TeamColour": "3671C6"},
+    }
+    listener._handle_feed("TimingData", {"Lines": {"1": {"Position": "1"}}})
+    listener._handle_feed("TimingAppData", {"Lines": {
+        "1": {"Stints": {"0": {"Compound": "SOFT", "TotalLaps": 10}}},
+    }})
+    assert state.driver_positions[0].tyre == "S"
+
+
+def test_driver_list_merges_on_update():
+    """DriverList updates are incremental — merge, don't replace."""
+    state = AppState()
+    listener = F1Listener(state=state)
+    listener._handle_feed("DriverList", {
+        "1": {"Tla": "VER", "FullName": "Max Verstappen", "TeamName": "Red Bull Racing", "TeamColour": "3671C6"},
+    })
+    listener._handle_feed("DriverList", {
+        "44": {"Tla": "HAM", "FullName": "Lewis Hamilton", "TeamName": "Mercedes", "TeamColour": "27F4D2"},
+    })
+    assert "1" in listener._driver_list
+    assert "44" in listener._driver_list
