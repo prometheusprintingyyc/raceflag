@@ -101,3 +101,34 @@ def test_start_stop(controller):
     assert controller._thread is not None and controller._thread.is_alive()
     controller.stop()
     assert not controller._thread.is_alive()
+
+
+def test_controller_starts_in_idle(controller):
+    assert controller._idle_active is True
+
+
+def test_set_idle_true(controller):
+    controller._idle_active = False
+    controller.set_idle(True)
+    assert controller._idle_active is True
+
+
+def test_set_idle_false(controller):
+    controller.set_idle(False)
+    assert controller._idle_active is False
+
+
+def test_trigger_disables_idle(controller):
+    assert controller._idle_active is True
+    controller.trigger("track_clear")
+    assert controller._idle_active is False
+
+
+def test_idle_animation_sets_pixels_to_dim_red(controller):
+    controller._step_idle_animation()
+    r, g, b = controller._strip.pixels[0]
+    assert r > 0
+    assert g >= 0
+    assert b == 0
+    assert r < 100  # dim, not full brightness
+    assert all(p == controller._strip.pixels[0] for p in controller._strip.pixels)

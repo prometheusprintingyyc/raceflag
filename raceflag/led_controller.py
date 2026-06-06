@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+import math
 import queue
 import threading
 import time
@@ -50,6 +51,7 @@ class LEDController:
         self._queue: queue.Queue = queue.Queue()
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
+        self._idle_active: bool = True
 
     def start(self) -> None:
         self._stop_event.clear()
@@ -67,7 +69,11 @@ class LEDController:
     def set_delay(self, seconds: float) -> None:
         self._delay_seconds = seconds
 
+    def set_idle(self, active: bool) -> None:
+        self._idle_active = active
+
     def trigger(self, flag_state: str) -> None:
+        self._idle_active = False
         self._queue.put((flag_state, time.monotonic()))
 
     def _hex_to_rgb(self, hex_color: str) -> tuple[int, int, int]:
@@ -109,6 +115,17 @@ class LEDController:
                     self._strip.set_pixel(i, r, g, b)
         self._strip.show()
 
+    def _step_idle_animation(self) -> None:
+        """One frame of the idle breathing animation — slow 4-second sine pulse in dim F1 red."""
+        t = time.monotonic()
+        phase = (math.sin(math.pi * t / 2.0) + 1) / 2  # 0→1, period 4s
+        brightness = 0.02 + phase * 0.23               # 2 % → 25 % of #E10600
+        r = int(0xE1 * brightness)
+        g = int(0x06 * brightness)
+        for i in range(self._strip.num_pixels()):
+            self._strip.set_pixel(i, r, g, 0)
+        self._strip.show()
+
     def _drain_queue(self) -> None:
         now = time.monotonic()
         # Snapshot the queue so items not yet due can be re-enqueued without blocking trigger().
@@ -128,4 +145,6 @@ class LEDController:
         while not self._stop_event.is_set():
             self._maybe_reload_effects()
             self._drain_queue()
+            if self._idle_active and self._queue.empty():
+                self._step_idle_animation()
             time.sleep(0.05)

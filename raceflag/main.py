@@ -78,8 +78,14 @@ async def main() -> None:
 
     jolpica = JolpicaClient()
 
+    _IDLE_STATUSES = {"unknown", "break", "finished"}
+
     def on_flag_change(status: str) -> None:
-        led.trigger(status)
+        if status in _IDLE_STATUSES:
+            led.set_idle(True)
+        else:
+            led.set_idle(False)
+            led.trigger(status)
 
     listener = F1Listener(state=state, on_track_status_change=on_flag_change)
 
