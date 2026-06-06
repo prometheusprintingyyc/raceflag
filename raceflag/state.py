@@ -81,6 +81,8 @@ class SessionInfo:
     current_lap: int = 0
     total_laps: int = 0
     time_remaining: str = ""
+    time_remaining_at: str = ""
+    extrapolating: bool = False
 
 
 @dataclass

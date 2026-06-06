@@ -2,7 +2,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime
+from dataclasses import replace as _replace
+from datetime import datetime, timezone
 from urllib.parse import quote
 
 import httpx
@@ -105,18 +106,7 @@ class F1Listener:
     def _ensure_active(self) -> None:
         """Mark session active on first feed message — any data means a live session is running."""
         if not self._state.session.is_active:
-            session = self._state.session
-            self._state.set_session(SessionInfo(
-                name=session.name,
-                circuit=session.circuit,
-                venue=session.venue,
-                country_flag=session.country_flag,
-                session_type=session.session_type,
-                is_active=True,
-                current_lap=session.current_lap,
-                total_laps=session.total_laps,
-                time_remaining=session.time_remaining,
-            ))
+            self._state.set_session(_replace(self._state.session, is_active=True))
             logger.info("Session marked active from incoming feed data")
 
     def _merge_timing_lines(self, data: dict) -> None:
@@ -208,18 +198,7 @@ class F1Listener:
         if topic == "SessionStatus":
             status_msg = str(data.get("Status") or data.get("Message") or "").strip()
             if status_msg in ("Finished", "Finalised", "Ends", "Inactive"):
-                session = self._state.session
-                self._state.set_session(SessionInfo(
-                    name=session.name,
-                    circuit=session.circuit,
-                    venue=session.venue,
-                    country_flag=session.country_flag,
-                    session_type=session.session_type,
-                    is_active=False,
-                    current_lap=session.current_lap,
-                    total_laps=session.total_laps,
-                    time_remaining=session.time_remaining,
-                ))
+                self._state.set_session(_replace(self._state.session, is_active=False, extrapolating=False))
                 new_status = "finished" if status_msg == "Finalised" else "break"
                 self._state.set_track_status(new_status)
                 logger.info("Session ended: %s", status_msg)
@@ -246,29 +225,16 @@ class F1Listener:
                     self._state.add_race_control_message(parse_race_control(msg_data))
         elif topic == "LapCount":
             session = self._state.session
-            self._state.set_session(SessionInfo(
-                name=session.name,
-                circuit=session.circuit,
-                venue=session.venue,
-                country_flag=session.country_flag,
-                session_type=session.session_type,
-                is_active=session.is_active,
+            self._state.set_session(_replace(session,
                 current_lap=int(data.get("CurrentLap", session.current_lap)),
                 total_laps=int(data.get("TotalLaps", session.total_laps)),
-                time_remaining=session.time_remaining,
             ))
         elif topic == "ExtrapolatedClock":
-            session = self._state.session
-            self._state.set_session(SessionInfo(
-                name=session.name,
-                circuit=session.circuit,
-                venue=session.venue,
-                country_flag=session.country_flag,
-                session_type=session.session_type,
-                is_active=session.is_active,
-                current_lap=session.current_lap,
-                total_laps=session.total_laps,
+            now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+            self._state.set_session(_replace(self._state.session,
                 time_remaining=str(data.get("Remaining", "")),
+                time_remaining_at=now_utc,
+                extrapolating=bool(data.get("Extrapolating", False)),
             ))
         elif topic == "DriverList":
             _deep_update(self._driver_list, data)

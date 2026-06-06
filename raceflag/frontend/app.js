@@ -1,5 +1,32 @@
 const POLL_MS = 2000;
 let manualView = null;
+let _clockBase = null;
+
+function _parseRemainingToSeconds(timeStr) {
+  if (!timeStr) return null;
+  const parts = timeStr.split(':').map(Number);
+  if (parts.some(isNaN) || parts.length < 2) return null;
+  return parts.length === 3
+    ? parts[0] * 3600 + parts[1] * 60 + parts[2]
+    : parts[0] * 60 + parts[1];
+}
+
+function _formatSeconds(totalSec) {
+  const s = Math.max(0, Math.floor(totalSec));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  return `${m}:${String(sec).padStart(2, '0')}`;
+}
+
+function _tickClock() {
+  if (!_clockBase || !_clockBase.extrapolating) return;
+  const elapsed = (Date.now() - _clockBase.receivedAt) / 1000;
+  const remaining = _clockBase.totalSeconds - elapsed;
+  const el = document.getElementById('time-remaining');
+  if (el) el.textContent = remaining > 0 ? _formatSeconds(remaining) : '0:00';
+}
 
 async function fetchState() {
   try {
@@ -36,7 +63,16 @@ function updateUI(data) {
   document.getElementById('circuit-venue').textContent = s.circuit || '';
   document.getElementById('session-type').textContent = s.session_type || '—';
   document.getElementById('session-lap').textContent = s.total_laps ? `Lap ${s.current_lap} / ${s.total_laps}` : '';
-  document.getElementById('time-remaining').textContent = s.time_remaining || '—';
+  if (s.time_remaining) {
+    const totalSeconds = _parseRemainingToSeconds(s.time_remaining);
+    const receivedAt = s.time_remaining_at ? new Date(s.time_remaining_at).getTime() : Date.now();
+    if (totalSeconds !== null) _clockBase = { totalSeconds, receivedAt, extrapolating: !!s.extrapolating };
+  }
+  if (!_clockBase || !_clockBase.extrapolating) {
+    document.getElementById('time-remaining').textContent = s.time_remaining || '—';
+  } else {
+    _tickClock();
+  }
 
   const w = data.weather || {};
   document.getElementById('air-temp').textContent = w.air_temp != null ? `${w.air_temp}°C` : '—';
@@ -224,3 +260,4 @@ document.querySelectorAll('[data-effect]').forEach(btn => {
 
 fetchState();
 setInterval(fetchState, POLL_MS);
+setInterval(_tickClock, 1000);
