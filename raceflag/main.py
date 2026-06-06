@@ -81,11 +81,21 @@ async def main() -> None:
     _IDLE_STATUSES = {"unknown", "break", "finished"}
 
     def on_flag_change(status: str) -> None:
-        if status in _IDLE_STATUSES:
-            led.set_idle(True)
+        delay = config.delay_seconds
+        if status not in _IDLE_STATUSES:
+            led.trigger(status)  # idle clears when the queued effect fires
+
+        if delay <= 0:
+            state.set_display_track_status(status)
+            if status in _IDLE_STATUSES:
+                led.set_idle(True)
         else:
-            led.set_idle(False)
-            led.trigger(status)
+            async def _delayed_ui(s: str = status, d: float = delay) -> None:
+                await asyncio.sleep(d)
+                state.set_display_track_status(s)
+                if s in _IDLE_STATUSES:
+                    led.set_idle(True)
+            asyncio.ensure_future(_delayed_ui())
 
     listener = F1Listener(state=state, on_track_status_change=on_flag_change)
 

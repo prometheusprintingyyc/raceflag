@@ -154,7 +154,7 @@ document.getElementById('btn-standings').addEventListener('click', () => { manua
 
 document.getElementById('btn-settings').addEventListener('click', () => {
   document.getElementById('settings-overlay').classList.add('open');
-  loadUpdateStatus();
+  loadSettings();
 });
 document.getElementById('btn-close-settings').addEventListener('click', () => {
   document.getElementById('settings-overlay').classList.remove('open');
@@ -163,19 +163,26 @@ document.getElementById('settings-overlay').addEventListener('click', function (
   if (e.target === this) this.classList.remove('open');
 });
 
-async function loadUpdateStatus() {
+async function loadSettings() {
   try {
-    const resp = await fetch('/api/update/check');
-    const data = await resp.json();
-    document.getElementById('update-current').textContent = data.current || '—';
+    const [updateResp, configResp] = await Promise.all([
+      fetch('/api/update/check'),
+      fetch('/api/config'),
+    ]);
+    const update = await updateResp.json();
+    document.getElementById('update-current').textContent = update.current || '—';
     const btn = document.getElementById('btn-update');
-    if (data.update_available) {
-      btn.textContent = `Update to ${data.latest}`;
+    if (update.update_available) {
+      btn.textContent = `Update to ${update.latest}`;
       btn.disabled = false;
     } else {
       btn.textContent = 'Up to date';
       btn.disabled = true;
     }
+    const cfg = await configResp.json();
+    const slider = document.getElementById('delay-slider');
+    slider.value = cfg.delay_seconds ?? 0;
+    document.getElementById('delay-value').textContent = slider.value;
   } catch (e) {}
 }
 

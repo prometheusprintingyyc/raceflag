@@ -40,6 +40,7 @@ def test_get_state_returns_200(client):
 
 def test_get_state_reflects_current_track_status(client, app_state):
     app_state.set_track_status("red_flag")
+    app_state.set_display_track_status("red_flag")
     resp = client.get("/api/state")
     assert resp.json()["track_status"] == "red_flag"
 

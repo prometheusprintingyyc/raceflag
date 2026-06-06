@@ -73,7 +73,6 @@ class LEDController:
         self._idle_active = active
 
     def trigger(self, flag_state: str) -> None:
-        self._idle_active = False
         self._queue.put((flag_state, time.monotonic()))
 
     def _hex_to_rgb(self, hex_color: str) -> tuple[int, int, int]:
@@ -137,6 +136,7 @@ class LEDController:
                 break
         for flag_state, arrival in pending:
             if now - arrival >= self._delay_seconds:
+                self._idle_active = False
                 self._apply_effect(flag_state)
             else:
                 self._queue.put((flag_state, arrival))

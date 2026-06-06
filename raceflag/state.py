@@ -123,6 +123,7 @@ class NextRace:
 @dataclass
 class AppState:
     track_status: str = "unknown"
+    display_track_status: str = "unknown"
     session: SessionInfo = field(default_factory=SessionInfo)
     weather: WeatherInfo = field(default_factory=WeatherInfo)
     race_control_messages: List[RaceControlMessage] = field(default_factory=list)
@@ -135,6 +136,10 @@ class AppState:
     def set_track_status(self, status: str) -> None:
         with self._lock:
             self.track_status = status
+
+    def set_display_track_status(self, status: str) -> None:
+        with self._lock:
+            self.display_track_status = status
 
     def set_session(self, session: SessionInfo) -> None:
         with self._lock:
@@ -169,8 +174,8 @@ class AppState:
     def to_dict(self) -> dict:
         with self._lock:
             return {
-                "track_status": self.track_status,
-                "flag_color": FLAG_COLORS.get(self.track_status, FLAG_COLORS["unknown"]),
+                "track_status": self.display_track_status,
+                "flag_color": FLAG_COLORS.get(self.display_track_status, FLAG_COLORS["unknown"]),
                 "session": asdict(self.session),
                 "weather": asdict(self.weather),
                 "race_control_messages": [asdict(m) for m in self.race_control_messages],

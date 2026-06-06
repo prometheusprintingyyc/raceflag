@@ -118,9 +118,18 @@ def test_set_idle_false(controller):
     assert controller._idle_active is False
 
 
-def test_trigger_disables_idle(controller):
+def test_trigger_does_not_immediately_disable_idle(controller):
+    """Idle keeps running until the queued effect actually fires, not on trigger()."""
     assert controller._idle_active is True
     controller.trigger("track_clear")
+    assert controller._idle_active is True
+
+
+def test_drain_queue_disables_idle_when_effect_fires(controller):
+    controller._effects = controller._load_effects()
+    controller.trigger("track_clear")
+    assert controller._idle_active is True
+    controller._drain_queue()
     assert controller._idle_active is False
 
 

@@ -44,6 +44,7 @@ def test_to_dict_is_serialisable():
     import json
     s = AppState()
     s.set_track_status("red_flag")
+    s.set_display_track_status("red_flag")
     d = s.to_dict()
     assert d["track_status"] == "red_flag"
     assert d["flag_color"] == FLAG_COLORS["red_flag"]
