@@ -184,6 +184,18 @@ def test_handle_feed_session_status_finished_marks_inactive():
     assert state.session.is_active is False
 
 
+def test_handle_feed_session_status_ends_sets_break():
+    state = AppState()
+    listener = F1Listener(state=state)
+    listener._handle_feed("WeatherData", {
+        "AirTemp": "22", "TrackTemp": "35", "Humidity": "70",
+        "WindSpeed": "10", "WindDirection": "S", "Rainfall": "0",
+    })
+    listener._handle_feed("SessionStatus", {"Status": "Ends"})
+    assert state.session.is_active is False
+    assert state.track_status == "break"
+
+
 def test_handle_feed_session_status_inactive_does_not_reactivate():
     """SessionStatus Inactive (Q1→Q2 break) must not re-mark the session active."""
     state = AppState()
@@ -193,9 +205,21 @@ def test_handle_feed_session_status_inactive_does_not_reactivate():
         "WindSpeed": "10", "WindDirection": "S", "Rainfall": "0",
     })
     listener._handle_feed("SessionStatus", {"Status": "Ends"})
-    assert state.session.is_active is False
     listener._handle_feed("SessionStatus", {"Status": "Inactive"})
     assert state.session.is_active is False
+    assert state.track_status == "break"
+
+
+def test_handle_feed_session_status_finished_sets_finished():
+    state = AppState()
+    listener = F1Listener(state=state)
+    listener._handle_feed("WeatherData", {
+        "AirTemp": "22", "TrackTemp": "35", "Humidity": "70",
+        "WindSpeed": "10", "WindDirection": "S", "Rainfall": "0",
+    })
+    listener._handle_feed("SessionStatus", {"Status": "Finished"})
+    assert state.session.is_active is False
+    assert state.track_status == "finished"
 
 
 def test_handle_feed_session_status_finished_resets_track_status():
@@ -204,7 +228,7 @@ def test_handle_feed_session_status_finished_resets_track_status():
     listener._handle_feed("TrackStatus", {"Status": "2"})
     assert state.track_status == "yellow_flag"
     listener._handle_feed("SessionStatus", {"Status": "Finished"})
-    assert state.track_status == "unknown"
+    assert state.track_status == "finished"
 
 
 def test_timing_data_incremental_updates_accumulate():

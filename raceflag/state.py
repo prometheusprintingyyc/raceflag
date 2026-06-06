@@ -35,6 +35,8 @@ FLAG_COLORS: dict[str, str] = {
     "virtual_sc": "#FFD600",
     "red_flag": "#FF1744",
     "checkered": "#FFFFFF",
+    "break": "#444444",
+    "finished": "#444444",
     "unknown": "#444444",
 }
 

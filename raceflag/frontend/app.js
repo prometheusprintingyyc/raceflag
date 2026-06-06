@@ -21,9 +21,7 @@ function updateUI(data) {
   document.getElementById('btn-standings').classList.toggle('active', targetView === 'standings');
 
   const color = data.flag_color || '#444';
-  const status = (!isActive && s.name)
-    ? 'BREAK'
-    : (data.track_status || 'unknown').replace(/_/g, ' ').toUpperCase();
+  const status = (data.track_status || 'unknown').replace(/_/g, ' ').toUpperCase();
   const banner = document.getElementById('flag-banner');
   banner.style.borderLeftColor = color;
   banner.style.background = hexToRgba(color, 0.1);
