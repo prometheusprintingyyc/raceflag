@@ -70,7 +70,7 @@ body {
 .table-head { display: grid; padding: 7px 12px; font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: #555; border-bottom: 1px solid #222; gap: 6px; }
 .table-row { display: grid; padding: 7px 12px; border-bottom: 1px solid #1e1e1e; align-items: center; gap: 6px; font-size: 12px; }
 .table-row:last-child { border-bottom: none; }
-.positions-cols { grid-template-columns: 28px 14px 1fr 70px 40px 32px; }
+.positions-cols { grid-template-columns: 28px 14px 1fr 60px 76px 40px 32px; }
 .drivers-cols { grid-template-columns: 28px 14px 1fr 48px; }
 .constructors-cols { grid-template-columns: 28px 1fr 48px; }
 .pos-num { font-weight: 700; color: #888; font-size: 11px; }
@@ -82,6 +82,7 @@ body {
 .driver-sub { color: #555; font-weight: 400; font-size: 10px; display: block; margin-top: 1px; }
 .driver-team { color: #666; font-size: 10px; margin-top: 1px; }
 .gap-val { color: #888; font-size: 11px; }
+.lap-val { color: #aaa; font-size: 11px; font-variant-numeric: tabular-nums; }
 .tyre-badge { width: 22px; height: 22px; border-radius: 50%; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; color: #111; }
 .tyre-S { background: #ff2d2d; }
 .tyre-M { background: #ffff00; }

@@ -174,6 +174,9 @@ class F1Listener:
                 interval = line.get("IntervalToPositionAhead", {})
                 if isinstance(interval, dict):
                     gap = interval.get("Value", "")
+            last_lap = line.get("LastLapTime", "")
+            if isinstance(last_lap, dict):
+                last_lap = last_lap.get("Value", "")
             try:
                 pit_count = int(line.get("NumberOfPitStops", 0) or 0)
             except (ValueError, TypeError):
@@ -185,6 +188,7 @@ class F1Listener:
                 team=team,
                 team_color=TEAM_COLORS.get(team, team_colour),
                 gap=str(gap),
+                last_lap_time=str(last_lap),
                 tyre=self._current_tyre(racing_number),
                 pit_count=pit_count,
             ))

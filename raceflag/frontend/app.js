@@ -69,6 +69,7 @@ function renderPositions(positions) {
       <div class="team-bar" style="background:${p.team_color}"></div>
       <div class="driver-name">${p.code}<span class="driver-sub">${p.full_name}</span></div>
       <span class="gap-val">${p.gap || '—'}</span>
+      <span class="lap-val">${p.last_lap_time || '—'}</span>
       <div class="tyre-badge tyre-${p.tyre || '?'}">${p.tyre || '?'}</div>
       <span class="pit-val">${p.pit_count}</span>
     </div>`).join('');

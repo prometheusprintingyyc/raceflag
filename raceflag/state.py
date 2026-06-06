@@ -56,6 +56,7 @@ class DriverPosition:
     team: str = ""
     team_color: str = "#888888"
     gap: str = ""
+    last_lap_time: str = ""
     tyre: str = ""
     pit_count: int = 0
 

@@ -245,6 +245,18 @@ def test_timing_app_data_provides_tyre():
     assert state.driver_positions[0].tyre == "S"
 
 
+def test_timing_data_last_lap_time_string():
+    state = AppState()
+    listener = F1Listener(state=state)
+    listener._driver_list = {
+        "1": {"Tla": "VER", "FullName": "Max Verstappen", "TeamName": "Red Bull Racing", "TeamColour": "3671C6"},
+    }
+    listener._handle_feed("TimingData", {"Lines": {
+        "1": {"Position": "1", "LastLapTime": {"Value": "1:18.234"}},
+    }})
+    assert state.driver_positions[0].last_lap_time == "1:18.234"
+
+
 def test_driver_list_merges_on_update():
     """DriverList updates are incremental — merge, don't replace."""
     state = AppState()
