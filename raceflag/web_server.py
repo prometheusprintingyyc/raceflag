@@ -64,6 +64,11 @@ def create_app(
         led.trigger(req.flag_state)
         return {"triggered": req.flag_state}
 
+    @app.post("/api/test-idle")
+    async def test_idle():
+        led.set_idle(True)
+        return {"triggered": "idle"}
+
     @app.get("/api/update/check")
     async def check_update():
         if ota is None:

@@ -258,6 +258,10 @@ document.querySelectorAll('[data-effect]').forEach(btn => {
   });
 });
 
+document.getElementById('btn-test-idle').addEventListener('click', async () => {
+  await fetch('/api/test-idle', { method: 'POST' });
+});
+
 fetchState();
 setInterval(fetchState, POLL_MS);
 setInterval(_tickClock, 1000);
