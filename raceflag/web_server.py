@@ -14,6 +14,12 @@ VALID_FLAG_STATES = {
     "track_clear", "yellow_flag", "safety_car", "virtual_sc", "red_flag", "checkered",
 }
 
+# These use trigger_timed rather than trigger so the animated version fires
+_TIMED_TEST_EFFECTS: dict[str, float] = {
+    "track_clear": 30.0,
+    "checkered": 30.0,
+}
+
 FRONTEND_DIR = Path(__file__).parent / "frontend"
 
 
@@ -61,7 +67,10 @@ def create_app(
     async def test_effect(req: TestEffectRequest):
         if req.flag_state not in VALID_FLAG_STATES:
             raise HTTPException(status_code=422, detail=f"flag_state must be one of {VALID_FLAG_STATES}")
-        led.trigger(req.flag_state)
+        if req.flag_state in _TIMED_TEST_EFFECTS:
+            led.trigger_timed(req.flag_state, _TIMED_TEST_EFFECTS[req.flag_state])
+        else:
+            led.trigger(req.flag_state)
         return {"triggered": req.flag_state}
 
     @app.post("/api/test-idle")
