@@ -78,23 +78,28 @@ async def main() -> None:
 
     jolpica = JolpicaClient()
 
-    _IDLE_STATUSES = {"unknown", "break", "finished", "track_clear"}
+    _IDLE_STATUSES = {"unknown", "break", "finished"}
+    _TIMED_EFFECTS = {"track_clear": 30.0}
 
     def on_flag_change(status: str) -> None:
         delay = config.delay_seconds
-        if status not in _IDLE_STATUSES:
+        if status not in _IDLE_STATUSES and status not in _TIMED_EFFECTS:
             led.trigger(status)  # idle clears when the queued effect fires
 
         if delay <= 0:
             state.set_display_track_status(status)
             if status in _IDLE_STATUSES:
                 led.set_idle(True)
+            elif status in _TIMED_EFFECTS:
+                led.trigger_timed(status, _TIMED_EFFECTS[status])
         else:
             async def _delayed_ui(s: str = status, d: float = delay) -> None:
                 await asyncio.sleep(d)
                 state.set_display_track_status(s)
                 if s in _IDLE_STATUSES:
                     led.set_idle(True)
+                elif s in _TIMED_EFFECTS:
+                    led.trigger_timed(s, _TIMED_EFFECTS[s])
             asyncio.ensure_future(_delayed_ui())
 
     listener = F1Listener(state=state, on_track_status_change=on_flag_change)

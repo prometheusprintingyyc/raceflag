@@ -133,11 +133,49 @@ def test_drain_queue_disables_idle_when_effect_fires(controller):
     assert controller._idle_active is False
 
 
-def test_idle_animation_sets_pixels_to_dim_red(controller):
+def test_idle_animation_runs_and_shows(controller):
+    show_before = controller._strip.show_calls
     controller._step_idle_animation()
-    r, g, b = controller._strip.pixels[0]
-    assert r > 0
-    assert g >= 0
+    assert controller._strip.show_calls == show_before + 1
+    # Chase has at least one non-zero pixel and no blue in the red segments (0-10)
+    assert any(r > 0 or g > 0 for r, g, b in controller._strip.pixels)
+    assert all(b == 0 for r, g, b in controller._strip.pixels[:11])
+
+
+def test_trigger_timed_sets_timed_effect(controller):
+    controller.trigger_timed("track_clear", 30.0)
+    assert controller._timed_effect == "track_clear"
+    assert controller._timed_effect_expiry > time.monotonic()
+
+
+def test_trigger_timed_disables_idle(controller):
+    assert controller._idle_active is True
+    controller.trigger_timed("track_clear", 30.0)
+    assert controller._idle_active is False
+
+
+def test_track_clear_animation_shows_green_or_red(controller):
+    controller._step_track_clear_animation()
+    assert controller._strip.show_calls == 1
+    first = controller._strip.pixels[0]
+    assert all(p == first for p in controller._strip.pixels)
+    r, g, b = first
     assert b == 0
-    assert r < 100  # dim, not full brightness
-    assert all(p == controller._strip.pixels[0] for p in controller._strip.pixels)
+    assert (r == 0 and g == 255) or (r == 255 and g == 0)
+
+
+def test_drain_queue_cancels_timed_effect(controller):
+    controller._effects = controller._load_effects()
+    controller.trigger_timed("track_clear", 30.0)
+    controller.trigger("red_flag")
+    controller._drain_queue()
+    assert controller._timed_effect == ""
+
+
+def test_timed_effect_expires_and_restores_idle(controller):
+    controller._effects = controller._load_effects()
+    controller.trigger_timed("track_clear", 0.05)
+    controller.start()
+    time.sleep(0.3)
+    controller.stop()
+    assert controller._idle_active is True

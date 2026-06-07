@@ -52,6 +52,8 @@ class LEDController:
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._idle_active: bool = True
+        self._timed_effect: str = ""
+        self._timed_effect_expiry: float = 0.0
 
     def start(self) -> None:
         self._stop_event.clear()
@@ -74,6 +76,11 @@ class LEDController:
 
     def trigger(self, flag_state: str) -> None:
         self._queue.put((flag_state, time.monotonic()))
+
+    def trigger_timed(self, flag_state: str, duration: float) -> None:
+        self._timed_effect = flag_state
+        self._timed_effect_expiry = time.monotonic() + duration
+        self._idle_active = False
 
     def _hex_to_rgb(self, hex_color: str) -> tuple[int, int, int]:
         h = hex_color.lstrip("#")
@@ -112,6 +119,17 @@ class LEDController:
             elif pattern in ("blink", "pulse", "chase", "rainbow"):
                 for i in range(start, min(end + 1, self._strip.num_pixels())):
                     self._strip.set_pixel(i, r, g, b)
+        self._strip.show()
+
+    def _step_track_clear_animation(self) -> None:
+        """Alternates all LEDs between green and red every 0.5 seconds."""
+        t = time.monotonic()
+        if int(t * 2) % 2 == 0:
+            r, g, b = 0, 255, 0
+        else:
+            r, g, b = 255, 0, 0
+        for i in range(self._strip.num_pixels()):
+            self._strip.set_pixel(i, r, g, b)
         self._strip.show()
 
     def _step_idle_animation(self) -> None:
@@ -157,6 +175,7 @@ class LEDController:
         for flag_state, arrival in pending:
             if now - arrival >= self._delay_seconds:
                 self._idle_active = False
+                self._timed_effect = ""  # real effect cancels any timed animation
                 self._apply_effect(flag_state)
             else:
                 self._queue.put((flag_state, arrival))
@@ -165,6 +184,13 @@ class LEDController:
         while not self._stop_event.is_set():
             self._maybe_reload_effects()
             self._drain_queue()
-            if self._idle_active and self._queue.empty():
+            now = time.monotonic()
+            if self._timed_effect:
+                if now >= self._timed_effect_expiry:
+                    self._timed_effect = ""
+                    self._idle_active = True
+                elif self._queue.empty():
+                    self._step_track_clear_animation()
+            elif self._idle_active and self._queue.empty():
                 self._step_idle_animation()
             time.sleep(0.05)
