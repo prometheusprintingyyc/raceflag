@@ -63,7 +63,7 @@ body {
 .card-sub { font-size: 11px; color: #888; margin-top: 3px; }
 
 .circuit-header { display: flex; align-items: center; gap: 10px; }
-.circuit-flag { font-size: 26px; line-height: 1; }
+.circuit-flag { font-size: 26px; line-height: 1; font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif; }
 .circuit-name { font-size: 15px; font-weight: 700; }
 
 .table-wrap { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; margin: 0 12px 12px; overflow: hidden; }
@@ -102,7 +102,7 @@ body {
 .next-race-card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; margin: 12px 12px 0; padding: 12px 14px; }
 .next-race-label { font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px; color: #666; margin-bottom: 8px; }
 .next-race-header { display: flex; align-items: center; gap: 10px; }
-.next-race-flag { font-size: 26px; line-height: 1; }
+.next-race-flag { font-size: 26px; line-height: 1; font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif; }
 .next-race-name { font-size: 16px; font-weight: 700; }
 .next-race-meta { font-size: 11px; color: #888; margin-top: 3px; }
 .next-race-date { font-size: 11px; color: #e10600; font-weight: 600; margin-top: 2px; }

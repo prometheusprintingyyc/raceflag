@@ -19,13 +19,16 @@ TEAM_COLORS: dict[str, str] = {
 }
 
 COUNTRY_FLAGS: dict[str, str] = {
+    # Full country names
     "Monaco": "🇲🇨", "Italy": "🇮🇹", "United Kingdom": "🇬🇧",
     "Spain": "🇪🇸", "Bahrain": "🇧🇭", "Saudi Arabia": "🇸🇦",
     "Australia": "🇦🇺", "Japan": "🇯🇵", "China": "🇨🇳",
     "United States": "🇺🇸", "Canada": "🇨🇦", "Austria": "🇦🇹",
     "Hungary": "🇭🇺", "Belgium": "🇧🇪", "Netherlands": "🇳🇱",
     "Singapore": "🇸🇬", "Mexico": "🇲🇽", "Brazil": "🇧🇷",
-    "Abu Dhabi": "🇦🇪", "Azerbaijan": "🇦🇿",
+    "Abu Dhabi": "🇦🇪", "Azerbaijan": "🇦🇿", "Qatar": "🇶🇦",
+    # Ergast/Jolpica API aliases
+    "UK": "🇬🇧", "USA": "🇺🇸", "UAE": "🇦🇪",
 }
 
 FLAG_COLORS: dict[str, str] = {
