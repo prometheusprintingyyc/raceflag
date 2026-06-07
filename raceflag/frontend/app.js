@@ -262,6 +262,10 @@ document.getElementById('btn-test-idle').addEventListener('click', async () => {
   await fetch('/api/test-idle', { method: 'POST' });
 });
 
+document.getElementById('btn-test-race-start').addEventListener('click', async () => {
+  await fetch('/api/test-race-start', { method: 'POST' });
+});
+
 fetchState();
 setInterval(fetchState, POLL_MS);
 setInterval(_tickClock, 1000);

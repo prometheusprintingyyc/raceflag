@@ -69,6 +69,11 @@ def create_app(
         led.set_idle(True)
         return {"triggered": "idle"}
 
+    @app.post("/api/test-race-start")
+    async def test_race_start():
+        led.trigger_timed("race_start", 30.0)
+        return {"triggered": "race_start"}
+
     @app.get("/api/update/check")
     async def check_update():
         if ota is None:
