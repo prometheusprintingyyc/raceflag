@@ -246,6 +246,24 @@ def test_yellow_flag_animation_varies_brightness(controller):
     assert len(set(reds)) > 1
 
 
+def test_virtual_sc_trigger_sets_active_animation(controller):
+    controller._effects = controller._load_effects()
+    controller.trigger("virtual_sc")
+    controller._drain_queue()
+    assert controller._active_animation == "virtual_sc"
+
+
+def test_virtual_sc_animation_all_yellow_or_off(controller):
+    controller._strip = MockStrip(21)
+    controller._step_virtual_sc_animation()
+    assert controller._strip.show_calls == 1
+    first = controller._strip.pixels[0]
+    assert all(p == first for p in controller._strip.pixels)
+    r, g, b = first
+    assert b == 0
+    assert (r == 255 and g == 215) or (r == 0 and g == 0)
+
+
 def test_safety_car_trigger_sets_active_animation(controller):
     controller._effects = controller._load_effects()
     controller.trigger("safety_car")
