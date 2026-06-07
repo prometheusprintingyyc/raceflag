@@ -42,7 +42,7 @@ class MockStrip:
 
 
 class LEDController:
-    _CONTINUOUS_ANIMATIONS = frozenset({"red_flag", "yellow_flag"})
+    _CONTINUOUS_ANIMATIONS = frozenset({"red_flag", "yellow_flag", "safety_car"})
 
     def __init__(self, strip: LEDStrip, effects_path: Path, delay_seconds: float = 0.0):
         self._strip = strip
@@ -136,6 +136,15 @@ class LEDController:
             phase = (i / wave_length - t * speed) * 2 * math.pi
             brightness = 0.2 + ((math.sin(phase) + 1) / 2) * 0.8  # 20 %–100 %
             self._strip.set_pixel(i, int(255 * brightness), 0, 0)
+        self._strip.show()
+
+    def _step_safety_car_animation(self) -> None:
+        """Segments 1+2 and segment 3 alternate yellow every 0.5 seconds."""
+        t = time.monotonic()
+        seg12_on = int(t * 2) % 2 == 0  # flips every 0.5 s
+        for i in range(self._strip.num_pixels()):
+            on = seg12_on if i <= 16 else not seg12_on
+            self._strip.set_pixel(i, 255 if on else 0, 215 if on else 0, 0)
         self._strip.show()
 
     def _step_yellow_flag_animation(self) -> None:
@@ -254,6 +263,8 @@ class LEDController:
                     self._step_red_flag_animation()
                 elif self._active_animation == "yellow_flag":
                     self._step_yellow_flag_animation()
+                elif self._active_animation == "safety_car":
+                    self._step_safety_car_animation()
             elif self._idle_active and self._queue.empty():
                 self._step_idle_animation()
             time.sleep(0.05)

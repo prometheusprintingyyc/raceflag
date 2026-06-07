@@ -246,6 +246,30 @@ def test_yellow_flag_animation_varies_brightness(controller):
     assert len(set(reds)) > 1
 
 
+def test_safety_car_trigger_sets_active_animation(controller):
+    controller._effects = controller._load_effects()
+    controller.trigger("safety_car")
+    controller._drain_queue()
+    assert controller._active_animation == "safety_car"
+
+
+def test_safety_car_animation_only_yellow_or_off(controller):
+    controller._strip = MockStrip(21)
+    controller._step_safety_car_animation()
+    assert controller._strip.show_calls == 1
+    for r, g, b in controller._strip.pixels:
+        assert b == 0
+        assert (r == 255 and g == 215) or (r == 0 and g == 0)
+
+
+def test_safety_car_animation_seg12_and_seg3_opposite(controller):
+    controller._strip = MockStrip(21)
+    controller._step_safety_car_animation()
+    seg12_on = controller._strip.pixels[0][0] == 255
+    seg3_on = controller._strip.pixels[17][0] == 255
+    assert seg12_on != seg3_on  # they must be opposite
+
+
 def test_checkered_animation_all_white_pixels(controller):
     controller._strip = MockStrip(21)
     controller._step_checkered_animation()
