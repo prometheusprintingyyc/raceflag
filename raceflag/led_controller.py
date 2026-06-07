@@ -128,13 +128,13 @@ class LEDController:
         self._strip.show()
 
     def _step_red_flag_animation(self) -> None:
-        """Sine-wave brightness rolling across all LEDs in red."""
+        """Rolling wave in red — half-rectified sine so pixels go fully dark between peaks."""
         t = time.monotonic()
-        wave_length = 7.0   # pixels per brightness cycle
-        speed = 0.5         # cycles per second
+        wave_length = 14.0  # ~1.5 cycles across 21 LEDs
+        speed = 1.5         # cycles per second
         for i in range(self._strip.num_pixels()):
             phase = (i / wave_length - t * speed) * 2 * math.pi
-            brightness = 0.2 + ((math.sin(phase) + 1) / 2) * 0.8  # 20 %–100 %
+            brightness = max(0.0, math.sin(phase))
             self._strip.set_pixel(i, int(255 * brightness), 0, 0)
         self._strip.show()
 
@@ -156,13 +156,13 @@ class LEDController:
         self._strip.show()
 
     def _step_yellow_flag_animation(self) -> None:
-        """Sine-wave brightness rolling across all LEDs in yellow."""
+        """Rolling wave in yellow — half-rectified sine so pixels go fully dark between peaks."""
         t = time.monotonic()
-        wave_length = 7.0
-        speed = 0.5
+        wave_length = 14.0
+        speed = 1.5
         for i in range(self._strip.num_pixels()):
             phase = (i / wave_length - t * speed) * 2 * math.pi
-            brightness = 0.2 + ((math.sin(phase) + 1) / 2) * 0.8
+            brightness = max(0.0, math.sin(phase))
             self._strip.set_pixel(i, int(255 * brightness), int(215 * brightness), 0)
         self._strip.show()
 
@@ -178,13 +178,13 @@ class LEDController:
         self._strip.show()
 
     def _step_checkered_animation(self) -> None:
-        """Sine-wave brightness rolling across all LEDs in white."""
+        """Rolling wave in white — half-rectified sine so pixels go fully dark between peaks."""
         t = time.monotonic()
-        wave_length = 7.0
-        speed = 0.5
+        wave_length = 14.0
+        speed = 1.5
         for i in range(self._strip.num_pixels()):
             phase = (i / wave_length - t * speed) * 2 * math.pi
-            brightness = 0.2 + ((math.sin(phase) + 1) / 2) * 0.8
+            brightness = max(0.0, math.sin(phase))
             v = int(255 * brightness)
             self._strip.set_pixel(i, v, v, v)
         self._strip.show()
