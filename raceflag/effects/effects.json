@@ -1,43 +1,54 @@
 {
   "track_clear": {
     "segments": [
-      { "start": 0, "end": 59, "color": "#00FF00", "pattern": "solid" }
+      { "start": 0,  "end": 10, "color": "#00FF00", "pattern": "solid" },
+      { "start": 11, "end": 16, "color": "#00FF00", "pattern": "solid" },
+      { "start": 17, "end": 20, "color": "#00FF00", "pattern": "solid" }
     ],
     "transition": "fade",
     "transition_ms": 500
   },
   "yellow_flag": {
     "segments": [
-      { "start": 0, "end": 59, "color": "#FFD700", "pattern": "solid" }
+      { "start": 0,  "end": 10, "color": "#FFD700", "pattern": "solid" },
+      { "start": 11, "end": 16, "color": "#FFD700", "pattern": "solid" },
+      { "start": 17, "end": 20, "color": "#FFD700", "pattern": "solid" }
     ],
     "transition": "instant",
     "transition_ms": 0
   },
   "safety_car": {
     "segments": [
-      { "start": 0, "end": 29, "color": "#FFD700", "pattern": "solid" },
-      { "start": 30, "end": 59, "color": "#00FF00", "pattern": "solid" }
+      { "start": 0,  "end": 10, "color": "#FFD700", "pattern": "solid" },
+      { "start": 11, "end": 16, "color": "#FFD700", "pattern": "solid" },
+      { "start": 17, "end": 20, "color": "#00FF00", "pattern": "solid" }
     ],
     "transition": "fade",
     "transition_ms": 800
   },
   "virtual_sc": {
     "segments": [
-      { "start": 0, "end": 59, "color": "#FFD700", "pattern": "pulse" }
+      { "start": 0,  "end": 10, "color": "#FFD700", "pattern": "pulse" },
+      { "start": 11, "end": 16, "color": "#FFD700", "pattern": "pulse" },
+      { "start": 17, "end": 20, "color": "#FFD700", "pattern": "pulse" }
     ],
     "transition": "fade",
     "transition_ms": 1000
   },
   "red_flag": {
     "segments": [
-      { "start": 0, "end": 59, "color": "#FF0000", "pattern": "solid" }
+      { "start": 0,  "end": 10, "color": "#FF0000", "pattern": "solid" },
+      { "start": 11, "end": 16, "color": "#FF0000", "pattern": "solid" },
+      { "start": 17, "end": 20, "color": "#FF0000", "pattern": "solid" }
     ],
     "transition": "instant",
     "transition_ms": 0
   },
   "checkered": {
     "segments": [
-      { "start": 0, "end": 59, "color": "#FFFFFF", "pattern": "chase" }
+      { "start": 0,  "end": 10, "color": "#FFFFFF", "pattern": "chase" },
+      { "start": 11, "end": 16, "color": "#FFFFFF", "pattern": "chase" },
+      { "start": 17, "end": 20, "color": "#FFFFFF", "pattern": "chase" }
     ],
     "transition": "instant",
     "transition_ms": 0

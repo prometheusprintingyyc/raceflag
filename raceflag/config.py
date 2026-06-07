@@ -7,7 +7,7 @@ DEFAULT_PATH = Path("/opt/raceflag/config.json")
 
 @dataclass
 class Config:
-    led_count: int = 60
+    led_count: int = 21
     led_gpio_pin: int = 18
     led_brightness: int = 128
     delay_seconds: float = 0.0

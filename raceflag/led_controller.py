@@ -115,14 +115,31 @@ class LEDController:
         self._strip.show()
 
     def _step_idle_animation(self) -> None:
-        """One frame of the idle breathing animation — slow 4-second sine pulse in dim F1 red."""
+        """Chase effect: red on segments 1+2, white on segment 3, with a 2-pixel fading tail."""
         t = time.monotonic()
-        phase = (math.sin(math.pi * t / 2.0) + 1) / 2  # 0→1, period 4s
-        brightness = 0.02 + phase * 0.23               # 2 % → 25 % of #E10600
-        r = int(0xE1 * brightness)
-        g = int(0x06 * brightness)
+        speed = 4.0  # pixels per second
+        tail = 2
+
+        _IDLE_SEGMENTS = [
+            (0,  10, 255,   0,   0),   # seg1: red
+            (11, 16, 255,   0,   0),   # seg2: red
+            (17, 20, 255, 255, 255),   # seg3: white
+        ]
+
         for i in range(self._strip.num_pixels()):
-            self._strip.set_pixel(i, r, g, 0)
+            self._strip.set_pixel(i, 0, 0, 0)
+
+        for start, end, r, g, b in _IDLE_SEGMENTS:
+            length = end - start + 1
+            head = int(t * speed) % length
+            for j in range(tail + 1):
+                idx = (head - j) % length
+                fade = 1.0 - j / (tail + 1)
+                self._strip.set_pixel(
+                    start + idx,
+                    int(r * fade), int(g * fade), int(b * fade),
+                )
+
         self._strip.show()
 
     def _drain_queue(self) -> None:

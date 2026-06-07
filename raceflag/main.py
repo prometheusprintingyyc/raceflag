@@ -78,7 +78,7 @@ async def main() -> None:
 
     jolpica = JolpicaClient()
 
-    _IDLE_STATUSES = {"unknown", "break", "finished"}
+    _IDLE_STATUSES = {"unknown", "break", "finished", "track_clear"}
 
     def on_flag_change(status: str) -> None:
         delay = config.delay_seconds
