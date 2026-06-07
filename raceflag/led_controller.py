@@ -132,6 +132,15 @@ class LEDController:
             self._strip.set_pixel(i, r, g, b)
         self._strip.show()
 
+    def _step_race_start_animation(self) -> None:
+        """Flashes all LEDs green at 2 Hz for the race start."""
+        t = time.monotonic()
+        on = int(t * 4) % 2 == 0  # 4 transitions/sec → 2 Hz
+        r, g, b = (0, 255, 0) if on else (0, 0, 0)
+        for i in range(self._strip.num_pixels()):
+            self._strip.set_pixel(i, r, g, b)
+        self._strip.show()
+
     def _step_idle_animation(self) -> None:
         """Chase effect: red on segments 1+2 (shared period), white on segment 3."""
         t = time.monotonic()
@@ -190,7 +199,10 @@ class LEDController:
                     self._timed_effect = ""
                     self._idle_active = True
                 elif self._queue.empty():
-                    self._step_track_clear_animation()
+                    if self._timed_effect == "race_start":
+                        self._step_race_start_animation()
+                    else:
+                        self._step_track_clear_animation()
             elif self._idle_active and self._queue.empty():
                 self._step_idle_animation()
             time.sleep(0.05)

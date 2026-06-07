@@ -179,3 +179,23 @@ def test_timed_effect_expires_and_restores_idle(controller):
     time.sleep(0.3)
     controller.stop()
     assert controller._idle_active is True
+
+
+def test_race_start_animation_flashes_green_or_off(controller):
+    controller._step_race_start_animation()
+    assert controller._strip.show_calls == 1
+    first = controller._strip.pixels[0]
+    assert all(p == first for p in controller._strip.pixels)
+    r, g, b = first
+    assert b == 0 and r == 0  # never has red or blue
+    assert g == 255 or g == 0  # either full green or off
+
+
+def test_run_dispatches_race_start_animation(controller):
+    controller._effects = controller._load_effects()
+    controller.trigger_timed("race_start", 30.0)
+    controller.start()
+    time.sleep(0.1)
+    controller.stop()
+    # At least one frame was rendered — pixels should be green or off
+    assert all(b == 0 and r == 0 for r, g, b in controller._strip.pixels)

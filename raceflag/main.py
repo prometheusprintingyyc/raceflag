@@ -79,27 +79,44 @@ async def main() -> None:
     jolpica = JolpicaClient()
 
     _IDLE_STATUSES = {"unknown", "break", "finished"}
-    _TIMED_EFFECTS = {"track_clear": 30.0}
+    _TIMED_EFFECTS = {"track_clear": 30.0, "race_start": 30.0}
+    _RACE_SESSION_TYPES = {"race", "sprint"}
+    _race_started = False
 
     def on_flag_change(status: str) -> None:
+        nonlocal _race_started
         delay = config.delay_seconds
-        if status not in _IDLE_STATUSES and status not in _TIMED_EFFECTS:
-            led.trigger(status)  # idle clears when the queued effect fires
+
+        # Reset when a session ends so the next race triggers the animation again
+        if status in _IDLE_STATUSES:
+            _race_started = False
+
+        # Promote the first track_clear in a Race/Sprint session to race_start
+        effective = status
+        if (status == "track_clear"
+                and not _race_started
+                and state.session.is_active
+                and state.session.session_type.lower() in _RACE_SESSION_TYPES):
+            _race_started = True
+            effective = "race_start"
+
+        if effective not in _IDLE_STATUSES and effective not in _TIMED_EFFECTS:
+            led.trigger(effective)
 
         if delay <= 0:
             state.set_display_track_status(status)
             if status in _IDLE_STATUSES:
                 led.set_idle(True)
-            elif status in _TIMED_EFFECTS:
-                led.trigger_timed(status, _TIMED_EFFECTS[status])
+            elif effective in _TIMED_EFFECTS:
+                led.trigger_timed(effective, _TIMED_EFFECTS[effective])
         else:
-            async def _delayed_ui(s: str = status, d: float = delay) -> None:
+            async def _delayed_ui(s: str = status, e: str = effective, d: float = delay) -> None:
                 await asyncio.sleep(d)
                 state.set_display_track_status(s)
                 if s in _IDLE_STATUSES:
                     led.set_idle(True)
-                elif s in _TIMED_EFFECTS:
-                    led.trigger_timed(s, _TIMED_EFFECTS[s])
+                elif e in _TIMED_EFFECTS:
+                    led.trigger_timed(e, _TIMED_EFFECTS[e])
             asyncio.ensure_future(_delayed_ui())
 
     listener = F1Listener(state=state, on_track_status_change=on_flag_change)
