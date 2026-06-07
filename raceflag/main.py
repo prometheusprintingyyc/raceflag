@@ -79,7 +79,7 @@ async def main() -> None:
     jolpica = JolpicaClient()
 
     _IDLE_STATUSES = {"unknown", "break", "finished"}
-    _TIMED_EFFECTS = {"track_clear": 30.0, "race_start": 30.0}
+    _TIMED_EFFECTS = {"track_clear": 30.0, "race_start": 30.0, "checkered": 30.0}
     _RACE_SESSION_TYPES = {"race", "sprint"}
     _race_started = False
 

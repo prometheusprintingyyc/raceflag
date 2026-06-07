@@ -246,6 +246,21 @@ def test_yellow_flag_animation_varies_brightness(controller):
     assert len(set(reds)) > 1
 
 
+def test_checkered_animation_all_white_pixels(controller):
+    controller._strip = MockStrip(21)
+    controller._step_checkered_animation()
+    for r, g, b in controller._strip.pixels:
+        assert r == g == b
+        assert r > 0
+
+
+def test_checkered_animation_varies_brightness(controller):
+    controller._strip = MockStrip(21)
+    controller._step_checkered_animation()
+    vals = [r for r, g, b in controller._strip.pixels]
+    assert len(set(vals)) > 1
+
+
 def test_race_start_animation_flashes_green_or_off(controller):
     controller._step_race_start_animation()
     assert controller._strip.show_calls == 1

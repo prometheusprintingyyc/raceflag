@@ -160,6 +160,18 @@ class LEDController:
             self._strip.set_pixel(i, r, g, b)
         self._strip.show()
 
+    def _step_checkered_animation(self) -> None:
+        """Sine-wave brightness rolling across all LEDs in white."""
+        t = time.monotonic()
+        wave_length = 7.0
+        speed = 0.5
+        for i in range(self._strip.num_pixels()):
+            phase = (i / wave_length - t * speed) * 2 * math.pi
+            brightness = 0.2 + ((math.sin(phase) + 1) / 2) * 0.8
+            v = int(255 * brightness)
+            self._strip.set_pixel(i, v, v, v)
+        self._strip.show()
+
     def _step_race_start_animation(self) -> None:
         """Flashes all LEDs green at 2 Hz for the race start."""
         t = time.monotonic()
@@ -233,6 +245,8 @@ class LEDController:
                 elif self._queue.empty():
                     if self._timed_effect == "race_start":
                         self._step_race_start_animation()
+                    elif self._timed_effect == "checkered":
+                        self._step_checkered_animation()
                     else:
                         self._step_track_clear_animation()
             elif self._active_animation and self._queue.empty():
