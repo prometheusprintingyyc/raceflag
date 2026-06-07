@@ -199,6 +199,29 @@ document.getElementById('settings-overlay').addEventListener('click', function (
   if (e.target === this) this.classList.remove('open');
 });
 
+function _applyVersionInfo(update) {
+  const nav = document.getElementById('nav-version');
+  if (nav) {
+    nav.textContent = update.current ? `v${update.current}` : 'v—';
+    if (update.update_available) {
+      nav.textContent += ' · Update available';
+      nav.style.color = '#FFD700';
+    } else {
+      nav.style.color = '';
+    }
+  }
+  const cur = document.getElementById('update-current');
+  if (cur) cur.textContent = update.current || '—';
+}
+
+async function loadNavVersion() {
+  try {
+    const resp = await fetch('/api/update/check');
+    if (!resp.ok) return;
+    _applyVersionInfo(await resp.json());
+  } catch (e) {}
+}
+
 async function loadSettings() {
   try {
     const [updateResp, configResp] = await Promise.all([
@@ -206,7 +229,7 @@ async function loadSettings() {
       fetch('/api/config'),
     ]);
     const update = await updateResp.json();
-    document.getElementById('update-current').textContent = update.current || '—';
+    _applyVersionInfo(update);
     const btn = document.getElementById('btn-update');
     if (update.update_available) {
       btn.textContent = `Update to ${update.latest}`;
@@ -267,5 +290,6 @@ document.getElementById('btn-test-race-start').addEventListener('click', async (
 });
 
 fetchState();
+loadNavVersion();
 setInterval(fetchState, POLL_MS);
 setInterval(_tickClock, 1000);
