@@ -42,6 +42,8 @@ class MockStrip:
 
 
 class LEDController:
+    _CONTINUOUS_ANIMATIONS = frozenset({"red_flag"})
+
     def __init__(self, strip: LEDStrip, effects_path: Path, delay_seconds: float = 0.0):
         self._strip = strip
         self._effects_path = Path(effects_path)
@@ -54,6 +56,7 @@ class LEDController:
         self._idle_active: bool = True
         self._timed_effect: str = ""
         self._timed_effect_expiry: float = 0.0
+        self._active_animation: str = ""  # continuous animation, no auto-expiry
 
     def start(self) -> None:
         self._stop_event.clear()
@@ -73,6 +76,8 @@ class LEDController:
 
     def set_idle(self, active: bool) -> None:
         self._idle_active = active
+        if active:
+            self._active_animation = ""
 
     def trigger(self, flag_state: str) -> None:
         self._queue.put((flag_state, time.monotonic()))
@@ -81,6 +86,7 @@ class LEDController:
         self._timed_effect = flag_state
         self._timed_effect_expiry = time.monotonic() + duration
         self._idle_active = False
+        self._active_animation = ""
 
     def _hex_to_rgb(self, hex_color: str) -> tuple[int, int, int]:
         h = hex_color.lstrip("#")
@@ -119,6 +125,17 @@ class LEDController:
             elif pattern in ("blink", "pulse", "chase", "rainbow"):
                 for i in range(start, min(end + 1, self._strip.num_pixels())):
                     self._strip.set_pixel(i, r, g, b)
+        self._strip.show()
+
+    def _step_red_flag_animation(self) -> None:
+        """Sine-wave brightness rolling across all LEDs in red."""
+        t = time.monotonic()
+        wave_length = 7.0   # pixels per brightness cycle
+        speed = 0.5         # cycles per second
+        for i in range(self._strip.num_pixels()):
+            phase = (i / wave_length - t * speed) * 2 * math.pi
+            brightness = 0.2 + ((math.sin(phase) + 1) / 2) * 0.8  # 20 %–100 %
+            self._strip.set_pixel(i, int(255 * brightness), 0, 0)
         self._strip.show()
 
     def _step_track_clear_animation(self) -> None:
@@ -184,8 +201,12 @@ class LEDController:
         for flag_state, arrival in pending:
             if now - arrival >= self._delay_seconds:
                 self._idle_active = False
-                self._timed_effect = ""  # real effect cancels any timed animation
-                self._apply_effect(flag_state)
+                self._timed_effect = ""
+                if flag_state in self._CONTINUOUS_ANIMATIONS:
+                    self._active_animation = flag_state
+                else:
+                    self._active_animation = ""
+                    self._apply_effect(flag_state)
             else:
                 self._queue.put((flag_state, arrival))
 
@@ -203,6 +224,9 @@ class LEDController:
                         self._step_race_start_animation()
                     else:
                         self._step_track_clear_animation()
+            elif self._active_animation and self._queue.empty():
+                if self._active_animation == "red_flag":
+                    self._step_red_flag_animation()
             elif self._idle_active and self._queue.empty():
                 self._step_idle_animation()
             time.sleep(0.05)

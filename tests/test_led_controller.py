@@ -87,12 +87,12 @@ def test_set_delay_updates_delay(controller):
 def test_delay_queue_holds_event_until_delay_elapsed(controller):
     controller._effects = controller._load_effects()
     controller.set_delay(0.05)
-    controller.trigger("red_flag")
+    controller.trigger("track_clear")
     controller._drain_queue()
     assert all(p == (0, 0, 0) for p in controller._strip.pixels)
     time.sleep(0.1)
     controller._drain_queue()
-    assert controller._strip.pixels[0] == (255, 0, 0)
+    assert controller._strip.pixels[0] == (0, 255, 0)
 
 
 def test_start_stop(controller):
@@ -179,6 +179,49 @@ def test_timed_effect_expires_and_restores_idle(controller):
     time.sleep(0.3)
     controller.stop()
     assert controller._idle_active is True
+
+
+def test_red_flag_trigger_sets_active_animation(controller):
+    controller._effects = controller._load_effects()
+    controller.trigger("red_flag")
+    controller._drain_queue()
+    assert controller._active_animation == "red_flag"
+    assert controller._idle_active is False
+
+
+def test_red_flag_animation_all_red_pixels(controller):
+    controller._step_red_flag_animation()
+    assert controller._strip.show_calls == 1
+    for r, g, b in controller._strip.pixels:
+        assert g == 0 and b == 0
+        assert r > 0
+
+
+def test_red_flag_animation_varies_brightness(controller):
+    controller._strip = MockStrip(21)
+    controller._step_red_flag_animation()
+    reds = [r for r, g, b in controller._strip.pixels]
+    assert len(set(reds)) > 1  # not all the same brightness
+
+
+def test_set_idle_clears_active_animation(controller):
+    controller._active_animation = "red_flag"
+    controller.set_idle(True)
+    assert controller._active_animation == ""
+
+
+def test_trigger_timed_clears_active_animation(controller):
+    controller._active_animation = "red_flag"
+    controller.trigger_timed("track_clear", 30.0)
+    assert controller._active_animation == ""
+
+
+def test_drain_queue_clears_active_animation_on_non_continuous(controller):
+    controller._effects = controller._load_effects()
+    controller._active_animation = "red_flag"
+    controller.trigger("track_clear")
+    controller._drain_queue()
+    assert controller._active_animation == ""
 
 
 def test_race_start_animation_flashes_green_or_off(controller):

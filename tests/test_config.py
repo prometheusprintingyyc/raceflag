@@ -6,7 +6,7 @@ from raceflag import config
 
 def test_load_returns_defaults_when_file_missing(tmp_path):
     cfg = config.load(tmp_path / "config.json")
-    assert cfg.led_count == 60
+    assert cfg.led_count == 21
     assert cfg.led_gpio_pin == 18
     assert cfg.led_brightness == 128
     assert cfg.delay_seconds == 0.0
