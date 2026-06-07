@@ -224,6 +224,28 @@ def test_drain_queue_clears_active_animation_on_non_continuous(controller):
     assert controller._active_animation == ""
 
 
+def test_yellow_flag_trigger_sets_active_animation(controller):
+    controller._effects = controller._load_effects()
+    controller.trigger("yellow_flag")
+    controller._drain_queue()
+    assert controller._active_animation == "yellow_flag"
+
+
+def test_yellow_flag_animation_all_yellow_pixels(controller):
+    controller._strip = MockStrip(21)
+    controller._step_yellow_flag_animation()
+    for r, g, b in controller._strip.pixels:
+        assert b == 0
+        assert r > 0 and g > 0
+
+
+def test_yellow_flag_animation_varies_brightness(controller):
+    controller._strip = MockStrip(21)
+    controller._step_yellow_flag_animation()
+    reds = [r for r, g, b in controller._strip.pixels]
+    assert len(set(reds)) > 1
+
+
 def test_race_start_animation_flashes_green_or_off(controller):
     controller._step_race_start_animation()
     assert controller._strip.show_calls == 1

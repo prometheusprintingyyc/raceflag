@@ -42,7 +42,7 @@ class MockStrip:
 
 
 class LEDController:
-    _CONTINUOUS_ANIMATIONS = frozenset({"red_flag"})
+    _CONTINUOUS_ANIMATIONS = frozenset({"red_flag", "yellow_flag"})
 
     def __init__(self, strip: LEDStrip, effects_path: Path, delay_seconds: float = 0.0):
         self._strip = strip
@@ -138,6 +138,17 @@ class LEDController:
             self._strip.set_pixel(i, int(255 * brightness), 0, 0)
         self._strip.show()
 
+    def _step_yellow_flag_animation(self) -> None:
+        """Sine-wave brightness rolling across all LEDs in yellow."""
+        t = time.monotonic()
+        wave_length = 7.0
+        speed = 0.5
+        for i in range(self._strip.num_pixels()):
+            phase = (i / wave_length - t * speed) * 2 * math.pi
+            brightness = 0.2 + ((math.sin(phase) + 1) / 2) * 0.8
+            self._strip.set_pixel(i, int(255 * brightness), int(215 * brightness), 0)
+        self._strip.show()
+
     def _step_track_clear_animation(self) -> None:
         """Alternates all LEDs between green and red every 0.5 seconds."""
         t = time.monotonic()
@@ -227,6 +238,8 @@ class LEDController:
             elif self._active_animation and self._queue.empty():
                 if self._active_animation == "red_flag":
                     self._step_red_flag_animation()
+                elif self._active_animation == "yellow_flag":
+                    self._step_yellow_flag_animation()
             elif self._idle_active and self._queue.empty():
                 self._step_idle_animation()
             time.sleep(0.05)
