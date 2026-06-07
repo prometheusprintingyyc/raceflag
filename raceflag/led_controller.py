@@ -74,15 +74,25 @@ class LEDController:
     def set_delay(self, seconds: float) -> None:
         self._delay_seconds = seconds
 
+    def _flush_queue(self) -> None:
+        while not self._queue.empty():
+            try:
+                self._queue.get_nowait()
+            except queue.Empty:
+                break
+
     def set_idle(self, active: bool) -> None:
-        self._idle_active = active
         if active:
+            self._flush_queue()
             self._active_animation = ""
+            self._timed_effect = ""
+        self._idle_active = active
 
     def trigger(self, flag_state: str) -> None:
         self._queue.put((flag_state, time.monotonic()))
 
     def trigger_timed(self, flag_state: str, duration: float) -> None:
+        self._flush_queue()
         self._timed_effect = flag_state
         self._timed_effect_expiry = time.monotonic() + duration
         self._idle_active = False

@@ -211,10 +211,34 @@ def test_set_idle_clears_active_animation(controller):
     assert controller._active_animation == ""
 
 
+def test_set_idle_clears_timed_effect(controller):
+    controller.trigger_timed("track_clear", 30.0)
+    controller.set_idle(True)
+    assert controller._timed_effect == ""
+
+
+def test_set_idle_true_flushes_queue(controller):
+    controller.trigger("yellow_flag")
+    controller.set_idle(True)
+    assert controller._queue.empty()
+
+
 def test_trigger_timed_clears_active_animation(controller):
     controller._active_animation = "red_flag"
     controller.trigger_timed("track_clear", 30.0)
     assert controller._active_animation == ""
+
+
+def test_trigger_timed_flushes_stale_queue_events(controller):
+    """Queued continuous events must not cancel a timed effect set afterward."""
+    controller._effects = controller._load_effects()
+    controller.trigger("yellow_flag")
+    controller.trigger_timed("track_clear", 30.0)
+    # Queue should be empty — stale yellow_flag discarded
+    assert controller._queue.empty()
+    # Draining should NOT cancel the timed effect
+    controller._drain_queue()
+    assert controller._timed_effect == "track_clear"
 
 
 def test_drain_queue_clears_active_animation_on_non_continuous(controller):
