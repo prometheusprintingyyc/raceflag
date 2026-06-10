@@ -76,3 +76,33 @@ def test_get_config_returns_current_values(client, config):
     config.led_count = 120
     resp = client.get("/api/config")
     assert resp.json()["led_count"] == 120
+
+
+def test_get_led_state_returns_pixels_for_mock_strip(client):
+    resp = client.get("/api/led-state")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["available"] is True
+    assert isinstance(data["pixels"], list)
+    assert len(data["pixels"]) == 10
+    assert data["pixels"][0] == [0, 0, 0]
+
+
+def test_set_demo_mode_on(client, app_state):
+    resp = client.post("/api/config/demo-mode", json={"enabled": True})
+    assert resp.status_code == 200
+    assert resp.json()["demo_mode"] is True
+    assert app_state.demo_mode is True
+
+
+def test_set_demo_mode_off(client, app_state):
+    app_state.set_demo_mode(True)
+    resp = client.post("/api/config/demo-mode", json={"enabled": False})
+    assert resp.status_code == 200
+    assert app_state.demo_mode is False
+
+
+def test_state_includes_demo_mode(client, app_state):
+    app_state.set_demo_mode(True)
+    resp = client.get("/api/state")
+    assert resp.json()["demo_mode"] is True

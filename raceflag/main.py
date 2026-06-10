@@ -22,6 +22,7 @@ EFFECTS_PATH = Path(os.environ.get("RACEFLAG_EFFECTS", "/opt/raceflag/raceflag/e
 VERSION_FILE = Path(os.environ.get("RACEFLAG_VERSION", "/opt/raceflag/version.txt"))
 INSTALL_DIR = Path(os.environ.get("RACEFLAG_DIR", "/opt/raceflag"))
 GITHUB_REPO = os.environ.get("RACEFLAG_REPO", "prometheusprintingyyc/raceflag")
+DEMO_MODE = os.environ.get("DEMO_MODE", "").lower() in ("1", "true", "yes")
 
 
 def _make_strip(config):
@@ -67,6 +68,7 @@ async def _refresh_standings_loop(client: JolpicaClient, state: AppState) -> Non
 async def main() -> None:
     config = load_config(CONFIG_PATH)
     state = AppState()
+    state.set_demo_mode(DEMO_MODE)
 
     strip = _make_strip(config)
     from raceflag.led_controller import LEDController

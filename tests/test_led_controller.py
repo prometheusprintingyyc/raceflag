@@ -338,6 +338,25 @@ def test_race_start_animation_flashes_green_or_off(controller):
     assert g == 255 or g == 0  # either full green or off
 
 
+def test_get_pixel_state_returns_pixels_for_mock_strip(controller):
+    controller._strip.set_pixel(0, 255, 0, 0)
+    pixels = controller.get_pixel_state()
+    assert pixels is not None
+    assert pixels[0] == (255, 0, 0)
+
+
+def test_get_pixel_state_returns_none_for_real_strip(controller):
+    from raceflag.led_controller import LEDStrip
+    class FakeRealStrip:
+        def begin(self): pass
+        def set_pixel(self, n, r, g, b): pass
+        def show(self): pass
+        def num_pixels(self): return 10
+        def fill(self, r, g, b): pass
+    controller._strip = FakeRealStrip()
+    assert controller.get_pixel_state() is None
+
+
 def test_run_dispatches_race_start_animation(controller):
     controller._effects = controller._load_effects()
     controller.trigger_timed("race_start", 30.0)

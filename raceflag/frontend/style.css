@@ -124,6 +124,35 @@ body {
 .btn-effect { background: #2a2a2a; border: 1px solid #333; color: #aaa; border-radius: 4px; padding: 5px 10px; font-size: 11px; cursor: pointer; margin: 2px; }
 .effects-grid { display: flex; flex-wrap: wrap; margin-top: 8px; }
 
+.led-strip-panel {
+  display: none;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  margin: 0 12px 12px;
+  padding: 12px 14px;
+}
+.led-strip-panel.visible { display: block; }
+.led-strip-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.led-strip-label { font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px; color: #666; }
+.virtual-pill {
+  background: #2a2a2a; border: 1px solid #444; color: #555;
+  font-size: 8px; font-weight: 700; letter-spacing: 1px;
+  padding: 1px 6px; border-radius: 3px;
+}
+.led-track {
+  background: #0a0a0a; border-radius: 6px; padding: 8px 10px;
+  display: flex; gap: 2px; align-items: center; overflow: hidden;
+}
+.led-pixel { flex: 1; height: 16px; border-radius: 3px; min-width: 0; background: #111; }
+
+.btn-toggle {
+  background: #2a2a2a; border: 1px solid #444; color: #555;
+  border-radius: 4px; padding: 5px 14px; font-size: 11px;
+  font-weight: 700; cursor: pointer; letter-spacing: 0.5px;
+}
+.btn-toggle.on { background: rgba(0,200,83,0.12); border-color: #00C853; color: #00C853; }
+
 @media (max-width: 400px) {
   .card.wide { grid-column: span 1; }
 }

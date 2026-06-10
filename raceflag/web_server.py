@@ -36,6 +36,10 @@ class WiFiRequest(BaseModel):
     password: str
 
 
+class DemoModeRequest(BaseModel):
+    enabled: bool
+
+
 def create_app(
     state: AppState,
     config: Config,
@@ -72,6 +76,18 @@ def create_app(
         else:
             led.trigger(req.flag_state)
         return {"triggered": req.flag_state}
+
+    @app.get("/api/led-state")
+    async def get_led_state():
+        pixels = led.get_pixel_state()
+        if pixels is None:
+            return {"available": False, "pixels": []}
+        return {"available": True, "pixels": [[r, g, b] for r, g, b in pixels]}
+
+    @app.post("/api/config/demo-mode")
+    async def set_demo_mode(req: DemoModeRequest):
+        state.set_demo_mode(req.enabled)
+        return {"demo_mode": req.enabled}
 
     @app.post("/api/test-idle")
     async def test_idle():

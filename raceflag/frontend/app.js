@@ -83,6 +83,8 @@ function updateUI(data) {
   document.getElementById('rain').textContent = w.rain ? 'Yes' : 'No';
   document.getElementById('rain').style.color = w.rain ? '#4fc3f7' : '#aaa';
 
+  _setDemoMode(!!data.demo_mode);
+
   renderPositions(data.driver_positions || []);
   renderRCMessages(rcMsgs);
 
@@ -287,6 +289,64 @@ document.getElementById('btn-test-idle').addEventListener('click', async () => {
 
 document.getElementById('btn-test-race-start').addEventListener('click', async () => {
   await fetch('/api/test-race-start', { method: 'POST' });
+});
+
+// ── Demo mode ──────────────────────────────────────────────────────────────
+let _ledPollInterval = null;
+let _ledPixels = [];
+
+function _initLedStrip(count) {
+  const track = document.getElementById('led-track');
+  if (!track || _ledPixels.length === count) return;
+  track.innerHTML = '';
+  _ledPixels = [];
+  for (let i = 0; i < count; i++) {
+    const el = document.createElement('div');
+    el.className = 'led-pixel';
+    track.appendChild(el);
+    _ledPixels.push(el);
+  }
+}
+
+async function _pollLedState() {
+  try {
+    const resp = await fetch('/api/led-state');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (!data.available || !data.pixels.length) return;
+    _initLedStrip(data.pixels.length);
+    for (let i = 0; i < _ledPixels.length; i++) {
+      const [r, g, b] = data.pixels[i];
+      _ledPixels[i].style.background = `rgb(${r},${g},${b})`;
+      _ledPixels[i].style.boxShadow = (r + g + b > 30)
+        ? `0 0 4px rgba(${r},${g},${b},0.5)` : 'none';
+    }
+  } catch (e) {}
+}
+
+function _setDemoMode(enabled) {
+  const panel = document.getElementById('led-strip-panel');
+  const btn = document.getElementById('btn-demo-mode');
+  if (enabled) {
+    panel.classList.add('visible');
+    if (!_ledPollInterval) _ledPollInterval = setInterval(_pollLedState, 100);
+    if (btn) { btn.textContent = 'ON'; btn.classList.add('on'); }
+  } else {
+    panel.classList.remove('visible');
+    if (_ledPollInterval) { clearInterval(_ledPollInterval); _ledPollInterval = null; }
+    if (btn) { btn.textContent = 'OFF'; btn.classList.remove('on'); }
+  }
+}
+
+document.getElementById('btn-demo-mode').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-demo-mode');
+  const enabling = !btn.classList.contains('on');
+  await fetch('/api/config/demo-mode', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled: enabling }),
+  });
+  await fetchState();
 });
 
 fetchState();

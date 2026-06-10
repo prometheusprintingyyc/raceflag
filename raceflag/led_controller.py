@@ -74,6 +74,11 @@ class LEDController:
     def set_delay(self, seconds: float) -> None:
         self._delay_seconds = seconds
 
+    def get_pixel_state(self) -> list[tuple[int, int, int]] | None:
+        if isinstance(self._strip, MockStrip):
+            return list(self._strip.pixels)
+        return None
+
     def _flush_queue(self) -> None:
         while not self._queue.empty():
             try:

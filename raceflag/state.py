@@ -129,6 +129,7 @@ class NextRace:
 class AppState:
     track_status: str = "unknown"
     display_track_status: str = "unknown"
+    demo_mode: bool = False
     session: SessionInfo = field(default_factory=SessionInfo)
     weather: WeatherInfo = field(default_factory=WeatherInfo)
     race_control_messages: List[RaceControlMessage] = field(default_factory=list)
@@ -145,6 +146,10 @@ class AppState:
     def set_display_track_status(self, status: str) -> None:
         with self._lock:
             self.display_track_status = status
+
+    def set_demo_mode(self, enabled: bool) -> None:
+        with self._lock:
+            self.demo_mode = enabled
 
     def set_session(self, session: SessionInfo) -> None:
         with self._lock:
@@ -181,6 +186,7 @@ class AppState:
             return {
                 "track_status": self.display_track_status,
                 "flag_color": FLAG_COLORS.get(self.display_track_status, FLAG_COLORS["unknown"]),
+                "demo_mode": self.demo_mode,
                 "session": asdict(self.session),
                 "weather": asdict(self.weather),
                 "race_control_messages": [asdict(m) for m in self.race_control_messages],
