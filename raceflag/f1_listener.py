@@ -336,6 +336,7 @@ class F1Listener:
                         "invocationId": "0",
                     }) + RECORD_SEP)
                     logger.info("Connected — subscribed to timing topics")
+                    self._state.set_feed_connected(True)
 
                     async for raw in ws:
                         if not self._running:
@@ -344,6 +345,7 @@ class F1Listener:
                         for resp in responses:
                             await ws.send(resp)
             except Exception as e:
+                self._state.set_feed_connected(False)
                 logger.warning("SignalR connection lost: %s — reconnecting in 5s", e)
                 if self._running:
                     await asyncio.sleep(5)

@@ -85,6 +85,12 @@ function updateUI(data) {
 
   _setDemoMode(!!data.demo_mode);
 
+  const feedEl = document.getElementById('feed-status');
+  if (feedEl) {
+    feedEl.textContent = data.feed_connected ? 'Connected' : 'Disconnected';
+    feedEl.style.color = data.feed_connected ? '#00C853' : '#FF5252';
+  }
+
   renderPositions(data.driver_positions || []);
   renderRCMessages(rcMsgs);
 
