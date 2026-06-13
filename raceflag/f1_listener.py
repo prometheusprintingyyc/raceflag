@@ -205,6 +205,11 @@ class F1Listener:
                 if self._on_track_status_change:
                     self._on_track_status_change(new_status)
                 return
+            if status_msg == "Started" and self._state.track_status in ("break", "finished"):
+                self._state.set_track_status("unknown")
+                logger.info("New session segment started — clearing break state")
+                if self._on_track_status_change:
+                    self._on_track_status_change("unknown")
 
         self._ensure_active()
 

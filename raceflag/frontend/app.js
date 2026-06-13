@@ -351,5 +351,15 @@ document.getElementById('btn-demo-mode').addEventListener('click', async () => {
 
 fetchState();
 loadNavVersion();
+(async () => {
+  try {
+    const resp = await fetch('/api/config');
+    if (!resp.ok) return;
+    const cfg = await resp.json();
+    const slider = document.getElementById('delay-slider');
+    slider.value = cfg.delay_seconds ?? 0;
+    document.getElementById('delay-value').textContent = slider.value;
+  } catch (e) {}
+})();
 setInterval(fetchState, POLL_MS);
 setInterval(_tickClock, 1000);
