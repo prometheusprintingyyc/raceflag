@@ -199,7 +199,7 @@ class F1Listener:
             status_msg = str(data.get("Status") or data.get("Message") or "").strip()
             if status_msg in ("Finished", "Finalised", "Ends", "Inactive"):
                 self._state.set_session(_replace(self._state.session, is_active=False, extrapolating=False))
-                new_status = "finished" if status_msg == "Finalised" else "break"
+                new_status = "finished" if status_msg in ("Finished", "Finalised") else "break"
                 self._state.set_track_status(new_status)
                 logger.info("Session ended: %s", status_msg)
                 if self._on_track_status_change:
