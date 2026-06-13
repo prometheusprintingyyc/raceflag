@@ -145,6 +145,7 @@ body {
   display: flex; gap: 2px; align-items: center; overflow: hidden;
 }
 .led-pixel { flex: 1; height: 16px; border-radius: 3px; min-width: 0; background: #111; }
+.led-segment-divider { width: 6px; flex-shrink: 0; height: 24px; background: #1e1e1e; border-left: 1px solid #333; border-right: 1px solid #333; }
 
 .btn-toggle {
   background: #2a2a2a; border: 1px solid #444; color: #555;

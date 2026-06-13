@@ -81,8 +81,12 @@ def create_app(
     async def get_led_state():
         pixels = led.get_pixel_state()
         if pixels is None:
-            return {"available": False, "pixels": []}
-        return {"available": True, "pixels": [[r, g, b] for r, g, b in pixels]}
+            return {"available": False, "pixels": [], "segment_breaks": []}
+        return {
+            "available": True,
+            "pixels": [[r, g, b] for r, g, b in pixels],
+            "segment_breaks": led.get_segment_breaks(),
+        }
 
     @app.post("/api/config/demo-mode")
     async def set_demo_mode(req: DemoModeRequest):

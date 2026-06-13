@@ -300,17 +300,25 @@ document.getElementById('btn-test-race-start').addEventListener('click', async (
 // ── Demo mode ──────────────────────────────────────────────────────────────
 let _ledPollInterval = null;
 let _ledPixels = [];
+let _ledInitCount = 0;
 
-function _initLedStrip(count) {
+function _initLedStrip(count, segmentBreaks) {
   const track = document.getElementById('led-track');
-  if (!track || _ledPixels.length === count) return;
+  if (!track || _ledInitCount === count) return;
   track.innerHTML = '';
   _ledPixels = [];
+  _ledInitCount = count;
+  const breaks = new Set(segmentBreaks || []);
   for (let i = 0; i < count; i++) {
     const el = document.createElement('div');
     el.className = 'led-pixel';
     track.appendChild(el);
     _ledPixels.push(el);
+    if (breaks.has(i)) {
+      const div = document.createElement('div');
+      div.className = 'led-segment-divider';
+      track.appendChild(div);
+    }
   }
 }
 
@@ -320,7 +328,7 @@ async function _pollLedState() {
     if (!resp.ok) return;
     const data = await resp.json();
     if (!data.available || !data.pixels.length) return;
-    _initLedStrip(data.pixels.length);
+    _initLedStrip(data.pixels.length, data.segment_breaks);
     for (let i = 0; i < _ledPixels.length; i++) {
       const [r, g, b] = data.pixels[i];
       _ledPixels[i].style.background = `rgb(${r},${g},${b})`;

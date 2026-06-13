@@ -79,6 +79,12 @@ class LEDController:
             return list(self._strip.pixels)
         return None
 
+    def get_segment_breaks(self) -> list[int]:
+        """Return the last pixel index of each segment except the final one."""
+        first_effect = next(iter(self._effects.values()), {})
+        segments = first_effect.get("segments", [])
+        return [seg["end"] for seg in segments[:-1]] if len(segments) > 1 else []
+
     def _flush_queue(self) -> None:
         while not self._queue.empty():
             try:
