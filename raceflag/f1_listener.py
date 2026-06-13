@@ -228,6 +228,10 @@ class F1Listener:
             for _, msg_data in items:
                 if isinstance(msg_data, dict):
                     self._state.add_race_control_message(parse_race_control(msg_data))
+                    if str(msg_data.get("Flag", "")).upper() == "CHEQUERED":
+                        self._state.set_track_status("checkered")
+                        if self._on_track_status_change:
+                            self._on_track_status_change("checkered")
         elif topic == "LapCount":
             session = self._state.session
             self._state.set_session(_replace(session,

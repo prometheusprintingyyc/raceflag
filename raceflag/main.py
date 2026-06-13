@@ -81,6 +81,7 @@ async def main() -> None:
     jolpica = JolpicaClient()
 
     _IDLE_STATUSES = {"unknown", "break", "finished"}
+    _LED_IDLE_STATUSES = {"unknown", "break"}
     _TIMED_EFFECTS = {"track_clear": 30.0, "race_start": 30.0, "checkered": 30.0}
     _RACE_SESSION_TYPES = {"race", "sprint"}
     _race_started = False
@@ -107,7 +108,7 @@ async def main() -> None:
 
         if delay <= 0:
             state.set_display_track_status(status)
-            if status in _IDLE_STATUSES:
+            if status in _LED_IDLE_STATUSES:
                 led.set_idle(True)
             elif effective in _TIMED_EFFECTS:
                 led.trigger_timed(effective, _TIMED_EFFECTS[effective])
@@ -115,7 +116,7 @@ async def main() -> None:
             async def _delayed_ui(s: str = status, e: str = effective, d: float = delay) -> None:
                 await asyncio.sleep(d)
                 state.set_display_track_status(s)
-                if s in _IDLE_STATUSES:
+                if s in _LED_IDLE_STATUSES:
                     led.set_idle(True)
                 elif e in _TIMED_EFFECTS:
                     led.trigger_timed(e, _TIMED_EFFECTS[e])
