@@ -280,14 +280,14 @@ class LEDController:
                 if now >= self._timed_effect_expiry:
                     self._timed_effect = ""
                     self._idle_active = True
-                elif self._queue.empty():
+                else:
                     if self._timed_effect == "race_start":
                         self._step_race_start_animation()
                     elif self._timed_effect == "checkered":
                         self._step_checkered_animation()
                     else:
                         self._step_track_clear_animation()
-            elif self._active_animation and self._queue.empty():
+            elif self._active_animation:
                 if self._active_animation == "red_flag":
                     self._step_red_flag_animation()
                 elif self._active_animation == "yellow_flag":
@@ -296,6 +296,6 @@ class LEDController:
                     self._step_safety_car_animation()
                 elif self._active_animation == "virtual_sc":
                     self._step_virtual_sc_animation()
-            elif self._idle_active and self._queue.empty():
+            elif self._idle_active:
                 self._step_idle_animation()
             time.sleep(0.05)
