@@ -157,13 +157,11 @@ class F1Listener:
                 continue
             if pos == 0:
                 continue
-            gap = line.get("GapToLeader", "")
-            if isinstance(gap, dict):
-                gap = gap.get("Value", "")
+            interval = line.get("IntervalToPositionAhead", {})
+            gap = interval.get("Value", "") if isinstance(interval, dict) else ""
             if not gap:
-                interval = line.get("IntervalToPositionAhead", {})
-                if isinstance(interval, dict):
-                    gap = interval.get("Value", "")
+                gap_to_leader = line.get("GapToLeader", "")
+                gap = gap_to_leader.get("Value", "") if isinstance(gap_to_leader, dict) else str(gap_to_leader or "")
             last_lap = line.get("LastLapTime", "")
             if isinstance(last_lap, dict):
                 last_lap = last_lap.get("Value", "")
