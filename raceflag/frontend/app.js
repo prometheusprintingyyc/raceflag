@@ -62,7 +62,10 @@ function updateUI(data) {
   document.getElementById('circuit-name').textContent = s.name || '—';
   document.getElementById('circuit-venue').textContent = s.circuit || '';
   document.getElementById('session-type').textContent = s.session_type || '—';
-  document.getElementById('session-lap').textContent = s.total_laps ? `Lap ${s.current_lap} / ${s.total_laps}` : '';
+  const _remaining = s.total_laps && s.current_lap ? s.total_laps - s.current_lap : null;
+  document.getElementById('session-lap').textContent =
+    _remaining !== null ? `Lap ${_remaining} / ${s.total_laps}` :
+    s.current_lap ? `Lap ${s.current_lap}` : '';
   if (s.time_remaining) {
     const totalSeconds = _parseRemainingToSeconds(s.time_remaining);
     const receivedAt = s.time_remaining_at ? new Date(s.time_remaining_at).getTime() : Date.now();
