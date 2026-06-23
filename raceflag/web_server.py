@@ -3,7 +3,7 @@ from dataclasses import asdict
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 
 from raceflag.config import Config, save as save_config
@@ -119,8 +119,12 @@ def create_app(
     @app.get("/api/wifi/status")
     async def wifi_status():
         if wifi_manager is None:
-            return {"connected": False, "ssid": ""}
-        return {"connected": wifi_manager.is_connected(), "ssid": wifi_manager.get_ssid()}
+            return {"connected": False, "ssid": "", "hotspot_active": False}
+        return {
+            "connected": wifi_manager.is_connected(),
+            "ssid": wifi_manager.get_ssid(),
+            "hotspot_active": wifi_manager.is_hotspot_active(),
+        }
 
     @app.get("/api/wifi/scan")
     async def wifi_scan():
@@ -137,6 +141,8 @@ def create_app(
 
     @app.get("/", include_in_schema=False)
     async def index():
+        if wifi_manager and wifi_manager.is_hotspot_active():
+            return RedirectResponse(url="/setup")
         html = (FRONTEND_DIR / "index.html").read_text()
         if version:
             html = html.replace('href="/style.css"', f'href="/style.css?v={version}"')
@@ -146,7 +152,7 @@ def create_app(
 
     @app.get("/setup", include_in_schema=False)
     async def setup_page():
-        return FileResponse(FRONTEND_DIR / "index.html")
+        return FileResponse(FRONTEND_DIR / "setup.html")
 
     if FRONTEND_DIR.exists():
         app.mount("/", StaticFiles(directory=str(FRONTEND_DIR)), name="static")

@@ -46,6 +46,9 @@ class WiFiManager:
     def get_ssid(self) -> str:
         return self._current_ssid
 
+    def is_hotspot_active(self) -> bool:
+        return self._hotspot_active
+
     async def start(self) -> None:
         self._running = True
         if self._config.wifi_ssid:

@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RaceFlag Setup</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #111;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      color: #eee;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .page { width: 100%; max-width: 480px; padding-bottom: 40px; }
+
+    .nav {
+      background: #1a1a1a;
+      border-bottom: 2px solid #e10600;
+      padding: 10px 16px;
+      display: flex; align-items: flex-start;
+      position: sticky; top: 0; z-index: 50;
+    }
+    .nav-logo { font-weight: 900; letter-spacing: 3px; color: #e10600; font-size: 32px; line-height: 1; }
+    .nav-sub { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: #555; margin-top: 2px; }
+
+    .card {
+      background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px;
+      margin: 16px 12px 0; padding: 20px;
+    }
+    .card-heading { font-size: 13px; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .card-sub { font-size: 12px; color: #666; line-height: 1.5; margin-bottom: 18px; }
+
+    .btn-primary {
+      width: 100%; background: #e10600; color: #fff; border: none;
+      border-radius: 6px; padding: 14px; font-size: 14px; font-weight: 700;
+      letter-spacing: 0.5px; cursor: pointer;
+    }
+    .btn-primary:disabled { background: #3a0800; color: #6a2020; cursor: default; }
+    .btn-secondary {
+      width: 100%; background: #2a2a2a; border: 1px solid #444; color: #aaa;
+      border-radius: 6px; padding: 12px; font-size: 13px; font-weight: 700; cursor: pointer;
+      margin-top: 10px;
+    }
+    .btn-ghost {
+      background: none; border: none; color: #555; font-size: 12px;
+      cursor: pointer; padding: 8px 0; width: 100%; margin-top: 4px;
+      font-family: inherit;
+    }
+
+    .spinner-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 6px 0; color: #666; font-size: 13px; margin-top: 16px;
+    }
+    .spinner {
+      width: 18px; height: 18px; border: 2px solid #333;
+      border-top-color: #e10600; border-radius: 50%;
+      animation: spin 0.8s linear infinite; flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .network-list { margin-top: 4px; }
+    .network-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 0; border-bottom: 1px solid #222; cursor: pointer; gap: 12px;
+    }
+    .network-row:last-child { border-bottom: none; }
+    .network-left { display: flex; align-items: center; gap: 10px; }
+    .network-name { font-size: 13px; font-weight: 600; color: #ddd; }
+    .network-name.active { color: #fff; }
+    .signal-bars { display: flex; gap: 2px; align-items: flex-end; height: 14px; }
+    .bar { width: 3px; border-radius: 1px; background: #444; }
+    .bar.lit { background: #eee; }
+    .bar.lit-red { background: #e10600; }
+    .b1 { height: 4px; } .b2 { height: 7px; } .b3 { height: 10px; } .b4 { height: 14px; }
+    .lock { color: #555; font-size: 11px; }
+    .chevron { color: #444; font-size: 16px; line-height: 1; }
+    .selected-dot { width: 8px; height: 8px; border-radius: 50%; background: #e10600; flex-shrink: 0; }
+
+    .pw-section { margin-top: 16px; border-top: 1px solid #222; padding-top: 16px; }
+    .pw-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: #555; margin-bottom: 8px; }
+    .pw-input {
+      width: 100%; background: #0d0d0d; border: 1px solid #333; border-radius: 6px;
+      padding: 12px 14px; color: #eee; font-size: 14px; outline: none; font-family: inherit;
+    }
+    .pw-input:focus { border-color: #e10600; }
+    .pw-input::placeholder { color: #444; }
+
+    .center-icon {
+      width: 56px; height: 56px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 26px; margin: 0 auto 16px;
+    }
+    .icon-success { background: rgba(0,200,83,0.12); border: 2px solid #00C853; }
+    .icon-error { background: rgba(225,6,0,0.1); border: 2px solid #e10600; }
+    .center-heading { font-size: 16px; font-weight: 700; text-align: center; margin-bottom: 6px; }
+    .center-ssid { font-size: 13px; font-weight: 600; text-align: center; margin-bottom: 16px; }
+    .center-sub { font-size: 12px; color: #555; text-align: center; line-height: 1.6; margin-bottom: 20px; }
+
+    .countdown-wrap { background: #0d0d0d; border-radius: 4px; height: 4px; overflow: hidden; }
+    .countdown-bar { height: 4px; background: #e10600; border-radius: 4px; width: 100%; transition: width 1s linear; }
+    .countdown-label { font-size: 11px; color: #555; text-align: center; margin-top: 8px; }
+
+    .info-strip {
+      background: #0d0d0d; border: 1px solid #222; border-radius: 8px;
+      margin: 12px 12px 0; padding: 12px 14px;
+      display: flex; gap: 10px; align-items: flex-start;
+    }
+    .info-icon { color: #444; font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+    .info-text { font-size: 11px; color: #555; line-height: 1.5; }
+
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <nav class="nav">
+    <div>
+      <div class="nav-logo">RaceFlag 🏁</div>
+      <div class="nav-sub">WiFi Setup</div>
+    </div>
+  </nav>
+
+  <!-- IDLE -->
+  <div id="s-idle">
+    <div class="card">
+      <div class="card-heading">Connect to WiFi</div>
+      <div class="card-sub">Scan for available networks, then enter your password to get RaceFlag online.</div>
+      <button class="btn-primary" onclick="startScan()">Scan for networks</button>
+    </div>
+    <div class="info-strip">
+      <span class="info-icon">ℹ</span>
+      <span class="info-text">Your device is connected to <strong style="color:#eee">RaceFlag-Setup</strong>. Once WiFi is configured, this hotspot will shut down and your device will reconnect to your home network.</span>
+    </div>
+  </div>
+
+  <!-- SCANNING -->
+  <div id="s-scanning" class="hidden">
+    <div class="card">
+      <div class="card-heading">Connect to WiFi</div>
+      <div class="card-sub">Scan for available networks, then enter your password to get RaceFlag online.</div>
+      <button class="btn-primary" disabled>Scan for networks</button>
+      <div class="spinner-row"><div class="spinner"></div><span>Scanning…</span></div>
+    </div>
+  </div>
+
+  <!-- NETWORK LIST -->
+  <div id="s-networks" class="hidden">
+    <div class="card">
+      <div class="card-heading">Select a network</div>
+      <div class="network-list" id="network-list"></div>
+      <button class="btn-secondary" onclick="startScan()">Scan again</button>
+    </div>
+  </div>
+
+  <!-- PASSWORD -->
+  <div id="s-password" class="hidden">
+    <div class="card">
+      <div class="card-heading">Select a network</div>
+      <div class="network-list" id="selected-network-row"></div>
+      <div class="pw-section">
+        <div class="pw-label">Password</div>
+        <input id="pw-input" class="pw-input" type="password" placeholder="Enter WiFi password"
+               onkeydown="if(event.key==='Enter') connect()">
+        <button class="btn-primary" style="margin-top:12px" onclick="connect()">Connect</button>
+        <button class="btn-ghost" onclick="show('s-networks')">← Choose a different network</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONNECTING -->
+  <div id="s-connecting" class="hidden">
+    <div class="card">
+      <div class="card-heading">Connecting…</div>
+      <div class="card-sub" id="connecting-label"></div>
+      <div class="spinner-row"><div class="spinner"></div><span>Please wait</span></div>
+    </div>
+  </div>
+
+  <!-- SUCCESS -->
+  <div id="s-success" class="hidden">
+    <div class="card">
+      <div class="center-icon icon-success">✓</div>
+      <div class="center-heading">Connected!</div>
+      <div class="center-ssid" id="success-ssid" style="color:#00C853"></div>
+      <div class="center-sub">
+        RaceFlag is now online. This setup hotspot will shut down shortly
+        — your device will reconnect to your home network automatically.
+      </div>
+      <div class="countdown-wrap"><div class="countdown-bar" id="countdown-bar"></div></div>
+      <div class="countdown-label" id="countdown-label"></div>
+    </div>
+  </div>
+
+  <!-- ERROR -->
+  <div id="s-error" class="hidden">
+    <div class="card">
+      <div class="center-icon icon-error">✕</div>
+      <div class="center-heading">Connection failed</div>
+      <div class="center-sub" id="error-sub"></div>
+      <button class="btn-secondary" onclick="show('s-password')">← Try again</button>
+    </div>
+  </div>
+
+</div>
+<script>
+  const REDIRECT_URL = 'http://raceflag.local:8080';
+  const COUNTDOWN_SEC = 30;
+
+  let _selectedSsid = '';
+  let _networks = [];
+  let _countdownTimer = null;
+
+  function show(id) {
+    ['s-idle','s-scanning','s-networks','s-password','s-connecting','s-success','s-error']
+      .forEach(s => document.getElementById(s).classList.toggle('hidden', s !== id));
+  }
+
+  function signalBars(strength, active) {
+    const cls = active ? 'lit-red' : 'lit';
+    const lvl = strength >= 4 ? 4 : strength >= 3 ? 3 : strength >= 2 ? 2 : 1;
+    return `<div class="signal-bars">
+      <div class="bar b1 ${lvl >= 1 ? cls : ''}"></div>
+      <div class="bar b2 ${lvl >= 2 ? cls : ''}"></div>
+      <div class="bar b3 ${lvl >= 3 ? cls : ''}"></div>
+      <div class="bar b4 ${lvl >= 4 ? cls : ''}"></div>
+    </div>`;
+  }
+
+  async function startScan() {
+    show('s-scanning');
+    try {
+      const resp = await fetch('/api/wifi/scan');
+      const data = await resp.json();
+      _networks = (data.networks || []).filter(Boolean);
+      renderNetworkList();
+      show('s-networks');
+    } catch (e) {
+      document.getElementById('s-scanning').querySelector('.spinner-row span').textContent = 'Scan failed — try again.';
+      setTimeout(() => show('s-idle'), 2000);
+    }
+  }
+
+  function renderNetworkList() {
+    const list = document.getElementById('network-list');
+    if (!_networks.length) {
+      list.innerHTML = '<div style="color:#555;font-size:13px;padding:12px 0">No networks found.</div>';
+      return;
+    }
+    list.innerHTML = _networks.map((ssid, i) => `
+      <div class="network-row" onclick="selectNetwork(${i})">
+        <div class="network-left">
+          ${signalBars(4 - Math.floor(i / 3), false)}
+          <span class="network-name">${escHtml(ssid)}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="lock">🔒</span>
+          <span class="chevron">›</span>
+        </div>
+      </div>`).join('');
+  }
+
+  function selectNetwork(idx) {
+    _selectedSsid = _networks[idx];
+    document.getElementById('selected-network-row').innerHTML = `
+      <div class="network-row" style="cursor:default">
+        <div class="network-left">
+          ${signalBars(4, true)}
+          <span class="network-name active">${escHtml(_selectedSsid)}</span>
+        </div>
+        <div class="selected-dot"></div>
+      </div>`;
+    document.getElementById('pw-input').value = '';
+    show('s-password');
+    setTimeout(() => document.getElementById('pw-input').focus(), 50);
+  }
+
+  async function connect() {
+    const password = document.getElementById('pw-input').value;
+    document.getElementById('connecting-label').textContent =
+      `Connecting to ${_selectedSsid}…`;
+    show('s-connecting');
+    try {
+      const resp = await fetch('/api/wifi/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ssid: _selectedSsid, password }),
+      });
+      if (resp.ok) {
+        showSuccess();
+      } else {
+        showError('Check the password and try again.');
+      }
+    } catch (_) {
+      // Network error likely means the hotspot shut down — connection succeeded.
+      showSuccess();
+    }
+  }
+
+  function showSuccess() {
+    document.getElementById('success-ssid').textContent = _selectedSsid;
+    show('s-success');
+    let remaining = COUNTDOWN_SEC;
+    const bar = document.getElementById('countdown-bar');
+    const label = document.getElementById('countdown-label');
+    bar.style.width = '100%';
+    label.textContent = `Redirecting to RaceFlag in ${remaining} seconds…`;
+    _countdownTimer = setInterval(() => {
+      remaining--;
+      bar.style.width = (remaining / COUNTDOWN_SEC * 100) + '%';
+      label.textContent = remaining > 0
+        ? `Redirecting to RaceFlag in ${remaining} seconds…`
+        : 'Redirecting…';
+      if (remaining <= 0) {
+        clearInterval(_countdownTimer);
+        window.location.href = REDIRECT_URL;
+      }
+    }, 1000);
+  }
+
+  function showError(msg) {
+    document.getElementById('error-sub').innerHTML =
+      `Could not connect to <strong style="color:#eee">${escHtml(_selectedSsid)}</strong>.<br>${msg}`;
+    show('s-error');
+  }
+
+  function escHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+</script>
+</body>
+</html>
