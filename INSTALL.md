@@ -172,6 +172,39 @@ sudo systemctl restart raceflag
 
 ---
 
+## Preparing to Ship a Unit
+
+If you tested the device on your own WiFi before sending it to someone else, clear your credentials before shipping:
+
+**1. Clear the RaceFlag config:**
+
+```bash
+sudo nano /opt/raceflag/config.json
+```
+
+Set `wifi_ssid` and `wifi_password` to empty strings:
+
+```json
+"wifi_ssid": "",
+"wifi_password": ""
+```
+
+**2. Remove the saved NetworkManager connection:**
+
+```bash
+sudo nmcli connection delete "YourSSID"
+```
+
+**3. Reboot and confirm the setup hotspot appears:**
+
+```bash
+sudo reboot
+```
+
+After rebooting, `RaceFlag-Setup` should appear as an available WiFi network, confirming credentials have been cleared and the unit is ready for the recipient to configure.
+
+---
+
 ## Updating RaceFlag
 
 To update to a newer release:
