@@ -6,6 +6,9 @@ All notable changes to RaceFlag are documented here.
 
 ## [Unreleased]
 
+### Changed
+- Removed redundant "Shut Down Pi" label from the shutdown button row in Settings
+
 ---
 
 ## [v0.2.13] — 2026-06-26
