@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 from dataclasses import asdict
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
@@ -137,6 +138,19 @@ def create_app(
         if wifi_manager is None:
             raise HTTPException(503, "WiFi manager not available")
         await wifi_manager.connect(req.ssid, req.password)
+        return {"ok": True}
+
+    @app.post("/api/shutdown")
+    async def shutdown():
+        async def _deferred_shutdown() -> None:
+            await asyncio.sleep(1)
+            proc = await asyncio.create_subprocess_exec(
+                "shutdown", "-h", "now",
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await proc.wait()
+        asyncio.create_task(_deferred_shutdown())
         return {"ok": True}
 
     @app.get("/", include_in_schema=False)

@@ -366,6 +366,15 @@ document.getElementById('btn-demo-mode').addEventListener('click', async () => {
   await fetchState();
 });
 
+// ── Shutdown ────────────────────────────────────────────────────────────────
+document.getElementById('btn-shutdown').addEventListener('click', async () => {
+  if (!confirm('Shut down the Raspberry Pi?\n\nWait 30 seconds before unplugging power.')) return;
+  const btn = document.getElementById('btn-shutdown');
+  btn.textContent = 'Shutting down…';
+  btn.disabled = true;
+  try { await fetch('/api/shutdown', { method: 'POST' }); } catch (e) {}
+});
+
 fetchState();
 loadNavVersion();
 (async () => {

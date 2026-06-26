@@ -6,6 +6,9 @@ All notable changes to RaceFlag are documented here.
 
 ## [Unreleased]
 
+### Added
+- Shut Down button in the Settings panel — safely halts the Raspberry Pi via `shutdown -h now` with a browser confirmation dialog
+
 ### Fixed
 - Continuous LED animations (yellow flag, red flag, safety car, VSC) now return to idle when a session ends instead of staying stuck indefinitely
 - Stray flag messages arriving after a session is marked inactive are ignored, preventing LEDs from re-triggering after a session ends
