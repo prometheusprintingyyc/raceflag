@@ -81,7 +81,7 @@ async def main() -> None:
     jolpica = JolpicaClient()
 
     _IDLE_STATUSES = {"unknown", "break", "finished"}
-    _LED_IDLE_STATUSES = {"unknown", "break"}
+    _LED_IDLE_STATUSES = {"unknown", "break", "finished"}
     _TIMED_EFFECTS = {"track_clear": 30.0, "race_start": 30.0, "checkered": 30.0}
     _RACE_SESSION_TYPES = {"race", "sprint"}
     _race_started = False
@@ -104,7 +104,7 @@ async def main() -> None:
             _race_started = True
             effective = "race_start"
 
-        if effective not in _IDLE_STATUSES and effective not in _TIMED_EFFECTS:
+        if effective not in _IDLE_STATUSES and effective not in _TIMED_EFFECTS and state.session.is_active:
             led.trigger(effective)
 
         if delay <= 0:
