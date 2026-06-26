@@ -24,7 +24,7 @@ FRONTEND_DIR = Path(__file__).parent / "frontend"
 
 
 class DelayRequest(BaseModel):
-    seconds: float = Field(ge=0.0, le=60.0)
+    seconds: float = Field(ge=0.0, le=90.0)
 
 
 class TestEffectRequest(BaseModel):

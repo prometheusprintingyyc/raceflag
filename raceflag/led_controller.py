@@ -1,11 +1,14 @@
 from __future__ import annotations
 import json
+import logging
 import math
 import queue
 import threading
 import time
 from pathlib import Path
 from typing import Protocol, runtime_checkable
+
+logger = logging.getLogger(__name__)
 
 
 @runtime_checkable
@@ -260,7 +263,9 @@ class LEDController:
             except queue.Empty:
                 break
         for flag_state, arrival in pending:
-            if now - arrival >= self._delay_seconds:
+            waited = now - arrival
+            if waited >= self._delay_seconds:
+                logger.info("LED firing: %s  waited=%.1fs delay=%.1fs", flag_state, waited, self._delay_seconds)
                 self._idle_active = False
                 self._timed_effect = ""
                 if flag_state in self._CONTINUOUS_ANIMATIONS:
@@ -269,6 +274,7 @@ class LEDController:
                     self._active_animation = ""
                     self._apply_effect(flag_state)
             else:
+                logger.debug("LED holding: %s  waited=%.1fs remaining=%.1fs", flag_state, waited, self._delay_seconds - waited)
                 self._queue.put((flag_state, arrival))
 
     def _run(self) -> None:

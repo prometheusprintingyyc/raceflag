@@ -89,6 +89,7 @@ async def main() -> None:
     def on_flag_change(status: str) -> None:
         nonlocal _race_started
         delay = config.delay_seconds
+        logger.info("Flag change received: %s  delay=%.1fs", status, delay)
 
         # Reset when a session ends so the next race triggers the animation again
         if status in _IDLE_STATUSES:

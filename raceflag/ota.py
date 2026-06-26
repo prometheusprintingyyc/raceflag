@@ -95,9 +95,15 @@ class OTAUpdater:
                             raise ValueError(f"Unsafe tar member: {member.name}")
                     tf.extractall(staging)
 
+            config_path = self._install_dir / "config.json"
+            saved_config = config_path.read_text() if config_path.exists() else None
+
             shutil.rmtree(self._install_dir)
             shutil.move(str(staging), str(self._install_dir))
             archive_path.unlink(missing_ok=True)
+
+            if saved_config is not None:
+                (self._install_dir / "config.json").write_text(saved_config)
 
             self._version_file.write_text(tag.lstrip("v"))
 
