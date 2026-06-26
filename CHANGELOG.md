@@ -4,7 +4,7 @@ All notable changes to RaceFlag are documented here.
 
 ---
 
-## [Unreleased]
+## [v0.2.12] — 2026-06-26
 
 ### Fixed
 - OTA updates now preserve `config.json` (delay, LED settings, WiFi credentials are no longer reset after an update)
