@@ -6,6 +6,10 @@ All notable changes to RaceFlag are documented here.
 
 ## [Unreleased]
 
+---
+
+## [v0.2.13] — 2026-06-26
+
 ### Added
 - Shut Down button in the Settings panel — safely halts the Raspberry Pi via `shutdown -h now` with a browser confirmation dialog
 
