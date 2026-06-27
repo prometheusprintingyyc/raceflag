@@ -6,6 +6,9 @@ All notable changes to RaceFlag are documented here.
 
 ## [Unreleased]
 
+### Fixed
+- Hotspot now assigns IP addresses to clients — dnsmasq is restarted (not just started) so it picks up the DHCP config written by RaceFlag at hotspot enable time
+
 ---
 
 ## [v0.2.14] — 2026-06-27
