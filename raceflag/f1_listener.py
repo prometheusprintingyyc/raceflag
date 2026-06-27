@@ -188,7 +188,7 @@ class F1Listener:
         self._merge_timing_lines(data)
         self._rebuild_positions()
 
-    def _handle_feed(self, topic: str, data: dict) -> None:
+    def _handle_feed(self, topic: str, data: dict, is_snapshot: bool = False) -> None:
         logger.debug("Feed received: %s", topic)
 
         # Session-ending status must be handled before _ensure_active to avoid
@@ -201,13 +201,13 @@ class F1Listener:
                 new_status = "finished" if (status_msg in ("Finished", "Finalised") or is_race) else "break"
                 self._state.set_track_status(new_status)
                 logger.info("Session ended: %s", status_msg)
-                if self._on_track_status_change:
+                if self._on_track_status_change and not is_snapshot:
                     self._on_track_status_change(new_status)
                 return
             if status_msg == "Started" and self._state.track_status in ("break", "finished"):
                 self._state.set_track_status("unknown")
                 logger.info("New session segment started — clearing break state")
-                if self._on_track_status_change:
+                if self._on_track_status_change and not is_snapshot:
                     self._on_track_status_change("unknown")
 
         self._ensure_active()
@@ -215,7 +215,7 @@ class F1Listener:
         if topic == "TrackStatus":
             status = parse_track_status(data)
             self._state.set_track_status(status)
-            if self._on_track_status_change:
+            if self._on_track_status_change and not is_snapshot:
                 self._on_track_status_change(status)
         elif topic == "SessionInfo":
             self._state.set_session(parse_session_info(data))
@@ -293,12 +293,14 @@ class F1Listener:
                 # Completion: initial state snapshot returned after Subscribe.
                 # Process SessionStatus last so a terminated session isn't
                 # overridden by other topics that call _ensure_active().
+                # is_snapshot=True suppresses LED callbacks — state is restored
+                # silently so LEDs start in idle rather than replaying the last flag.
                 result = payload.get("result")
                 if isinstance(result, dict):
                     items = sorted(result.items(), key=lambda kv: kv[0] == "SessionStatus")
                     for topic, data in items:
                         if isinstance(data, dict):
-                            self._handle_feed(topic, data)
+                            self._handle_feed(topic, data, is_snapshot=True)
             elif msg_type == 6:
                 # Ping: respond with pong to keep connection alive
                 responses.append(json.dumps({"type": 6}) + RECORD_SEP)

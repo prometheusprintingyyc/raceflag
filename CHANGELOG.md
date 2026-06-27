@@ -6,8 +6,13 @@ All notable changes to RaceFlag are documented here.
 
 ## [Unreleased]
 
+---
+
+## [v0.2.16] — 2026-06-27
+
 ### Fixed
 - Driver and constructor standings now retry after 60 seconds if the first fetch fails (previously waited 4 hours, which meant standings were empty if WiFi wasn't ready at startup)
+- LEDs no longer replay the last flag state on service restart — the initial state snapshot from the F1 feed no longer triggers LED callbacks, so LEDs start in idle
 
 ---
 
