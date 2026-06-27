@@ -6,8 +6,16 @@ All notable changes to RaceFlag are documented here.
 
 ## [Unreleased]
 
+---
+
+## [v0.2.15] — 2026-06-27
+
 ### Fixed
 - Hotspot now assigns IP addresses to clients — dnsmasq is restarted (not just started) so it picks up the DHCP config written by RaceFlag at hotspot enable time
+- WiFi setup page now offers manual SSID entry when network scan returns no results (single WiFi chip cannot scan while broadcasting the setup hotspot)
+
+### Added
+- LEDs flash white at 1 Hz while the RaceFlag-Setup hotspot is active, providing physical feedback that the device is in setup mode
 
 ---
 
@@ -18,7 +26,6 @@ All notable changes to RaceFlag are documented here.
 
 ### Fixed
 - RaceFlag-Setup hotspot now starts immediately on boot when no WiFi is configured, instead of waiting for two ping timeouts (which could reset if the service restarted)
-- NetworkManager is now unmanaged from wlan0 before hostapd starts, preventing NM from blocking the AP broadcast on Pi OS Bookworm
 
 ---
 

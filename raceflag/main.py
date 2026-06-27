@@ -75,7 +75,7 @@ async def main() -> None:
     led = LEDController(strip=strip, effects_path=EFFECTS_PATH, delay_seconds=config.delay_seconds)
     led.start()
 
-    wifi = WiFiManager(config=config, config_path=CONFIG_PATH)
+    wifi = WiFiManager(config=config, config_path=CONFIG_PATH, on_hotspot_change=led.set_hotspot_mode)
     ota = OTAUpdater(version_file=VERSION_FILE, install_dir=INSTALL_DIR, github_repo=GITHUB_REPO)
 
     jolpica = JolpicaClient()

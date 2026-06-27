@@ -95,6 +95,16 @@ class LEDController:
             except queue.Empty:
                 break
 
+    def set_hotspot_mode(self, active: bool) -> None:
+        if active:
+            self._flush_queue()
+            self._timed_effect = ""
+            self._active_animation = "hotspot"
+            self._idle_active = False
+        else:
+            self._active_animation = ""
+            self._idle_active = True
+
     def set_idle(self, active: bool) -> None:
         if active:
             self._flush_queue()
@@ -222,6 +232,15 @@ class LEDController:
             self._strip.set_pixel(i, r, g, b)
         self._strip.show()
 
+    def _step_hotspot_animation(self) -> None:
+        """All LEDs flash white at 1 Hz to indicate setup/hotspot mode."""
+        t = time.monotonic()
+        on = int(t) % 2 == 0
+        v = 255 if on else 0
+        for i in range(self._strip.num_pixels()):
+            self._strip.set_pixel(i, v, v, v)
+        self._strip.show()
+
     def _step_idle_animation(self) -> None:
         """Chase effect: red on segments 1+2 (shared period), white on segment 3."""
         t = time.monotonic()
@@ -302,6 +321,8 @@ class LEDController:
                     self._step_safety_car_animation()
                 elif self._active_animation == "virtual_sc":
                     self._step_virtual_sc_animation()
+                elif self._active_animation == "hotspot":
+                    self._step_hotspot_animation()
             elif self._idle_active:
                 self._step_idle_animation()
             time.sleep(0.05)

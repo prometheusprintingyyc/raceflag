@@ -155,6 +155,24 @@
       <div class="card-heading">Select a network</div>
       <div class="network-list" id="network-list"></div>
       <button class="btn-secondary" onclick="startScan()">Scan again</button>
+      <button class="btn-ghost" onclick="enterManually()">Enter network name manually →</button>
+    </div>
+  </div>
+
+  <!-- MANUAL ENTRY -->
+  <div id="s-manual" class="hidden">
+    <div class="card">
+      <div class="card-heading">Enter network details</div>
+      <div class="pw-section" style="margin-top:0;border-top:none;padding-top:0">
+        <div class="pw-label">Network name (SSID)</div>
+        <input id="manual-ssid" class="pw-input" type="text" placeholder="Your WiFi network name"
+               style="margin-bottom:12px" onkeydown="if(event.key==='Enter') document.getElementById('manual-pw').focus()">
+        <div class="pw-label">Password</div>
+        <input id="manual-pw" class="pw-input" type="password" placeholder="Enter WiFi password"
+               onkeydown="if(event.key==='Enter') connectManual()">
+        <button class="btn-primary" style="margin-top:12px" onclick="connectManual()">Connect</button>
+        <button class="btn-ghost" onclick="show('s-networks')">← Back to network list</button>
+      </div>
     </div>
   </div>
 
@@ -217,7 +235,7 @@
   let _countdownTimer = null;
 
   function show(id) {
-    ['s-idle','s-scanning','s-networks','s-password','s-connecting','s-success','s-error']
+    ['s-idle','s-scanning','s-networks','s-password','s-manual','s-connecting','s-success','s-error']
       .forEach(s => document.getElementById(s).classList.toggle('hidden', s !== id));
   }
 
@@ -249,7 +267,7 @@
   function renderNetworkList() {
     const list = document.getElementById('network-list');
     if (!_networks.length) {
-      list.innerHTML = '<div style="color:#555;font-size:13px;padding:12px 0">No networks found.</div>';
+      list.innerHTML = '<div style="color:#555;font-size:13px;padding:12px 0">No networks found. Try scanning again or enter your network name manually below.</div>';
       return;
     }
     list.innerHTML = _networks.map((ssid, i) => `
@@ -278,6 +296,30 @@
     document.getElementById('pw-input').value = '';
     show('s-password');
     setTimeout(() => document.getElementById('pw-input').focus(), 50);
+  }
+
+  function enterManually() {
+    document.getElementById('manual-ssid').value = '';
+    document.getElementById('manual-pw').value = '';
+    show('s-manual');
+    setTimeout(() => document.getElementById('manual-ssid').focus(), 50);
+  }
+
+  async function connectManual() {
+    const ssid = document.getElementById('manual-ssid').value.trim();
+    if (!ssid) return;
+    _selectedSsid = ssid;
+    const password = document.getElementById('manual-pw').value;
+    document.getElementById('connecting-label').textContent = `Connecting to ${_selectedSsid}…`;
+    show('s-connecting');
+    try {
+      const resp = await fetch('/api/wifi/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ssid: _selectedSsid, password }),
+      });
+      if (resp.ok) { showSuccess(); } else { showError('Check the network name and password and try again.'); }
+    } catch (_) { showSuccess(); }
   }
 
   async function connect() {

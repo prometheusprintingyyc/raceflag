@@ -31,9 +31,10 @@ address=/#/{HOTSPOT_IP}
 
 
 class WiFiManager:
-    def __init__(self, config: Config, config_path: Path | None = None):
+    def __init__(self, config: Config, config_path: Path | None = None, on_hotspot_change=None):
         self._config = config
         self._config_path = config_path
+        self._on_hotspot_change = on_hotspot_change
         self._connected = False
         self._current_ssid = ""
         self._hotspot_active = False
@@ -131,11 +132,12 @@ class WiFiManager:
         self._hotspot_active = True
         self._connected = False
         self._current_ssid = ""
+        if self._on_hotspot_change:
+            self._on_hotspot_change(True)
         try:
             Path(HOSTAPD_CONF).write_text(HOSTAPD_CONF_CONTENT)
             Path(DNSMASQ_CONF).write_text(DNSMASQ_CONF_CONTENT)
             for cmd in [
-                ["nmcli", "device", "set", "wlan0", "managed", "no"],
                 ["ip", "addr", "add", f"{HOTSPOT_IP}/24", "dev", "wlan0"],
                 ["systemctl", "restart", "hostapd"],
                 ["systemctl", "restart", "dnsmasq"],
@@ -151,12 +153,13 @@ class WiFiManager:
 
     async def disable_hotspot(self) -> None:
         self._hotspot_active = False
+        if self._on_hotspot_change:
+            self._on_hotspot_change(False)
         try:
             for cmd in [
                 ["systemctl", "stop", "hostapd"],
                 ["systemctl", "stop", "dnsmasq"],
                 ["ip", "addr", "del", f"{HOTSPOT_IP}/24", "dev", "wlan0"],
-                ["nmcli", "device", "set", "wlan0", "managed", "yes"],
             ]:
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
