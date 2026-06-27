@@ -57,12 +57,17 @@ async def _refresh_standings_loop(client: JolpicaClient, state: AppState) -> Non
         try:
             drivers = await client.fetch_driver_standings()
             constructors = await client.fetch_constructor_standings()
-            state.set_standings(drivers, constructors)
             next_race = await client.fetch_next_race()
-            state.set_next_race(next_race)
         except Exception as e:
             logger.warning("Standings refresh failed: %s", e)
-        await asyncio.sleep(4 * 3600)
+            await asyncio.sleep(60)
+            continue
+        if drivers or constructors:
+            state.set_standings(drivers, constructors)
+            state.set_next_race(next_race)
+            await asyncio.sleep(4 * 3600)
+        else:
+            await asyncio.sleep(60)
 
 
 async def main() -> None:

@@ -6,6 +6,9 @@ All notable changes to RaceFlag are documented here.
 
 ## [Unreleased]
 
+### Fixed
+- Driver and constructor standings now retry after 60 seconds if the first fetch fails (previously waited 4 hours, which meant standings were empty if WiFi wasn't ready at startup)
+
 ---
 
 ## [v0.2.15] — 2026-06-27
