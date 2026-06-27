@@ -9,6 +9,10 @@ All notable changes to RaceFlag are documented here.
 ### Changed
 - Removed redundant "Shut Down Pi" label from the shutdown button row in Settings
 
+### Fixed
+- RaceFlag-Setup hotspot now starts immediately on boot when no WiFi is configured, instead of waiting for two ping timeouts (which could reset if the service restarted)
+- NetworkManager is now unmanaged from wlan0 before hostapd starts, preventing NM from blocking the AP broadcast on Pi OS Bookworm
+
 ---
 
 ## [v0.2.13] — 2026-06-26

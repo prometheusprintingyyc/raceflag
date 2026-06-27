@@ -53,6 +53,8 @@ class WiFiManager:
         self._running = True
         if self._config.wifi_ssid:
             await self._connect_to_configured()
+        else:
+            await self.enable_hotspot()
         self._task = asyncio.create_task(self._monitor_loop())
 
     async def stop(self) -> None:
@@ -133,6 +135,7 @@ class WiFiManager:
             Path(HOSTAPD_CONF).write_text(HOSTAPD_CONF_CONTENT)
             Path(DNSMASQ_CONF).write_text(DNSMASQ_CONF_CONTENT)
             for cmd in [
+                ["nmcli", "device", "set", "wlan0", "managed", "no"],
                 ["ip", "addr", "add", f"{HOTSPOT_IP}/24", "dev", "wlan0"],
                 ["systemctl", "start", "hostapd"],
                 ["systemctl", "start", "dnsmasq"],
@@ -153,6 +156,7 @@ class WiFiManager:
                 ["systemctl", "stop", "hostapd"],
                 ["systemctl", "stop", "dnsmasq"],
                 ["ip", "addr", "del", f"{HOTSPOT_IP}/24", "dev", "wlan0"],
+                ["nmcli", "device", "set", "wlan0", "managed", "yes"],
             ]:
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
