@@ -137,8 +137,8 @@ class WiFiManager:
             for cmd in [
                 ["nmcli", "device", "set", "wlan0", "managed", "no"],
                 ["ip", "addr", "add", f"{HOTSPOT_IP}/24", "dev", "wlan0"],
-                ["systemctl", "start", "hostapd"],
-                ["systemctl", "start", "dnsmasq"],
+                ["systemctl", "restart", "hostapd"],
+                ["systemctl", "restart", "dnsmasq"],
             ]:
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
