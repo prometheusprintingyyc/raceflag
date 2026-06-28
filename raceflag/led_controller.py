@@ -115,6 +115,16 @@ class LEDController:
     def trigger(self, flag_state: str) -> None:
         self._queue.put((flag_state, time.monotonic()))
 
+    def force_trigger(self, flag_state: str) -> None:
+        """Trigger immediately, bypassing the delay queue. Used by test buttons."""
+        self._flush_queue()
+        self._timed_effect = ""
+        self._idle_active = False
+        if flag_state in self._CONTINUOUS_ANIMATIONS:
+            self._active_animation = flag_state
+        else:
+            self._queue.put((flag_state, time.monotonic() - self._delay_seconds))
+
     def trigger_timed(self, flag_state: str, duration: float) -> None:
         self._flush_queue()
         self._timed_effect = flag_state

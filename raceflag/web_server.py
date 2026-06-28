@@ -75,7 +75,7 @@ def create_app(
         if req.flag_state in _TIMED_TEST_EFFECTS:
             led.trigger_timed(req.flag_state, _TIMED_TEST_EFFECTS[req.flag_state])
         else:
-            led.trigger(req.flag_state)
+            led.force_trigger(req.flag_state)
         return {"triggered": req.flag_state}
 
     @app.get("/api/led-state")
