@@ -102,7 +102,7 @@ function updateUI(data) {
   document.getElementById('nr-name').textContent = nr.name || '—';
   document.getElementById('nr-meta').textContent = nr.circuit ? `${nr.circuit} · Round ${nr.round_number}` : '';
   document.getElementById('nr-date').textContent = nr.race_date || '';
-  updateCountdown(nr.race_date);
+  updateCountdown(nr.race_datetime_utc || nr.race_date);
 
   renderDriverStandings(data.driver_standings || []);
   renderConstructorStandings(data.constructor_standings || []);

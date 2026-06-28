@@ -6,6 +6,9 @@ All notable changes to RaceFlag are documented here.
 
 ## [Unreleased]
 
+### Fixed
+- Next race countdown now shows time until the actual race start (in UTC from the F1 calendar API) instead of time until midnight on race day
+
 ---
 
 ## [v0.2.16] — 2026-06-27

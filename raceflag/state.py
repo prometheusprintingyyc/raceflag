@@ -123,6 +123,7 @@ class NextRace:
     country_flag: str = ""
     round_number: int = 0
     race_date: str = ""
+    race_datetime_utc: str = ""
 
 
 @dataclass

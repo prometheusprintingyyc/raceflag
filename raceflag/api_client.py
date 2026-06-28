@@ -76,6 +76,8 @@ class JolpicaClient:
             if race["date"] >= today:
                 country = race["Circuit"]["Location"]["country"]
                 dt = datetime.strptime(race["date"], "%Y-%m-%d")
+                race_time = race.get("time", "")
+                race_datetime_utc = f"{race['date']}T{race_time}" if race_time else ""
                 return NextRace(
                     name=race["raceName"],
                     circuit=race["Circuit"]["circuitName"],
@@ -83,5 +85,6 @@ class JolpicaClient:
                     country_flag=COUNTRY_FLAGS.get(country, ""),
                     round_number=int(race["round"]),
                     race_date=dt.strftime("%A %d %B %Y"),
+                    race_datetime_utc=race_datetime_utc,
                 )
         return NextRace()
