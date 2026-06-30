@@ -64,7 +64,7 @@ function updateUI(data) {
   document.getElementById('session-type').textContent = s.session_type || '—';
   const _remaining = s.total_laps && s.current_lap ? s.total_laps - s.current_lap : null;
   document.getElementById('session-lap').textContent =
-    _remaining !== null ? `Lap ${_remaining} / ${s.total_laps}` :
+    _remaining !== null ? `${_remaining}/${s.total_laps} laps remaining` :
     s.current_lap ? `Lap ${s.current_lap}` : '';
   if (s.time_remaining) {
     const totalSeconds = _parseRemainingToSeconds(s.time_remaining);
