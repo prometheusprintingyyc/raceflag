@@ -10,6 +10,7 @@ All notable changes to RaceFlag are documented here.
 - Next race countdown now shows time until the actual race start (in UTC from the F1 calendar API) instead of time until midnight on race day
 - Test effect buttons (Yellow Flag, Safety Car, VSC, Red Flag) now trigger immediately regardless of the configured LED delay — the delay is only for live F1 feed events
 - Lap counter now shows laps remaining instead of laps completed
+- Checkered flag LED now triggers when the Race Control message text contains "Checkered" or "Chequered", not only when the Flag field is set — fixes missed triggers where the flag field was empty
 
 ---
 
