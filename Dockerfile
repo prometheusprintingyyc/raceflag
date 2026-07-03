@@ -9,6 +9,7 @@ COPY raceflag/ raceflag/
 COPY version.txt .
 
 ENV DEMO_MODE=1 \
+    WIFI_ENABLED=0 \
     RACEFLAG_CONFIG=/opt/raceflag/config.json \
     RACEFLAG_EFFECTS=/opt/raceflag/raceflag/effects/effects.json \
     RACEFLAG_VERSION=/opt/raceflag/version.txt \

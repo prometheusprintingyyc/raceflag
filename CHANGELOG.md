@@ -11,6 +11,7 @@ All notable changes to RaceFlag are documented here.
 - Test effect buttons (Yellow Flag, Safety Car, VSC, Red Flag) now trigger immediately regardless of the configured LED delay — the delay is only for live F1 feed events
 - Lap counter now shows laps remaining instead of laps completed
 - Checkered flag LED now triggers when the Race Control message text contains "Checkered" or "Chequered", not only when the Flag field is set — fixes missed triggers where the flag field was empty
+- Added `WIFI_ENABLED=0` env var to disable the WiFi manager (set by default in the Docker image) — keeps demo mode and WiFi management as independent settings
 
 ---
 

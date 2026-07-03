@@ -23,6 +23,7 @@ VERSION_FILE = Path(os.environ.get("RACEFLAG_VERSION", "/opt/raceflag/version.tx
 INSTALL_DIR = Path(os.environ.get("RACEFLAG_DIR", "/opt/raceflag"))
 GITHUB_REPO = os.environ.get("RACEFLAG_REPO", "prometheusprintingyyc/raceflag")
 DEMO_MODE = os.environ.get("DEMO_MODE", "").lower() in ("1", "true", "yes")
+WIFI_ENABLED = os.environ.get("WIFI_ENABLED", "1").lower() not in ("0", "false", "no")
 
 
 def _make_strip(config):
@@ -137,12 +138,10 @@ async def main() -> None:
     server_config = uvicorn.Config(app, host="0.0.0.0", port=8080, log_level="warning")
     server = uvicorn.Server(server_config)
 
-    await asyncio.gather(
-        wifi.start(),
-        _refresh_standings_loop(jolpica, state),
-        listener.start(),
-        server.serve(),
-    )
+    tasks = [_refresh_standings_loop(jolpica, state), listener.start(), server.serve()]
+    if WIFI_ENABLED:
+        tasks.append(wifi.start())
+    await asyncio.gather(*tasks)
 
 
 if __name__ == "__main__":
