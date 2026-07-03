@@ -6,12 +6,18 @@ All notable changes to RaceFlag are documented here.
 
 ## [Unreleased]
 
+---
+
+## [v0.2.17] — 2026-06-28
+
 ### Fixed
 - Next race countdown now shows time until the actual race start (in UTC from the F1 calendar API) instead of time until midnight on race day
 - Test effect buttons (Yellow Flag, Safety Car, VSC, Red Flag) now trigger immediately regardless of the configured LED delay — the delay is only for live F1 feed events
-- Lap counter now shows laps remaining instead of laps completed
+- Lap counter now shows laps remaining (e.g. 27/71) instead of laps completed
 - Checkered flag LED now triggers when the Race Control message text contains "Checkered" or "Chequered", not only when the Flag field is set — fixes missed triggers where the flag field was empty
-- Added `WIFI_ENABLED=0` env var to disable the WiFi manager (set by default in the Docker image) — keeps demo mode and WiFi management as independent settings
+
+### Added
+- `WIFI_ENABLED=0` env var to disable the WiFi manager (set by default in the Docker image) — keeps demo mode and WiFi management as independent settings
 
 ---
 
