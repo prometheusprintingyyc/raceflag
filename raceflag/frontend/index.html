@@ -9,7 +9,19 @@
 </head>
 <body>
   <nav class="nav">
-    <span class="nav-logo">RaceFlag 🏁</span>
+    <div class="nav-logo">
+      <svg class="nav-flag-icon" viewBox="0 0 20 20" aria-hidden="true">
+        <rect x="0"  y="0"  width="5" height="5" fill="currentColor"/>
+        <rect x="10" y="0"  width="5" height="5" fill="currentColor"/>
+        <rect x="5"  y="5"  width="5" height="5" fill="currentColor"/>
+        <rect x="15" y="5"  width="5" height="5" fill="currentColor"/>
+        <rect x="0"  y="10" width="5" height="5" fill="currentColor"/>
+        <rect x="10" y="10" width="5" height="5" fill="currentColor"/>
+        <rect x="5"  y="15" width="5" height="5" fill="currentColor"/>
+        <rect x="15" y="15" width="5" height="5" fill="currentColor"/>
+      </svg>
+      RaceFlag
+    </div>
     <div class="nav-right">
       <span class="nav-version" id="nav-version">v—</span>
       <button class="btn-settings" id="btn-settings">⚙ Settings</button>
@@ -17,8 +29,9 @@
   </nav>
 
   <div class="view-toggle">
-    <button class="view-btn active" id="btn-live">🔴 Live Race</button>
-    <button class="view-btn" id="btn-standings">📊 Standings</button>
+    <div class="view-toggle-pill" id="view-toggle-pill"></div>
+    <button class="view-btn active" id="btn-live">Live Race</button>
+    <button class="view-btn" id="btn-standings">Standings</button>
   </div>
   <div class="auto-label">Switches automatically · Manual override above</div>
 
@@ -70,12 +83,30 @@
     </div>
 
     <div class="section-title">Weather</div>
-    <div class="card-grid">
-      <div class="card"><div class="card-label">Air Temp</div><div class="card-value" id="air-temp">—</div></div>
-      <div class="card"><div class="card-label">Track Temp</div><div class="card-value" id="track-temp">—</div></div>
-      <div class="card"><div class="card-label">Humidity</div><div class="card-value" id="humidity">—</div></div>
-      <div class="card"><div class="card-label">Wind</div><div class="card-value" style="font-size:15px" id="wind">—</div><div class="card-sub" id="wind-dir"></div></div>
-      <div class="card"><div class="card-label">Rain</div><div class="card-value" style="font-size:15px" id="rain">—</div></div>
+    <div class="weather-panel">
+      <div class="weather-row">
+        <div class="weather-cell">
+          <div class="weather-label">Air Temp</div>
+          <div class="weather-value" id="air-temp">—</div>
+        </div>
+        <div class="weather-cell">
+          <div class="weather-label">Track Temp</div>
+          <div class="weather-value" id="track-temp">—</div>
+        </div>
+        <div class="weather-cell">
+          <div class="weather-label">Humidity</div>
+          <div class="weather-value" id="humidity">—</div>
+        </div>
+        <div class="weather-cell">
+          <div class="weather-label">Wind</div>
+          <div class="weather-value" id="wind">—</div>
+          <div class="weather-sub" id="wind-dir"></div>
+        </div>
+        <div class="weather-cell">
+          <div class="weather-label">Rain</div>
+          <div class="weather-value" id="rain">—</div>
+        </div>
+      </div>
     </div>
 
     <div class="section-title">Race Positions <span class="live-pill">LIVE</span></div>

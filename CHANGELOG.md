@@ -6,6 +6,12 @@ All notable changes to RaceFlag are documented here.
 
 ## [Unreleased]
 
+### Changed
+- Weather section replaced with a single divided-cell panel instead of five individual cards
+- View toggle uses a sliding pill indicator instead of a background colour swap on the active button
+- Nav logo uses an inline SVG checkered flag instead of the 🏁 emoji — renders consistently across all platforms
+- `font-variant-numeric: tabular-nums` applied to all numeric fields (gaps, lap times, positions, points, countdown, timestamps) so digits align in columns
+
 ---
 
 ## [v0.2.17] — 2026-06-28

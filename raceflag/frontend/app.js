@@ -46,6 +46,8 @@ function updateUI(data) {
   document.getElementById('view-standings').classList.toggle('active', targetView === 'standings');
   document.getElementById('btn-live').classList.toggle('active', targetView === 'live');
   document.getElementById('btn-standings').classList.toggle('active', targetView === 'standings');
+  const _pill = document.getElementById('view-toggle-pill');
+  if (_pill) _pill.classList.toggle('right', targetView === 'standings');
 
   const color = data.flag_color || '#444';
   const status = (data.track_status || 'unknown').replace(/_/g, ' ').toUpperCase();
