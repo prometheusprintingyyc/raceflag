@@ -6,6 +6,9 @@ All notable changes to RaceFlag are documented here.
 
 ## [Unreleased]
 
+### Added
+- `GET /api/logs` endpoint — runs `journalctl -u raceflag -n 150 --no-pager` and returns `{ "lines": str, "timestamp": str }`; falls back to a descriptive message when journalctl is unavailable (Docker / non-systemd)
+
 ### Changed
 - Weather section replaced with a single divided-cell panel instead of five individual cards
 - View toggle uses a sliding pill indicator instead of a background colour swap on the active button

@@ -23,6 +23,25 @@ _TIMED_TEST_EFFECTS: dict[str, float] = {
 
 FRONTEND_DIR = Path(__file__).parent / "frontend"
 
+_LOGS_UNAVAILABLE = (
+    "journalctl not available — unit may be running in Docker or a non-systemd environment."
+)
+
+
+async def _fetch_logs() -> str:
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "journalctl", "-u", "raceflag", "-n", "150", "--no-pager",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        stdout, _ = await proc.communicate()
+        if proc.returncode == 0 and stdout:
+            return stdout.decode("utf-8", errors="replace")
+        return _LOGS_UNAVAILABLE
+    except FileNotFoundError:
+        return _LOGS_UNAVAILABLE
+
 
 class DelayRequest(BaseModel):
     seconds: float = Field(ge=0.0, le=90.0)
@@ -152,6 +171,12 @@ def create_app(
             await proc.wait()
         asyncio.create_task(_deferred_shutdown())
         return {"ok": True}
+
+    @app.get("/api/logs")
+    async def get_logs():
+        from datetime import datetime
+        lines = await _fetch_logs()
+        return {"lines": lines, "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M")}
 
     @app.get("/", include_in_schema=False)
     async def index():

@@ -106,3 +106,25 @@ def test_state_includes_demo_mode(client, app_state):
     app_state.set_demo_mode(True)
     resp = client.get("/api/state")
     assert resp.json()["demo_mode"] is True
+
+
+def test_logs_returns_lines_and_timestamp(client, mocker):
+    mocker.patch(
+        "raceflag.web_server._fetch_logs",
+        return_value="INFO starting\nINFO feed connected\n",
+    )
+    resp = client.get("/api/logs")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["lines"] == "INFO starting\nINFO feed connected\n"
+    assert "timestamp" in data
+
+
+def test_logs_returns_fallback_when_journalctl_unavailable(client, mocker):
+    mocker.patch(
+        "raceflag.web_server._fetch_logs",
+        return_value="journalctl not available — unit may be running in Docker or a non-systemd environment.",
+    )
+    resp = client.get("/api/logs")
+    assert resp.status_code == 200
+    assert "not available" in resp.json()["lines"]
