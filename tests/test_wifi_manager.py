@@ -238,3 +238,12 @@ async def test_monitor_loop_resets_attempt_count_on_successful_reconnect(manager
     manager._hotspot_attempt_count = 2
     await manager._monitor_loop()
     assert manager._hotspot_attempt_count == 0
+
+
+@pytest.mark.asyncio
+async def test_start_enables_hotspot_when_initial_connect_fails(manager, mocker):
+    mocker.patch.object(manager, "_connect_to_configured", new=AsyncMock(return_value=False))
+    mocker.patch.object(manager, "enable_hotspot", new=AsyncMock())
+    mocker.patch.object(manager, "_monitor_loop", new=AsyncMock())
+    await manager.start()
+    manager.enable_hotspot.assert_called_once()

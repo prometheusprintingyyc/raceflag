@@ -60,7 +60,9 @@ class WiFiManager:
     async def start(self) -> None:
         self._running = True
         if self._config.wifi_ssid:
-            await self._connect_to_configured()
+            success = await self._connect_to_configured()
+            if not success:
+                await self.enable_hotspot()
         else:
             await self.enable_hotspot()
         self._task = asyncio.create_task(self._monitor_loop())
