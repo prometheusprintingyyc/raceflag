@@ -76,7 +76,22 @@ class WiFiManager:
             if self._hotspot_active:
                 if await self._check_configured_available():
                     await self.disable_hotspot()
-                    await self._connect_to_configured()
+                    success = await self._connect_to_configured()
+                    if not success:
+                        self._hotspot_attempt_count += 1
+                        await self.enable_hotspot()
+                        if self._hotspot_attempt_count >= MAX_HOTSPOT_ATTEMPTS:
+                            logger.warning(
+                                "WiFi connect failed %d times — clearing credentials",
+                                self._hotspot_attempt_count,
+                            )
+                            self._config.wifi_ssid = ""
+                            self._config.wifi_password = ""
+                            if self._config_path:
+                                save_config(self._config, self._config_path)
+                            self._hotspot_attempt_count = 0
+                    else:
+                        self._hotspot_attempt_count = 0
                 await asyncio.sleep(120)
             else:
                 ok = await self._check_connectivity()

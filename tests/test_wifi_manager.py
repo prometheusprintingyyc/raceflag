@@ -178,3 +178,63 @@ async def test_monitor_loop_enables_hotspot_after_10_failures_when_previously_co
     manager._ever_connected = True
     await manager._monitor_loop()
     manager.enable_hotspot.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_monitor_loop_reenables_hotspot_immediately_on_failed_auto_reconnect(manager, mocker):
+    call_count = 0
+    async def mock_connect():
+        nonlocal call_count
+        call_count += 1
+        manager._running = False
+        return False
+    mocker.patch.object(manager, "_check_configured_available", new=AsyncMock(return_value=True))
+    mocker.patch.object(manager, "_connect_to_configured", side_effect=mock_connect)
+    mocker.patch.object(manager, "disable_hotspot", new=AsyncMock())
+    mocker.patch.object(manager, "enable_hotspot", new=AsyncMock())
+    mocker.patch("raceflag.wifi_manager.asyncio.sleep", new=AsyncMock())
+    manager._running = True
+    manager._hotspot_active = True
+    await manager._monitor_loop()
+    manager.enable_hotspot.assert_called_once()
+    assert manager._hotspot_attempt_count == 1
+
+
+@pytest.mark.asyncio
+async def test_monitor_loop_clears_credentials_after_max_hotspot_attempts(manager, mocker, tmp_path):
+    manager._config_path = tmp_path / "config.json"
+    call_count = 0
+    async def mock_connect():
+        nonlocal call_count
+        call_count += 1
+        if call_count >= MAX_HOTSPOT_ATTEMPTS:
+            manager._running = False
+        return False
+    mocker.patch.object(manager, "_check_configured_available", new=AsyncMock(return_value=True))
+    mocker.patch.object(manager, "_connect_to_configured", side_effect=mock_connect)
+    mocker.patch.object(manager, "disable_hotspot", new=AsyncMock())
+    mocker.patch.object(manager, "enable_hotspot", new=AsyncMock())
+    mocker.patch("raceflag.wifi_manager.asyncio.sleep", new=AsyncMock())
+    manager._running = True
+    manager._hotspot_active = True
+    await manager._monitor_loop()
+    assert manager._config.wifi_ssid == ""
+    assert manager._config.wifi_password == ""
+    assert manager._hotspot_attempt_count == 0
+
+
+@pytest.mark.asyncio
+async def test_monitor_loop_resets_attempt_count_on_successful_reconnect(manager, mocker):
+    async def mock_connect():
+        manager._running = False
+        return True
+    mocker.patch.object(manager, "_check_configured_available", new=AsyncMock(return_value=True))
+    mocker.patch.object(manager, "_connect_to_configured", side_effect=mock_connect)
+    mocker.patch.object(manager, "disable_hotspot", new=AsyncMock())
+    mocker.patch.object(manager, "enable_hotspot", new=AsyncMock())
+    mocker.patch("raceflag.wifi_manager.asyncio.sleep", new=AsyncMock())
+    manager._running = True
+    manager._hotspot_active = True
+    manager._hotspot_attempt_count = 2
+    await manager._monitor_loop()
+    assert manager._hotspot_attempt_count == 0
