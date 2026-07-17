@@ -6,6 +6,10 @@ All notable changes to RaceFlag are documented here.
 
 ## [Unreleased]
 
+---
+
+## [v0.2.18] — 2026-07-17
+
 ### Added
 - `GET /api/logs` endpoint — runs `journalctl -u raceflag -n 150 --no-pager` and returns `{ "lines": str, "timestamp": str }`; falls back to a descriptive message when journalctl is unavailable (Docker / non-systemd)
 - Send Logs button in Settings — fetches the last 150 lines of the systemd journal and opens a pre-addressed mailto: link so the user can email diagnostic logs in one tap
