@@ -8,6 +8,7 @@ All notable changes to RaceFlag are documented here.
 
 ### Added
 - `GET /api/logs` endpoint — runs `journalctl -u raceflag -n 150 --no-pager` and returns `{ "lines": str, "timestamp": str }`; falls back to a descriptive message when journalctl is unavailable (Docker / non-systemd)
+- Send Logs button in Settings — fetches the last 150 lines of the systemd journal and opens a pre-addressed mailto: link so the user can email diagnostic logs in one tap
 
 ### Changed
 - Weather section replaced with a single divided-cell panel instead of five individual cards

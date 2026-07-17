@@ -377,6 +377,22 @@ document.getElementById('btn-shutdown').addEventListener('click', async () => {
   try { await fetch('/api/shutdown', { method: 'POST' }); } catch (e) {}
 });
 
+document.getElementById('btn-send-logs').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-send-logs');
+  btn.textContent = 'Sending…';
+  btn.disabled = true;
+  try {
+    const resp = await fetch('/api/logs');
+    if (!resp.ok) throw new Error('fetch failed');
+    const data = await resp.json();
+    const subject = encodeURIComponent(`RaceFlag Diagnostic Logs — ${data.timestamp}`);
+    const body = encodeURIComponent(data.lines);
+    window.location.href = `mailto:prometheusprinting.yyc@gmail.com?subject=${subject}&body=${body}`;
+  } catch (e) {}
+  btn.textContent = 'Send Logs';
+  btn.disabled = false;
+});
+
 fetchState();
 loadNavVersion();
 (async () => {
