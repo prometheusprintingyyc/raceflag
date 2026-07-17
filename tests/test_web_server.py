@@ -128,3 +128,42 @@ def test_logs_returns_fallback_when_journalctl_unavailable(client, mocker):
     resp = client.get("/api/logs")
     assert resp.status_code == 200
     assert "not available" in resp.json()["lines"]
+
+
+@pytest.mark.asyncio
+async def test_fetch_logs_returns_stdout_on_success(mocker):
+    mock_proc = mocker.MagicMock()
+    mock_proc.returncode = 0
+    mock_proc.communicate = mocker.AsyncMock(return_value=(b"INFO starting\nINFO feed connected\n", b""))
+    mocker.patch(
+        "raceflag.web_server.asyncio.create_subprocess_exec",
+        new=mocker.AsyncMock(return_value=mock_proc),
+    )
+    from raceflag.web_server import _fetch_logs
+    result = await _fetch_logs()
+    assert result == "INFO starting\nINFO feed connected\n"
+
+
+@pytest.mark.asyncio
+async def test_fetch_logs_returns_fallback_on_nonzero_exit(mocker):
+    mock_proc = mocker.MagicMock()
+    mock_proc.returncode = 1
+    mock_proc.communicate = mocker.AsyncMock(return_value=(b"", b""))
+    mocker.patch(
+        "raceflag.web_server.asyncio.create_subprocess_exec",
+        new=mocker.AsyncMock(return_value=mock_proc),
+    )
+    from raceflag.web_server import _fetch_logs, _LOGS_UNAVAILABLE
+    result = await _fetch_logs()
+    assert result == _LOGS_UNAVAILABLE
+
+
+@pytest.mark.asyncio
+async def test_fetch_logs_returns_fallback_when_journalctl_missing(mocker):
+    mocker.patch(
+        "raceflag.web_server.asyncio.create_subprocess_exec",
+        side_effect=FileNotFoundError,
+    )
+    from raceflag.web_server import _fetch_logs, _LOGS_UNAVAILABLE
+    result = await _fetch_logs()
+    assert result == _LOGS_UNAVAILABLE

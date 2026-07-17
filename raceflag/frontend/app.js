@@ -386,7 +386,11 @@ document.getElementById('btn-send-logs').addEventListener('click', async () => {
     if (!resp.ok) throw new Error('fetch failed');
     const data = await resp.json();
     const subject = encodeURIComponent(`RaceFlag Diagnostic Logs — ${data.timestamp}`);
-    const body = encodeURIComponent(data.lines);
+    const MAX_CHARS = 2000;
+    const raw = data.lines.length > MAX_CHARS
+      ? `[logs truncated — showing last ${MAX_CHARS} chars]\n` + data.lines.slice(-MAX_CHARS)
+      : data.lines;
+    const body = encodeURIComponent(raw);
     window.location.href = `mailto:prometheusprinting.yyc@gmail.com?subject=${subject}&body=${body}`;
   } catch (e) {}
   btn.textContent = 'Send Logs';
