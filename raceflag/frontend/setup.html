@@ -168,8 +168,13 @@
         <input id="manual-ssid" class="pw-input" type="text" placeholder="Your WiFi network name"
                style="margin-bottom:12px" onkeydown="if(event.key==='Enter') document.getElementById('manual-pw').focus()">
         <div class="pw-label">Password</div>
-        <input id="manual-pw" class="pw-input" type="password" placeholder="Enter WiFi password"
-               onkeydown="if(event.key==='Enter') connectManual()">
+        <div style="position:relative">
+          <input id="manual-pw" class="pw-input" type="password" placeholder="Enter WiFi password"
+                 onkeydown="if(event.key==='Enter') connectManual()"
+                 style="padding-right:60px">
+          <button type="button" onclick="togglePw('manual-pw',this)"
+                  style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:#555;font-size:11px;cursor:pointer;padding:4px;font-family:inherit">Show</button>
+        </div>
         <button class="btn-primary" style="margin-top:12px" onclick="connectManual()">Connect</button>
         <button class="btn-ghost" onclick="show('s-networks')">← Back to network list</button>
       </div>
@@ -183,8 +188,13 @@
       <div class="network-list" id="selected-network-row"></div>
       <div class="pw-section">
         <div class="pw-label">Password</div>
-        <input id="pw-input" class="pw-input" type="password" placeholder="Enter WiFi password"
-               onkeydown="if(event.key==='Enter') connect()">
+        <div style="position:relative">
+          <input id="pw-input" class="pw-input" type="password" placeholder="Enter WiFi password"
+                 onkeydown="if(event.key==='Enter') connect()"
+                 style="padding-right:60px">
+          <button type="button" onclick="togglePw('pw-input',this)"
+                  style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:#555;font-size:11px;cursor:pointer;padding:4px;font-family:inherit">Show</button>
+        </div>
         <button class="btn-primary" style="margin-top:12px" onclick="connect()">Connect</button>
         <button class="btn-ghost" onclick="show('s-networks')">← Choose a different network</button>
       </div>
@@ -194,24 +204,11 @@
   <!-- CONNECTING -->
   <div id="s-connecting" class="hidden">
     <div class="card">
-      <div class="card-heading">Connecting…</div>
+      <div class="card-heading">RaceFlag is attempting to connect…</div>
       <div class="card-sub" id="connecting-label"></div>
-      <div class="spinner-row"><div class="spinner"></div><span>Please wait</span></div>
-    </div>
-  </div>
-
-  <!-- SUCCESS -->
-  <div id="s-success" class="hidden">
-    <div class="card">
-      <div class="center-icon icon-success">✓</div>
-      <div class="center-heading">Connected!</div>
-      <div class="center-ssid" id="success-ssid" style="color:#00C853"></div>
-      <div class="center-sub">
-        RaceFlag is now online. This setup hotspot will shut down shortly
-        — your device will reconnect to your home network automatically.
-      </div>
-      <div class="countdown-wrap"><div class="countdown-bar" id="countdown-bar"></div></div>
-      <div class="countdown-label" id="countdown-label"></div>
+      <div class="countdown-wrap" style="margin-top:16px"><div class="countdown-bar" id="connect-countdown-bar"></div></div>
+      <div class="countdown-label" id="connect-countdown-label"></div>
+      <div style="margin-top:16px;font-size:12px;color:#555;text-align:center;line-height:1.5">If the LED strip is still flashing white after the countdown, the connection was unsuccessful. Reconnect to RaceFlag-Setup and try again.</div>
     </div>
   </div>
 
@@ -228,14 +225,14 @@
 </div>
 <script>
   const REDIRECT_URL = 'http://raceflag.local:8080';
-  const COUNTDOWN_SEC = 30;
+  const CONNECT_COUNTDOWN_SEC = 45;
 
   let _selectedSsid = '';
   let _networks = [];
-  let _countdownTimer = null;
+  let _connectTimer = null;
 
   function show(id) {
-    ['s-idle','s-scanning','s-networks','s-password','s-manual','s-connecting','s-success','s-error']
+    ['s-idle','s-scanning','s-networks','s-password','s-manual','s-connecting','s-error']
       .forEach(s => document.getElementById(s).classList.toggle('hidden', s !== id));
   }
 
@@ -312,57 +309,49 @@
     const password = document.getElementById('manual-pw').value;
     document.getElementById('connecting-label').textContent = `Connecting to ${_selectedSsid}…`;
     show('s-connecting');
-    try {
-      const resp = await fetch('/api/wifi/connect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ssid: _selectedSsid, password }),
-      });
-      if (resp.ok) { showSuccess(); } else { showError('Check the network name and password and try again.'); }
-    } catch (_) { showSuccess(); }
+    fetch('/api/wifi/connect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ssid: _selectedSsid, password }),
+    }).catch(() => {});
+    startConnectingCountdown();
   }
 
   async function connect() {
     const password = document.getElementById('pw-input').value;
-    document.getElementById('connecting-label').textContent =
-      `Connecting to ${_selectedSsid}…`;
+    document.getElementById('connecting-label').textContent = `Connecting to ${_selectedSsid}…`;
     show('s-connecting');
-    try {
-      const resp = await fetch('/api/wifi/connect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ssid: _selectedSsid, password }),
-      });
-      if (resp.ok) {
-        showSuccess();
-      } else {
-        showError('Check the password and try again.');
-      }
-    } catch (_) {
-      // Network error likely means the hotspot shut down — connection succeeded.
-      showSuccess();
-    }
+    fetch('/api/wifi/connect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ssid: _selectedSsid, password }),
+    }).catch(() => {});
+    startConnectingCountdown();
   }
 
-  function showSuccess() {
-    document.getElementById('success-ssid').textContent = _selectedSsid;
-    show('s-success');
-    let remaining = COUNTDOWN_SEC;
-    const bar = document.getElementById('countdown-bar');
-    const label = document.getElementById('countdown-label');
+  function startConnectingCountdown() {
+    if (_connectTimer) clearInterval(_connectTimer);
+    let remaining = CONNECT_COUNTDOWN_SEC;
+    const bar = document.getElementById('connect-countdown-bar');
+    const label = document.getElementById('connect-countdown-label');
     bar.style.width = '100%';
-    label.textContent = `Redirecting to RaceFlag in ${remaining} seconds…`;
-    _countdownTimer = setInterval(() => {
+    label.textContent = `${remaining}s`;
+    _connectTimer = setInterval(() => {
       remaining--;
-      bar.style.width = (remaining / COUNTDOWN_SEC * 100) + '%';
-      label.textContent = remaining > 0
-        ? `Redirecting to RaceFlag in ${remaining} seconds…`
-        : 'Redirecting…';
+      bar.style.width = (remaining / CONNECT_COUNTDOWN_SEC * 100) + '%';
+      label.textContent = remaining > 0 ? `${remaining}s` : '';
       if (remaining <= 0) {
-        clearInterval(_countdownTimer);
+        clearInterval(_connectTimer);
         window.location.href = REDIRECT_URL;
       }
     }, 1000);
+  }
+
+  function togglePw(inputId, btn) {
+    const input = document.getElementById(inputId);
+    const showing = input.type === 'text';
+    input.type = showing ? 'password' : 'text';
+    btn.textContent = showing ? 'Show' : 'Hide';
   }
 
   function showError(msg) {
