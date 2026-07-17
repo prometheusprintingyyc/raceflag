@@ -6,6 +6,15 @@ All notable changes to RaceFlag are documented here.
 
 ## [Unreleased]
 
+### Fixed
+- WiFi connection timeout handling — `_connect_to_configured()` now uses `asyncio.wait_for()` with 30-second timeout to prevent indefinite hangs
+- WiFi manager immediately re-enables hotspot when WiFi connection fails, allowing users to reconfigure network settings
+
+### Added
+- `CONNECT_TIMEOUT`, `CONNECT_FAIL_THRESHOLD`, `RECONNECT_FAIL_THRESHOLD`, `MAX_HOTSPOT_ATTEMPTS` constants to `wifi_manager.py`
+- `_ever_connected` and `_hotspot_attempt_count` tracking fields to `WiFiManager` for use by future resilience improvements
+- Boolean return value for `_connect_to_configured()` — `True` on successful connection, `False` on timeout or non-zero exit
+
 ---
 
 ## [v0.2.18] — 2026-07-17

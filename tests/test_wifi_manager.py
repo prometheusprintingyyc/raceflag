@@ -1,7 +1,7 @@
 import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock
-from raceflag.wifi_manager import WiFiManager
+from raceflag.wifi_manager import WiFiManager, MAX_HOTSPOT_ATTEMPTS
 from raceflag.config import Config
 
 
@@ -60,8 +60,66 @@ async def test_connect_updates_config(manager, config, tmp_path, mocker):
     manager._config_path = config_path
     mock_proc = MagicMock()
     mock_proc.wait = AsyncMock(return_value=0)
+    mock_proc.communicate = AsyncMock(return_value=(None, None))
     mock_proc.returncode = 0
     mocker.patch("raceflag.wifi_manager.asyncio.create_subprocess_exec", return_value=mock_proc)
     await manager.connect("NewNet", "newpass")
     assert manager._config.wifi_ssid == "NewNet"
     assert manager._config.wifi_password == "newpass"
+
+
+@pytest.mark.asyncio
+async def test_connect_to_configured_returns_true_on_success(manager, mocker):
+    mock_proc = MagicMock()
+    mock_proc.returncode = 0
+    mock_proc.communicate = AsyncMock(return_value=(None, None))
+    mock_proc.kill = MagicMock()
+    mock_proc.wait = AsyncMock(return_value=None)
+    mocker.patch("raceflag.wifi_manager.asyncio.create_subprocess_exec", return_value=mock_proc)
+    result = await manager._connect_to_configured()
+    assert result is True
+
+
+@pytest.mark.asyncio
+async def test_connect_to_configured_returns_false_on_nonzero_exit(manager, mocker):
+    mock_proc = MagicMock()
+    mock_proc.returncode = 1
+    mock_proc.communicate = AsyncMock(return_value=(None, None))
+    mock_proc.kill = MagicMock()
+    mock_proc.wait = AsyncMock(return_value=None)
+    mocker.patch("raceflag.wifi_manager.asyncio.create_subprocess_exec", return_value=mock_proc)
+    result = await manager._connect_to_configured()
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_connect_to_configured_returns_false_on_timeout(manager, mocker):
+    mock_proc = MagicMock()
+    mock_proc.returncode = 0
+    mock_proc.communicate = AsyncMock(return_value=(None, None))
+    mock_proc.kill = MagicMock()
+    mock_proc.wait = AsyncMock(return_value=None)
+    mocker.patch("raceflag.wifi_manager.asyncio.create_subprocess_exec", return_value=mock_proc)
+    mocker.patch("raceflag.wifi_manager.asyncio.wait_for", side_effect=asyncio.TimeoutError)
+    result = await manager._connect_to_configured()
+    assert result is False
+    mock_proc.kill.assert_called_once()
+    mock_proc.wait.assert_called()
+
+
+@pytest.mark.asyncio
+async def test_connect_reenables_hotspot_on_failure(manager, mocker):
+    mocker.patch.object(manager, "disable_hotspot", new=AsyncMock())
+    mocker.patch.object(manager, "enable_hotspot", new=AsyncMock())
+    mocker.patch.object(manager, "_connect_to_configured", new=AsyncMock(return_value=False))
+    await manager.connect("BadNet", "wrongpass")
+    manager.enable_hotspot.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_connect_does_not_reenable_hotspot_on_success(manager, mocker):
+    mocker.patch.object(manager, "disable_hotspot", new=AsyncMock())
+    mocker.patch.object(manager, "enable_hotspot", new=AsyncMock())
+    mocker.patch.object(manager, "_connect_to_configured", new=AsyncMock(return_value=True))
+    await manager.connect("GoodNet", "rightpass")
+    manager.enable_hotspot.assert_not_called()

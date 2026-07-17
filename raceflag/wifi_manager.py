@@ -29,6 +29,11 @@ dhcp-range=192.168.4.2,192.168.4.20,255.255.255.0,24h
 address=/#/{HOTSPOT_IP}
 """
 
+CONNECT_TIMEOUT = 30
+CONNECT_FAIL_THRESHOLD = 2
+RECONNECT_FAIL_THRESHOLD = 10
+MAX_HOTSPOT_ATTEMPTS = 3
+
 
 class WiFiManager:
     def __init__(self, config: Config, config_path: Path | None = None, on_hotspot_change=None):
@@ -40,6 +45,8 @@ class WiFiManager:
         self._hotspot_active = False
         self._running = False
         self._task: asyncio.Task | None = None
+        self._ever_connected = False
+        self._hotspot_attempt_count = 0
 
     def is_connected(self) -> bool:
         return self._connected
@@ -111,22 +118,30 @@ class WiFiManager:
         except Exception:
             return False
 
-    async def _connect_to_configured(self) -> None:
+    async def _connect_to_configured(self) -> bool:
         ssid = self._config.wifi_ssid
         password = self._config.wifi_password
         if not ssid:
-            return
+            return False
         try:
             proc = await asyncio.create_subprocess_exec(
                 "nmcli", "device", "wifi", "connect", ssid, "password", password,
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
             )
-            await proc.wait()
+            try:
+                await asyncio.wait_for(proc.communicate(), timeout=CONNECT_TIMEOUT)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
+                logger.warning("WiFi connect timed out after %ds", CONNECT_TIMEOUT)
+                return False
             self._connected = proc.returncode == 0
             self._current_ssid = ssid if self._connected else ""
+            return self._connected
         except Exception as e:
             logger.error("WiFi connect failed: %s", e)
+            return False
 
     async def enable_hotspot(self) -> None:
         self._hotspot_active = True
@@ -187,5 +202,8 @@ class WiFiManager:
         self._config.wifi_password = password
         if self._config_path:
             save_config(self._config, self._config_path)
+        self._hotspot_attempt_count = 0
         await self.disable_hotspot()
-        await self._connect_to_configured()
+        success = await self._connect_to_configured()
+        if not success:
+            await self.enable_hotspot()
