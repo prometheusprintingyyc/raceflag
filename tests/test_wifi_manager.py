@@ -123,3 +123,58 @@ async def test_connect_does_not_reenable_hotspot_on_success(manager, mocker):
     mocker.patch.object(manager, "_connect_to_configured", new=AsyncMock(return_value=True))
     await manager.connect("GoodNet", "rightpass")
     manager.enable_hotspot.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_monitor_loop_sets_ever_connected_on_first_ping_success(manager, mocker):
+    call_count = 0
+    async def mock_check():
+        nonlocal call_count
+        call_count += 1
+        if call_count >= 2:
+            manager._running = False
+        return True
+    mocker.patch.object(manager, "_check_connectivity", side_effect=mock_check)
+    mocker.patch("raceflag.wifi_manager.asyncio.sleep", new=AsyncMock())
+    manager._running = True
+    manager._hotspot_active = False
+    await manager._monitor_loop()
+    assert manager._ever_connected is True
+
+
+@pytest.mark.asyncio
+async def test_monitor_loop_enables_hotspot_after_2_failures_when_never_connected(manager, mocker):
+    fail_calls = 0
+    async def mock_check():
+        nonlocal fail_calls
+        fail_calls += 1
+        if fail_calls > 2:
+            manager._running = False
+        return False
+    mocker.patch.object(manager, "_check_connectivity", side_effect=mock_check)
+    mocker.patch.object(manager, "enable_hotspot", new=AsyncMock())
+    mocker.patch("raceflag.wifi_manager.asyncio.sleep", new=AsyncMock())
+    manager._running = True
+    manager._hotspot_active = False
+    manager._ever_connected = False
+    await manager._monitor_loop()
+    manager.enable_hotspot.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_monitor_loop_enables_hotspot_after_10_failures_when_previously_connected(manager, mocker):
+    fail_calls = 0
+    async def mock_check():
+        nonlocal fail_calls
+        fail_calls += 1
+        if fail_calls > 10:
+            manager._running = False
+        return False
+    mocker.patch.object(manager, "_check_connectivity", side_effect=mock_check)
+    mocker.patch.object(manager, "enable_hotspot", new=AsyncMock())
+    mocker.patch("raceflag.wifi_manager.asyncio.sleep", new=AsyncMock())
+    manager._running = True
+    manager._hotspot_active = False
+    manager._ever_connected = True
+    await manager._monitor_loop()
+    manager.enable_hotspot.assert_called_once()

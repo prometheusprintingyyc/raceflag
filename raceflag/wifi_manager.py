@@ -83,10 +83,12 @@ class WiFiManager:
                 if ok:
                     fail_count = 0
                     self._connected = True
+                    self._ever_connected = True
                 else:
                     fail_count += 1
                     self._connected = False
-                    if fail_count >= 2:
+                    threshold = RECONNECT_FAIL_THRESHOLD if self._ever_connected else CONNECT_FAIL_THRESHOLD
+                    if fail_count >= threshold:
                         logger.warning("WiFi unreachable — starting hotspot")
                         await self.enable_hotspot()
                         fail_count = 0
