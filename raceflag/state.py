@@ -131,6 +131,7 @@ class AppState:
     track_status: str = "unknown"
     display_track_status: str = "unknown"
     demo_mode: bool = False
+    led_enabled: bool = True
     feed_connected: bool = False
     session: SessionInfo = field(default_factory=SessionInfo)
     weather: WeatherInfo = field(default_factory=WeatherInfo)
@@ -152,6 +153,10 @@ class AppState:
     def set_demo_mode(self, enabled: bool) -> None:
         with self._lock:
             self.demo_mode = enabled
+
+    def set_led_enabled(self, enabled: bool) -> None:
+        with self._lock:
+            self.led_enabled = enabled
 
     def set_feed_connected(self, connected: bool) -> None:
         with self._lock:
@@ -193,6 +198,7 @@ class AppState:
                 "track_status": self.display_track_status,
                 "flag_color": FLAG_COLORS.get(self.display_track_status, FLAG_COLORS["unknown"]),
                 "demo_mode": self.demo_mode,
+                "led_enabled": self.led_enabled,
                 "feed_connected": self.feed_connected,
                 "session": asdict(self.session),
                 "weather": asdict(self.weather),

@@ -167,3 +167,24 @@ async def test_fetch_logs_returns_fallback_when_journalctl_missing(mocker):
     from raceflag.web_server import _fetch_logs, _LOGS_UNAVAILABLE
     result = await _fetch_logs()
     assert result == _LOGS_UNAVAILABLE
+
+
+def test_set_led_enabled_returns_200(client):
+    resp = client.post("/api/led/enabled", json={"enabled": False})
+    assert resp.status_code == 200
+    assert resp.json()["led_enabled"] is False
+
+
+def test_set_led_enabled_updates_app_state(client, app_state):
+    client.post("/api/led/enabled", json={"enabled": False})
+    assert app_state.led_enabled is False
+
+
+def test_set_led_enabled_updates_led_controller(client, led):
+    client.post("/api/led/enabled", json={"enabled": False})
+    assert led._led_enabled is False
+
+
+def test_get_state_includes_led_enabled(client):
+    resp = client.get("/api/state")
+    assert "led_enabled" in resp.json()

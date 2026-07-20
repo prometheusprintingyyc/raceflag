@@ -86,3 +86,21 @@ def test_team_colors_has_expected_teams():
 def test_flag_colors_covers_all_states():
     for state in ("track_clear", "yellow_flag", "safety_car", "virtual_sc", "red_flag", "checkered"):
         assert state in FLAG_COLORS
+
+
+def test_led_enabled_defaults_to_true():
+    s = AppState()
+    assert s.led_enabled is True
+
+
+def test_set_led_enabled_updates_state():
+    s = AppState()
+    s.set_led_enabled(False)
+    assert s.led_enabled is False
+
+
+def test_to_dict_includes_led_enabled():
+    s = AppState()
+    d = s.to_dict()
+    assert "led_enabled" in d
+    assert d["led_enabled"] is True

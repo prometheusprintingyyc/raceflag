@@ -60,6 +60,10 @@ class DemoModeRequest(BaseModel):
     enabled: bool
 
 
+class LEDEnabledRequest(BaseModel):
+    enabled: bool
+
+
 def create_app(
     state: AppState,
     config: Config,
@@ -112,6 +116,12 @@ def create_app(
     async def set_demo_mode(req: DemoModeRequest):
         state.set_demo_mode(req.enabled)
         return {"demo_mode": req.enabled}
+
+    @app.post("/api/led/enabled")
+    async def set_led_enabled(req: LEDEnabledRequest):
+        state.set_led_enabled(req.enabled)
+        led.set_led_enabled(req.enabled)
+        return {"led_enabled": req.enabled}
 
     @app.post("/api/test-idle")
     async def test_idle():
