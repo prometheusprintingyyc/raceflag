@@ -108,9 +108,6 @@ class LEDController:
 
     def set_led_enabled(self, enabled: bool) -> None:
         self._led_enabled = enabled
-        if not enabled:
-            self._strip.fill(0, 0, 0)
-            self._strip.show()
 
     def set_idle(self, active: bool) -> None:
         if active:

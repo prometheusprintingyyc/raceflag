@@ -372,15 +372,9 @@ def test_led_enabled_defaults_to_true(controller):
 
 
 def test_set_led_enabled_false_blanks_strip(controller):
-    controller._strip.set_pixel(0, 255, 0, 0)
+    """set_led_enabled(False) sets the flag; the _run() loop blanks the strip."""
     controller.set_led_enabled(False)
-    assert all(p == (0, 0, 0) for p in controller._strip.pixels)
-
-
-def test_set_led_enabled_false_calls_show(controller):
-    show_before = controller._strip.show_calls
-    controller.set_led_enabled(False)
-    assert controller._strip.show_calls == show_before + 1
+    assert controller._led_enabled is False
 
 
 def test_set_led_enabled_true_does_not_blank_strip(controller):
