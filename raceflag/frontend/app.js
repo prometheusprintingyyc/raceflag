@@ -89,6 +89,7 @@ function updateUI(data) {
   document.getElementById('rain').style.color = w.rain ? '#4fc3f7' : '#aaa';
 
   _setDemoMode(!!data.demo_mode);
+  _setLedEnabled(!!data.led_enabled);
 
   const feedEl = document.getElementById('feed-status');
   if (feedEl) {
@@ -357,10 +358,29 @@ function _setDemoMode(enabled) {
   }
 }
 
+function _setLedEnabled(enabled) {
+  const btn = document.getElementById('btn-led-toggle');
+  if (!btn) return;
+  btn.textContent = enabled ? 'ON' : 'OFF';
+  if (enabled) btn.classList.add('on');
+  else btn.classList.remove('on');
+}
+
 document.getElementById('btn-demo-mode').addEventListener('click', async () => {
   const btn = document.getElementById('btn-demo-mode');
   const enabling = !btn.classList.contains('on');
   await fetch('/api/config/demo-mode', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled: enabling }),
+  });
+  await fetchState();
+});
+
+document.getElementById('btn-led-toggle').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-led-toggle');
+  const enabling = !btn.classList.contains('on');
+  await fetch('/api/led/enabled', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ enabled: enabling }),

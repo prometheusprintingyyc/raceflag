@@ -8,6 +8,7 @@ All notable changes to RaceFlag are documented here.
 
 ### Added
 - Password show/hide toggle on the WiFi setup page password fields
+- LED Strip on/off toggle in Settings — darkens the LED strip immediately while keeping the app and web UI active; hotspot setup mode always shows regardless of toggle state
 
 ### Fixed
 - Wrong password during WiFi setup no longer leaves the device in a dark period — the setup hotspot re-enables within 35 seconds (previously up to 2 minutes) and the LED strip resumes flashing white
