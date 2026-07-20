@@ -84,12 +84,22 @@ async def load_session(path: str) -> None
 async def play(on_event: Callable) -> None
     # Starts asyncio task walking events in real time, calling on_event(flag_state) for each
 
+def pause() -> None
+    # Records t_paused = monotonic.now(); sets _paused = True
+    # The playback task checks _paused each tick and sleeps without firing events
+
+def resume() -> None
+    # Shifts _t_play forward by (monotonic.now() - t_paused) to absorb the pause gap
+    # Sets _paused = False; playback continues from the correct position
+
 def stop() -> None
-    # Cancels playback task, resets state
+    # Cancels playback task, resets all state including _paused
 
 def set_sync_offset(seconds: float) -> None
     # Adjusts _sync_offset_seconds, clamped to [-30, +30]
 ```
+
+**Pause implementation detail:** The playback asyncio task loops over the event list. On each iteration it checks `_paused`; if `True` it `await asyncio.sleep(0.1)` without advancing. On `resume()`, `_t_play` is incremented by the paused duration so subsequent events fire at the correct wall-clock time relative to the original press.
 
 ---
 
@@ -99,7 +109,7 @@ New fields added to `AppState` dataclass (`raceflag/state.py`):
 
 ```python
 replay_mode: bool = False
-replay_status: str = "idle"   # "idle" | "loading" | "ready" | "playing" | "complete"
+replay_status: str = "idle"   # "idle" | "loading" | "ready" | "playing" | "paused" | "complete"
 replay_session_name: str = ""  # e.g. "2025 British Grand Prix"
 replay_time_elapsed: str = ""  # HH:MM:SS display of current replay position
 ```
@@ -121,8 +131,9 @@ New endpoints added to `raceflag/web_server.py`:
 |---|---|---|
 | `GET` | `/api/replay/sessions` | Fetch fresh session list from Index.json |
 | `POST` | `/api/replay/load` | Load a session; body `{"session_path": str}` |
-| `POST` | `/api/replay/play` | Start playback |
-| `POST` | `/api/replay/stop` | Stop playback, resume live mode |
+| `POST` | `/api/replay/play` | Start or resume playback |
+| `POST` | `/api/replay/pause` | Pause playback mid-session |
+| `POST` | `/api/replay/stop` | Stop playback entirely, resume live mode |
 | `POST` | `/api/replay/offset` | Adjust sync offset; body `{"seconds": float}` |
 
 `GET /api/replay/sessions` always fetches fresh — no caching — so newly available replays appear automatically each time the Replay tab is opened.
@@ -185,10 +196,17 @@ After session loads, the button becomes red:
 [ Dropdown: 🇬🇧 British GP · 6 Jul 2025  ▼ ]  [ ▶ Play ]
 ```
 
-After Play is pressed, dropdown is disabled and button changes:
+After Play is pressed, dropdown is disabled and two buttons appear:
 ```
-[ Dropdown: 🇬🇧 British GP · 6 Jul 2025 (disabled) ]  [ ■ Stop ]
+[ Dropdown: 🇬🇧 British GP · 6 Jul 2025 (disabled) ]  [ ⏸ Pause ]  [ ■ Stop ]
 ```
+
+While paused, the Pause button becomes Resume:
+```
+[ Dropdown: 🇬🇧 British GP · 6 Jul 2025 (disabled) ]  [ ▶ Resume ]  [ ■ Stop ]
+```
+
+Stop always cancels the replay entirely and returns to live mode. Pause/Resume toggle mid-session without losing the current replay position.
 
 ### Auto-label (below toggle)
 
@@ -198,6 +216,7 @@ After Play is pressed, dropdown is disabled and button changes:
 | Replay idle | "Select a race to begin" |
 | Replay loaded | "Press Play at lights out · Use slider to fine-tune sync" |
 | Replay playing | "Replaying: 2025 British Grand Prix" |
+| Replay paused | "Paused · 2025 British Grand Prix" |
 
 ### Slider label and range
 
@@ -229,7 +248,8 @@ Flag banner, LED strip panel, weather, race positions, race control messages, an
 5. At the moment of lights out, tap **▶ Play** → LED goes green immediately (race start animation)
 6. If LEDs are slightly out of sync, adjust the **Sync Offset** slider left or right until aligned
 7. Watch the race — LEDs react to all flag events identically to live mode
-8. Tap **■ Stop** at any point to end the replay and return to live mode
+8. Tap **⏸ Pause** to freeze the replay (e.g. pausing the broadcast); tap **▶ Resume** to continue from the same position
+9. Tap **■ Stop** at any point to end the replay entirely and return to live mode
 
 ---
 
@@ -256,5 +276,4 @@ Flag banner, LED strip panel, weather, race positions, race control messages, an
 - Qualifying replay
 - Persisting selected race across page reloads
 - Caching fetched session data on disk
-- Scrubbing / seeking within a replay
-- Pausing replay mid-session
+- Scrubbing / seeking to an arbitrary position within a replay
