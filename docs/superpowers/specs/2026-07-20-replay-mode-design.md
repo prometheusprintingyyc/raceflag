@@ -85,12 +85,12 @@ async def play(on_event: Callable) -> None
     # Starts asyncio task walking events in real time, calling on_event(flag_state) for each
 
 def pause() -> None
-    # Records t_paused = monotonic.now(); sets _paused = True
+    # Sets _paused = True
     # The playback task checks _paused each tick and sleeps without firing events
 
 def resume() -> None
-    # Shifts _t_play forward by (monotonic.now() - t_paused) to absorb the pause gap
-    # Sets _paused = False; playback continues from the correct position
+    # Sets _paused = False; playback continues from the same position
+    # No clock adjustment needed — the user pauses and resumes both TV and RaceFlag together
 
 def stop() -> None
     # Cancels playback task, resets all state including _paused
@@ -99,7 +99,7 @@ def set_sync_offset(seconds: float) -> None
     # Adjusts _sync_offset_seconds, clamped to [-30, +30]
 ```
 
-**Pause implementation detail:** The playback asyncio task loops over the event list. On each iteration it checks `_paused`; if `True` it `await asyncio.sleep(0.1)` without advancing. On `resume()`, `_t_play` is incremented by the paused duration so subsequent events fire at the correct wall-clock time relative to the original press.
+**Pause implementation detail:** The playback asyncio task loops over the event list. On each iteration it checks `_paused`; if `True` it `await asyncio.sleep(0.1)` without advancing. The user is expected to pause and resume their TV broadcast simultaneously with RaceFlag, so no wall-clock compensation is applied on resume.
 
 ---
 
@@ -185,28 +185,30 @@ Pill width: `calc(33.33% - 2px)`. Positions: left, centre (`translateX(calc(100%
 
 ### Replay session selector bar
 
-Appears below the toggle only when Replay tab is active. Single row at all times:
+Appears below the toggle only when Replay tab is active. The layout changes across states:
 
+**Idle** — full-width dropdown + Load button:
 ```
-[ Dropdown: Select a race…  ▼ ]  [ Load ]
-```
-
-After session loads, the button becomes red:
-```
-[ Dropdown: 🇬🇧 British GP · 6 Jul 2025  ▼ ]  [ ▶ Play ]
+[ Dropdown: Select a race…  ▼              ]  [ Load ]
 ```
 
-After Play is pressed, dropdown is disabled and two buttons appear:
+**Loaded** — dropdown replaced by a compact race name chip + Play button:
 ```
-[ Dropdown: 🇬🇧 British GP · 6 Jul 2025 (disabled) ]  [ ⏸ Pause ]  [ ■ Stop ]
+[ 🇬🇧 British Grand Prix · 6 Jul 2025 ]  [ ▶ Play ]
+```
+The chip is a non-interactive label. A small "×" or "Change" affordance beside it lets the user go back to the dropdown if they want a different race.
+
+**Playing** — dropdown/chip hidden entirely, two equal buttons fill the row:
+```
+[ ⏸  Pause          ]  [ ■  Stop           ]
 ```
 
-While paused, the Pause button becomes Resume:
+**Paused** — same two-button layout, left button switches to Resume:
 ```
-[ Dropdown: 🇬🇧 British GP · 6 Jul 2025 (disabled) ]  [ ▶ Resume ]  [ ■ Stop ]
+[ ▶  Resume         ]  [ ■  Stop           ]
 ```
 
-Stop always cancels the replay entirely and returns to live mode. Pause/Resume toggle mid-session without losing the current replay position.
+Pressing Stop cancels the replay, clears state, and restores the full dropdown so the user can select a different race. Pause/Resume toggle without losing the current replay position.
 
 ### Auto-label (below toggle)
 
