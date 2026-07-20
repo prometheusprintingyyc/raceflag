@@ -60,6 +60,7 @@ class LEDController:
         self._timed_effect: str = ""
         self._timed_effect_expiry: float = 0.0
         self._active_animation: str = ""  # continuous animation, no auto-expiry
+        self._led_enabled: bool = True
 
     def start(self) -> None:
         self._stop_event.clear()
@@ -104,6 +105,12 @@ class LEDController:
         else:
             self._active_animation = ""
             self._idle_active = True
+
+    def set_led_enabled(self, enabled: bool) -> None:
+        self._led_enabled = enabled
+        if not enabled:
+            self._strip.fill(0, 0, 0)
+            self._strip.show()
 
     def set_idle(self, active: bool) -> None:
         if active:
@@ -301,7 +308,8 @@ class LEDController:
                     self._active_animation = flag_state
                 else:
                     self._active_animation = ""
-                    self._apply_effect(flag_state)
+                    if self._led_enabled:
+                        self._apply_effect(flag_state)
             else:
                 logger.debug("LED holding: %s  waited=%.1fs remaining=%.1fs", flag_state, waited, self._delay_seconds - waited)
                 self._queue.put((flag_state, arrival))
@@ -310,6 +318,15 @@ class LEDController:
         while not self._stop_event.is_set():
             self._maybe_reload_effects()
             self._drain_queue()
+            if self._active_animation == "hotspot":
+                self._step_hotspot_animation()
+                time.sleep(0.05)
+                continue
+            if not self._led_enabled:
+                self._strip.fill(0, 0, 0)
+                self._strip.show()
+                time.sleep(0.05)
+                continue
             now = time.monotonic()
             if self._timed_effect:
                 if now >= self._timed_effect_expiry:
@@ -331,8 +348,6 @@ class LEDController:
                     self._step_safety_car_animation()
                 elif self._active_animation == "virtual_sc":
                     self._step_virtual_sc_animation()
-                elif self._active_animation == "hotspot":
-                    self._step_hotspot_animation()
             elif self._idle_active:
                 self._step_idle_animation()
             time.sleep(0.05)

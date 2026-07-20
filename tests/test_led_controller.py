@@ -365,3 +365,62 @@ def test_run_dispatches_race_start_animation(controller):
     controller.stop()
     # At least one frame was rendered — pixels should be green or off
     assert all(b == 0 and r == 0 for r, g, b in controller._strip.pixels)
+
+
+def test_led_enabled_defaults_to_true(controller):
+    assert controller._led_enabled is True
+
+
+def test_set_led_enabled_false_blanks_strip(controller):
+    controller._strip.set_pixel(0, 255, 0, 0)
+    controller.set_led_enabled(False)
+    assert all(p == (0, 0, 0) for p in controller._strip.pixels)
+
+
+def test_set_led_enabled_false_calls_show(controller):
+    show_before = controller._strip.show_calls
+    controller.set_led_enabled(False)
+    assert controller._strip.show_calls == show_before + 1
+
+
+def test_set_led_enabled_true_does_not_blank_strip(controller):
+    controller._strip.set_pixel(0, 255, 0, 0)
+    controller.set_led_enabled(True)
+    assert controller._strip.pixels[0] == (255, 0, 0)
+
+
+def test_run_blanks_strip_when_led_disabled(controller):
+    controller._effects = controller._load_effects()
+    controller.set_led_enabled(False)
+    controller.start()
+    time.sleep(0.15)
+    controller.stop()
+    assert all(p == (0, 0, 0) for p in controller._strip.pixels)
+
+
+def test_run_hotspot_animation_runs_when_led_disabled(controller):
+    from unittest.mock import patch
+    controller._effects = controller._load_effects()
+    controller.set_led_enabled(False)
+    controller.set_hotspot_mode(True)
+    with patch.object(controller, '_step_hotspot_animation') as mock_anim:
+        controller.start()
+        time.sleep(0.15)
+        controller.stop()
+    assert mock_anim.call_count > 0
+
+
+def test_drain_queue_skips_apply_effect_when_led_disabled(controller):
+    controller._effects = controller._load_effects()
+    controller.set_led_enabled(False)
+    controller.trigger("track_clear")
+    controller._drain_queue()
+    assert all(p == (0, 0, 0) for p in controller._strip.pixels)
+
+
+def test_drain_queue_tracks_continuous_animation_when_led_disabled(controller):
+    controller._effects = controller._load_effects()
+    controller.set_led_enabled(False)
+    controller.trigger("yellow_flag")
+    controller._drain_queue()
+    assert controller._active_animation == "yellow_flag"
