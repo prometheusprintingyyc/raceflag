@@ -494,8 +494,16 @@ document.getElementById('btn-led-toggle').addEventListener('click', async () => 
 });
 
 // ── Shutdown ────────────────────────────────────────────────────────────────
-document.getElementById('btn-shutdown').addEventListener('click', async () => {
-  if (!confirm('Shut down RaceFlag?\n\nWait 30 seconds before unplugging power.')) return;
+document.getElementById('btn-shutdown').addEventListener('click', () => {
+  document.getElementById('confirm-shutdown-overlay').classList.add('open');
+});
+
+document.getElementById('btn-shutdown-cancel').addEventListener('click', () => {
+  document.getElementById('confirm-shutdown-overlay').classList.remove('open');
+});
+
+document.getElementById('btn-shutdown-confirm').addEventListener('click', async () => {
+  document.getElementById('confirm-shutdown-overlay').classList.remove('open');
   const btn = document.getElementById('btn-shutdown');
   btn.textContent = 'Shutting down…';
   btn.disabled = true;

@@ -125,7 +125,7 @@ body {
 .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: flex-end; justify-content: center; }
 .overlay.open { display: flex; }
 .settings-panel { background: #1a1a1a; border: 1px solid #333; border-radius: 12px 12px 0 0; width: 100%; max-width: 480px; padding: 20px 20px 40px; }
-#confirm-replay-overlay { align-items: center; padding: 0 16px; }
+#confirm-replay-overlay, #confirm-shutdown-overlay { align-items: center; padding: 0 16px; }
 .confirm-dialog { background: #1a1a1a; border: 1px solid #333; border-radius: 12px; width: 100%; max-width: 360px; padding: 24px 20px 20px; }
 .confirm-title { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
 .confirm-body { font-size: 13px; color: #888; line-height: 1.5; margin-bottom: 20px; }
