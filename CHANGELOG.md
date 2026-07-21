@@ -20,7 +20,7 @@ All notable changes to RaceFlag are documented here.
 - LED Strip on/off toggle in Settings — darkens the LED strip immediately while keeping the app and web UI active; hotspot setup mode always shows regardless of toggle state
 
 ### Fixed
-- Setup hotspot no longer activates when the device has an active WiFi connection via NetworkManager but config.json is empty — NM credentials are adopted at startup (local nmcli query, no network round-trip needed) and written to config.json before any hotspot decision is made
+- Setup hotspot no longer activates when the device already has an active WiFi connection — startup now always checks NM first via a local nmcli query; if NM is connected the hotspot is skipped without calling `nmcli device wifi connect` (which errors when the interface is already on that network and was triggering the hotspot)
 - Ongoing connectivity monitoring now uses IP address detection instead of ICMP ping — prevents false "WiFi lost" triggers on corporate/enterprise networks that block outbound ping, which previously caused the setup hotspot to re-enable every 5 minutes even on a healthy connection
 - Hotspot's own IP (192.168.4.1) is now excluded from the routable-address check — prevents the monitor loop from counting the hotspot itself as a "real" internet connection
 - When an existing NM connection is adopted, the active WiFi SSID and password are read from the NetworkManager profile and written to config.json, so subsequent restarts use the normal configured path

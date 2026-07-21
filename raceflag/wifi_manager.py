@@ -133,24 +133,21 @@ class WiFiManager:
         logger.info("WiFiManager starting (configured_ssid=%r)", self._config.wifi_ssid or "")
         self._running = True
 
-        if not self._config.wifi_ssid:
-            # Before deciding to hotspot, ask NM if wlan0 already has an active connection.
-            # This handles devices where NM has cached credentials but config.json is empty
-            # (first boot at a new location, or config was reset while NM kept credentials).
-            if await self._sync_nm_wifi_to_config():
-                self._connected = True
-                self._ever_connected = True
-                logger.info("Adopted existing NM connection — skipping hotspot")
-
-        if self._connected:
-            pass  # Already connected via NM adoption above
+        # Always ask NM what wlan0 is currently connected to before making any
+        # hotspot decision — this handles both "config is empty but NM has creds"
+        # AND "config has SSID but device is already connected" (nmcli connect
+        # returns an error when the interface is already on that network).
+        if await self._sync_nm_wifi_to_config():
+            self._connected = True
+            self._ever_connected = True
+            logger.info("Already connected via NM to %r — skipping hotspot", self._config.wifi_ssid)
         elif self._config.wifi_ssid:
+            # NM not currently connected but we have credentials — try to connect.
             success = await self._connect_to_configured()
             if not success:
                 await self.enable_hotspot()
         else:
-            # No SSID in config and NM has no WiFi profile.
-            # Still skip hotspot if a non-WiFi routable IP exists (e.g. Ethernet).
+            # No SSID anywhere — skip hotspot if a non-WiFi routable IP exists (Ethernet).
             if await self._has_network_address():
                 self._connected = True
                 self._ever_connected = True
