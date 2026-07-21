@@ -21,7 +21,8 @@ All notable changes to RaceFlag are documented here.
 
 ### Fixed
 - Setup hotspot no longer activates when the device already has a routable IP address but no SSID in config.json — uses IP address detection instead of ICMP ping so corporate firewalls don't interfere; covers WiFi via NetworkManager cached credentials and Ethernet
-- If the hotspot started at boot before the network was ready, the monitor loop now detects when a routable IP appears and exits hotspot mode automatically
+- When an existing connection is adopted (no SSID in config), the active WiFi SSID and password are read from the NetworkManager profile and written back to config.json, so subsequent restarts use the normal configured path without needing detection
+- If the hotspot started at boot before the network was ready, the monitor loop now detects when a routable IP appears, exits hotspot mode, and syncs credentials automatically
 - Wrong password during WiFi setup no longer leaves the device in a dark period — the setup hotspot re-enables within 35 seconds (previously up to 2 minutes) and the LED strip resumes flashing white
 - WiFi connectivity monitoring now tolerates up to 5 minutes of outage before re-enabling the setup hotspot, preventing false triggers during router reboots (previously 60 seconds)
 - Repeated wrong-password auto-retries in the monitor loop stop after 3 consecutive failures — saved credentials are cleared so the device stays in setup mode cleanly
