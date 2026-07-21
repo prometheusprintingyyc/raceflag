@@ -283,14 +283,20 @@ def create_app(
             replay_manager.set_sync_offset(req.seconds)
             return {"offset_seconds": req.seconds}
 
+    def _asset_tag(filename: str) -> str:
+        """Return a cache-busting query param based on file mtime (changes on git pull)."""
+        try:
+            return str(int((FRONTEND_DIR / filename).stat().st_mtime))
+        except Exception:
+            return version or "0"
+
     @app.get("/", include_in_schema=False)
     async def index():
         if wifi_manager and wifi_manager.is_hotspot_active():
             return RedirectResponse(url="/setup")
         html = (FRONTEND_DIR / "index.html").read_text()
-        if version:
-            html = html.replace('href="/style.css"', f'href="/style.css?v={version}"')
-            html = html.replace('src="/app.js"', f'src="/app.js?v={version}"')
+        html = html.replace('href="/style.css"', f'href="/style.css?v={_asset_tag("style.css")}"')
+        html = html.replace('src="/app.js"', f'src="/app.js?v={_asset_tag("app.js")}"')
         return Response(content=html, media_type="text/html",
                         headers={"Cache-Control": "no-cache"})
 
