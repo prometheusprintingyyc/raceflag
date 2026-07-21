@@ -234,7 +234,7 @@ class F1Listener:
                     _msg = str(msg_data.get("Message", "")).upper()
                     if _flag == "CHEQUERED" or "CHEQUERED" in _msg or "CHECKERED" in _msg:
                         self._state.set_track_status("checkered")
-                        if self._on_track_status_change:
+                        if self._on_track_status_change and not is_snapshot:
                             self._on_track_status_change("checkered")
         elif topic == "LapCount":
             session = self._state.session
@@ -355,6 +355,10 @@ class F1Listener:
                 logger.warning("SignalR connection lost: %s — reconnecting in 5s", e)
                 if self._running:
                     await asyncio.sleep(5)
+
+    def process_replay_event(self, topic: str, data: dict, is_snapshot: bool = False) -> None:
+        """Process one archived event during replay, bypassing the suspended check."""
+        self._handle_feed(topic, data, is_snapshot)
 
     async def stop(self) -> None:
         self._running = False

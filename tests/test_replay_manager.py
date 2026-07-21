@@ -1,5 +1,5 @@
 import asyncio
-import time
+import json
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from raceflag.replay_manager import ReplayManager, _parse_ts, _parse_jsonstream_line
 
 
-# ── Pure helper tests (no HTTP) ───────────────────────────────────────────────
+# ── Pure helper tests ────────────────────────────────────────────────────────
 
 def test_parse_ts_converts_hhmmss():
     assert _parse_ts("00:00:00.000") == pytest.approx(0.0)
@@ -34,40 +34,60 @@ def test_parse_jsonstream_line_returns_none_for_short():
     assert _parse_jsonstream_line("00:00{}") is None
 
 
-# ── Lights-out detection ──────────────────────────────────────────────────────
+# ── Lights-out detection (new API: takes list of (abs_ts, topic, dict)) ─────
+
+def _ts_event(ts_str: str, status: str) -> tuple:
+    return (_parse_ts(ts_str), "TrackStatus", {"Status": status})
+
+
+def _rc_event(ts_str: str, message: str) -> tuple:
+    return (_parse_ts(ts_str), "RaceControlMessages",
+            {"Messages": {"1": {"Message": message, "Flag": "GREEN"}}})
+
 
 def test_find_lights_out_uses_race_started_message():
-    ts_lines = [
-        '00:10:00.000{"Status":"1"}',
-        '00:35:00.000{"Status":"1"}',
-    ]
-    rc_lines = [
-        '00:32:55.000{"Messages":{"1":{"Message":"RACE STARTED","Flag":"GREEN"}}}',
+    events = [
+        _ts_event("00:10:00.000", "1"),   # formation-lap AllClear
+        _ts_event("00:28:00.000", "2"),   # yellow during formation lap
+        _rc_event("00:32:55.000", "RACE STARTED"),
+        _ts_event("00:33:00.000", "1"),   # lights out AllClear
     ]
     rm = ReplayManager()
-    result = rm._find_lights_out(ts_lines, rc_lines)
+    result = rm._find_lights_out(events)
     assert result == pytest.approx(1975.0, abs=0.1)
 
 
-def test_find_lights_out_fallback_to_first_allclear_after_gap():
-    # No "RACE STARTED" in RC messages; formation lap gap >= 5 min before second AllClear
-    ts_lines = [
-        '00:00:00.000{"Status":"1"}',   # warm-up AllClear at T=0
-        '00:28:00.000{"Status":"1"}',   # formation lap ends — gap = 28 min >= 5 min
+def test_find_lights_out_fallback_to_first_allclear_after_non_clear():
+    # No "RACE STARTED" RC message; secondary detection from TrackStatus transitions
+    events = [
+        _ts_event("00:10:00.000", "1"),   # pre-race AllClear
+        _ts_event("00:28:00.000", "2"),   # yellow flag during formation lap
+        _ts_event("00:33:00.000", "1"),   # lights-out AllClear (first after non-clear)
+        _ts_event("01:05:00.000", "4"),   # SC deployed mid-race
+        _ts_event("01:12:00.000", "1"),   # SC end — should NOT be chosen
     ]
-    rc_lines = []  # no RACE STARTED
     rm = ReplayManager()
-    result = rm._find_lights_out(ts_lines, rc_lines)
-    assert result == pytest.approx(28 * 60, abs=0.1)
+    result = rm._find_lights_out(events)
+    assert result == pytest.approx(33 * 60, abs=0.1)
 
 
-def test_find_lights_out_returns_zero_when_no_marker():
+def test_find_lights_out_non_clear_required_before_allclear():
+    # Only AllClear events present — saw_non_clear never set, returns 0.0
+    events = [
+        _ts_event("00:10:00.000", "1"),
+        _ts_event("00:33:00.000", "1"),
+    ]
     rm = ReplayManager()
-    result = rm._find_lights_out([], [])
+    result = rm._find_lights_out(events)
     assert result == pytest.approx(0.0)
 
 
-# ── get_sessions (mocked HTTP) ────────────────────────────────────────────────
+def test_find_lights_out_returns_zero_when_empty():
+    rm = ReplayManager()
+    assert rm._find_lights_out([]) == pytest.approx(0.0)
+
+
+# ── get_sessions (mocked HTTP) ───────────────────────────────────────────────
 
 INDEX_JSON = {
     "Meetings": [
@@ -82,6 +102,12 @@ INDEX_JSON = {
                     "StartDate": "2025-07-06T14:00:00",
                 },
                 {
+                    "Path": "2025/2025-07-04_British_Grand_Prix/2025-07-06_Sprint/",
+                    "Type": "Race",
+                    "Name": "Sprint",
+                    "StartDate": "2025-07-06T11:00:00",
+                },
+                {
                     "Path": "2025/2025-07-04_British_Grand_Prix/2025-07-05_Qualifying/",
                     "Type": "Qualifying",
                     "Name": "Qualifying",
@@ -93,14 +119,10 @@ INDEX_JSON = {
 }
 
 
-def _make_mock_client(json_data=None, text_data=None):
-    """Return a mock httpx.AsyncClient context manager."""
+def _make_index_client(json_data):
     mock_resp = AsyncMock()
     mock_resp.raise_for_status = MagicMock()
-    if json_data is not None:
-        mock_resp.json = MagicMock(return_value=json_data)
-    if text_data is not None:
-        mock_resp.text = text_data
+    mock_resp.json = MagicMock(return_value=json_data)
     mock_client = AsyncMock()
     mock_client.get = AsyncMock(return_value=mock_resp)
     mock_ctx = MagicMock()
@@ -110,51 +132,61 @@ def _make_mock_client(json_data=None, text_data=None):
 
 
 @pytest.mark.asyncio
-async def test_get_sessions_returns_race_sessions_only():
-    with patch("raceflag.replay_manager.httpx.AsyncClient", return_value=_make_mock_client(json_data=INDEX_JSON)):
-        rm = ReplayManager()
-        sessions = await rm.get_sessions(year=2025)
+async def test_get_sessions_returns_race_and_sprint():
+    with patch("raceflag.replay_manager.httpx.AsyncClient",
+               return_value=_make_index_client(INDEX_JSON)):
+        sessions = await ReplayManager().get_sessions(year=2025)
 
-    assert len(sessions) == 1  # only Race, not Qualifying
-    s = sessions[0]
-    assert s["name"] == "2025 British Grand Prix"
-    assert s["path"] == "2025/2025-07-04_British_Grand_Prix/2025-07-06_Race/"
-    assert s["date"] == "2025-07-06"
-    assert s["circuit"] == "Silverstone"
+    assert len(sessions) == 2
+    names = [s["name"] for s in sessions]
+    assert "2025 British Grand Prix" in names
+    assert "2025 British Grand Prix (Sprint)" in names
+
+
+@pytest.mark.asyncio
+async def test_get_sessions_excludes_qualifying():
+    with patch("raceflag.replay_manager.httpx.AsyncClient",
+               return_value=_make_index_client(INDEX_JSON)):
+        sessions = await ReplayManager().get_sessions(year=2025)
+
+    assert all("Qualifying" not in s["name"] for s in sessions)
 
 
 @pytest.mark.asyncio
 async def test_get_sessions_returns_empty_for_no_race_sessions():
     data = {"Meetings": [{"Name": "Test GP", "Circuit": {"ShortName": "X"},
-                           "Sessions": [{"Path": "p/", "Type": "Qualifying",
-                                         "Name": "Q", "StartDate": "2025-01-01T00:00:00"}]}]}
-    with patch("raceflag.replay_manager.httpx.AsyncClient", return_value=_make_mock_client(json_data=data)):
-        rm = ReplayManager()
-        sessions = await rm.get_sessions(year=2025)
+                          "Sessions": [{"Path": "p/", "Type": "Qualifying",
+                                        "Name": "Q", "StartDate": "2025-01-01T00:00:00"}]}]}
+    with patch("raceflag.replay_manager.httpx.AsyncClient",
+               return_value=_make_index_client(data)):
+        sessions = await ReplayManager().get_sessions(year=2025)
     assert sessions == []
 
 
 # ── load_session (mocked HTTP) ───────────────────────────────────────────────
 
 TS_STREAM = "\n".join([
-    '00:29:00.000{"Status":"1"}',
-    '00:32:55.000{"Status":"2"}',
-    '00:35:00.000{"Status":"4"}',
-    '00:40:00.000{"Status":"1"}',
+    '00:10:00.000{"Status":"1"}',   # pre-race AllClear
+    '00:28:00.000{"Status":"2"}',   # yellow during formation
+    '00:33:00.000{"Status":"1"}',   # lights-out AllClear
+    '00:40:00.000{"Status":"4"}',   # safety car
+    '00:45:00.000{"Status":"1"}',   # SC end
 ])
 
 RC_STREAM = '00:32:55.000{"Messages":{"1":{"Message":"RACE STARTED","Flag":"GREEN"}}}\n'
 
 
-@pytest.mark.asyncio
-async def test_load_session_parses_events_after_lights_out():
-    def side_effect(url, timeout=None):
-        mock_resp = AsyncMock()
-        mock_resp.raise_for_status = MagicMock()
-        if "TrackStatus" in url:
-            mock_resp.text = TS_STREAM
-        else:
-            mock_resp.text = RC_STREAM
+def _make_stream_client(stream_data: dict[str, str]):
+    """Return a mock client that serves different text per topic URL substring."""
+    async def side_effect(url, **_):
+        mock_resp = MagicMock()
+        for key, text in stream_data.items():
+            if key in url:
+                mock_resp.status_code = 200
+                mock_resp.text = text
+                return mock_resp
+        mock_resp.status_code = 404
+        mock_resp.text = ""
         return mock_resp
 
     mock_client = AsyncMock()
@@ -162,73 +194,158 @@ async def test_load_session_parses_events_after_lights_out():
     mock_ctx = MagicMock()
     mock_ctx.__aenter__ = AsyncMock(return_value=mock_client)
     mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    return mock_ctx
 
-    with patch("raceflag.replay_manager.httpx.AsyncClient", return_value=mock_ctx):
-        rm = ReplayManager()
-        count = await rm.load_session("2025/some_path/", session_name="2025 British GP")
-
-    # race_start at T=0, then yellow_flag at ~0s after lights out,
-    # then safety_car at ~125s, then track_clear at ~425s
-    assert count > 0
-    assert rm._session_name == "2025 British GP"
-    assert rm._events[0] == pytest.approx((0.0, "race_start"), abs=0.1)
-    # all events at t >= 0
-    assert all(t >= 0 for t, _ in rm._events)
-
-
-# ── Playback engine ───────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_play_fires_events_in_order():
-    rm = ReplayManager()
-    rm._events = [(0.0, "race_start"), (0.05, "yellow_flag"), (0.1, "track_clear")]
+async def test_load_session_counts_realtime_events():
+    mock_ctx = _make_stream_client({
+        "TrackStatus": TS_STREAM,
+        "RaceControlMessages": RC_STREAM,
+    })
+    with patch("raceflag.replay_manager.httpx.AsyncClient", return_value=mock_ctx):
+        rm = ReplayManager()
+        count = await rm.load_session("2025/path/", session_name="2025 British GP")
+
+    assert count > 0
+    assert rm._session_name == "2025 British GP"
+
+
+@pytest.mark.asyncio
+async def test_load_session_anchors_events_to_lights_out():
+    mock_ctx = _make_stream_client({
+        "TrackStatus": TS_STREAM,
+        "RaceControlMessages": RC_STREAM,
+    })
+    with patch("raceflag.replay_manager.httpx.AsyncClient", return_value=mock_ctx):
+        rm = ReplayManager()
+        await rm.load_session("2025/path/")
+
+    # Lights-out detected from "RACE STARTED" at 00:32:55 = 1975s
+    # All real-time events must have race_time >= 0
+    realtime = [(rt, t, d) for rt, t, d in rm._events if rt >= 0]
+    assert len(realtime) > 0
+    assert all(rt >= 0 for rt, _, _ in realtime)
+
+    # Pre-race events must have race_time < 0
+    pre_race = [(rt, t, d) for rt, t, d in rm._events if rt < 0]
+    assert len(pre_race) > 0
+
+
+@pytest.mark.asyncio
+async def test_load_session_events_sorted_chronologically():
+    mock_ctx = _make_stream_client({
+        "TrackStatus": TS_STREAM,
+        "RaceControlMessages": RC_STREAM,
+    })
+    with patch("raceflag.replay_manager.httpx.AsyncClient", return_value=mock_ctx):
+        rm = ReplayManager()
+        await rm.load_session("2025/path/")
+
+    times = [rt for rt, _, _ in rm._events]
+    assert times == sorted(times)
+
+
+# ── Playback engine (uses on_feed for new API, on_event for legacy) ──────────
+
+@pytest.mark.asyncio
+async def test_play_fires_on_feed_in_order():
     received = []
+    rm = ReplayManager(on_feed=lambda t, d, s: received.append((t, s)))
+    rm._events = [
+        (0.0, "TrackStatus", {"Status": "1"}),
+        (0.05, "WeatherData", {"AirTemp": "25"}),
+        (0.1, "TrackStatus", {"Status": "2"}),
+    ]
+    await rm.play()
+    await asyncio.sleep(0.3)
+    rm.stop()
+    assert received == [
+        ("TrackStatus", False),
+        ("WeatherData", False),
+        ("TrackStatus", False),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_play_snapshot_phase_fires_with_is_snapshot_true():
+    received = []
+    rm = ReplayManager(on_feed=lambda t, d, s: received.append(s))
+    rm._events = [
+        (-10.0, "TrackStatus", {"Status": "1"}),  # pre-race (snapshot)
+        (0.0, "TrackStatus", {"Status": "1"}),     # at lights-out (real-time)
+        (0.05, "TrackStatus", {"Status": "2"}),    # after lights-out (real-time)
+    ]
+    await rm.play()
+    await asyncio.sleep(0.3)
+    rm.stop()
+    # First event is snapshot (True), rest are real-time (False)
+    assert received[0] is True
+    assert received[1] is False
+    assert received[2] is False
+
+
+@pytest.mark.asyncio
+async def test_play_legacy_on_event_fires_for_track_status_only():
+    received = []
+    rm = ReplayManager()  # no on_feed
+    rm._events = [
+        (0.0, "TrackStatus", {"Status": "2"}),     # yellow_flag → on_event fires
+        (0.05, "WeatherData", {"AirTemp": "25"}),  # no on_event
+    ]
     await rm.play(on_event=received.append)
     await asyncio.sleep(0.3)
     rm.stop()
-    assert received == ["race_start", "yellow_flag", "track_clear"]
+    assert received == ["yellow_flag"]
 
 
 @pytest.mark.asyncio
 async def test_pause_stops_event_delivery():
-    rm = ReplayManager()
-    rm._events = [(0.0, "race_start"), (0.15, "yellow_flag")]
     received = []
-    await rm.play(on_event=received.append)
+    rm = ReplayManager(on_feed=lambda t, d, s: received.append(t))
+    rm._events = [
+        (0.0, "TrackStatus", {"Status": "1"}),
+        (0.15, "TrackStatus", {"Status": "2"}),
+    ]
+    await rm.play()
     await asyncio.sleep(0.02)
     rm.pause()
-    await asyncio.sleep(0.3)  # yellow_flag would fire here if not paused
+    await asyncio.sleep(0.3)
     rm.stop()
-    assert received == ["race_start"]
-    assert "yellow_flag" not in received
+    assert received == ["TrackStatus"]  # only first event fired
 
 
 @pytest.mark.asyncio
-async def test_resume_continues_from_same_position():
-    rm = ReplayManager()
-    rm._events = [(0.0, "race_start"), (0.15, "yellow_flag")]
+async def test_resume_continues_from_paused_position():
     received = []
-    await rm.play(on_event=received.append)
+    rm = ReplayManager(on_feed=lambda t, d, s: received.append(t))
+    rm._events = [
+        (0.0, "TrackStatus", {"Status": "1"}),
+        (0.15, "TrackStatus", {"Status": "2"}),
+    ]
+    await rm.play()
     await asyncio.sleep(0.02)
     rm.pause()
     await asyncio.sleep(0.1)
     rm.resume()
     await asyncio.sleep(0.3)
     rm.stop()
-    assert "race_start" in received
-    assert "yellow_flag" in received
+    assert received == ["TrackStatus", "TrackStatus"]
 
 
 @pytest.mark.asyncio
 async def test_stop_cancels_playback():
-    rm = ReplayManager()
-    rm._events = [(0.0, "race_start"), (10.0, "yellow_flag")]
     received = []
-    await rm.play(on_event=received.append)
+    rm = ReplayManager(on_feed=lambda t, d, s: received.append(t))
+    rm._events = [
+        (0.0, "TrackStatus", {"Status": "1"}),
+        (10.0, "TrackStatus", {"Status": "2"}),
+    ]
+    await rm.play()
     await asyncio.sleep(0.02)
     rm.stop()
     await asyncio.sleep(0.05)
-    assert received == ["race_start"]
+    assert received == ["TrackStatus"]
     assert rm._task is None
 
 
@@ -244,7 +361,7 @@ def test_set_sync_offset_clamps_to_range():
 
 def test_stop_clears_events_and_name():
     rm = ReplayManager()
-    rm._events = [(0.0, "race_start")]
+    rm._events = [(0.0, "TrackStatus", {"Status": "1"})]
     rm._session_name = "Test GP"
     rm.stop()
     assert rm._events == []

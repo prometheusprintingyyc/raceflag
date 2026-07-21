@@ -14,15 +14,25 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://livetiming.formula1.com/static"
 
+# All streams consumed by live mode — replayed identically so state stays in sync
+REPLAY_STREAMS = [
+    "TrackStatus",
+    "RaceControlMessages",
+    "SessionStatus",
+    "WeatherData",
+    "TimingData",
+    "TimingAppData",
+    "DriverList",
+    "LapCount",
+]
+
 
 def _parse_ts(ts: str) -> float:
-    """Parse HH:MM:SS.mmm into total seconds."""
     h, m, s = ts.split(":")
     return int(h) * 3600 + int(m) * 60 + float(s)
 
 
 def _parse_jsonstream_line(line: str) -> tuple[float, dict] | None:
-    """Parse one .jsonStream line into (seconds, payload). Returns None on bad input."""
     line = line.strip()
     if not line or len(line) < 13:
         return None
@@ -35,18 +45,25 @@ def _parse_jsonstream_line(line: str) -> tuple[float, dict] | None:
 
 
 class ReplayManager:
-    def __init__(self) -> None:
-        self._events: list[tuple[float, str]] = []  # (race_time_seconds, flag_state)
+    def __init__(
+        self,
+        on_feed: Callable[[str, dict, bool], None] | None = None,
+    ) -> None:
+        # Called with (topic, data, is_snapshot) for every replayed event.
+        # When set, all topics route through the same F1Listener that live mode uses,
+        # so LED callbacks, weather, positions, and session state all update identically.
+        self._on_feed = on_feed
+        # (race_time_seconds, topic, payload) — sorted chronologically, anchored to lights-out
+        self._events: list[tuple[float, str, dict]] = []
         self._session_name: str = ""
         self._play_wall_origin: float = 0.0
         self._paused: bool = False
         self._pause_wall: float = 0.0
         self._sync_offset: float = 0.0
         self._task: asyncio.Task | None = None
-        self._on_event: Callable[[str], None] | None = None
 
     async def get_sessions(self, year: int = 2025) -> list[dict]:
-        """Fetch Index.json fresh and return Race and Sprint sessions."""
+        """Fetch Index.json and return Race and Sprint sessions."""
         url = f"{BASE_URL}/{year}/Index.json"
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(url)
@@ -76,103 +93,135 @@ class ReplayManager:
                 })
         return sessions
 
-    async def load_session(self, path: str, session_name: str = "") -> int:
-        """Fetch TrackStatus + RaceControlMessages streams, parse events, return event count."""
-        base = f"{BASE_URL}/{path}"
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            ts_resp = await client.get(base + "TrackStatus.jsonStream")
-            rc_resp = await client.get(base + "RaceControlMessages.jsonStream")
-            ts_resp.raise_for_status()
-            rc_resp.raise_for_status()
+    async def _fetch_stream(
+        self,
+        client: httpx.AsyncClient,
+        base: str,
+        topic: str,
+    ) -> list[tuple[float, str, dict]]:
+        """Download one .jsonStream and return (abs_time, topic, payload) tuples."""
+        events: list[tuple[float, str, dict]] = []
+        try:
+            resp = await client.get(base + f"{topic}.jsonStream")
+            if resp.status_code != 200:
+                logger.debug("Stream %s returned %s — skipping", topic, resp.status_code)
+                return events
+            text = resp.text.lstrip("﻿")
+            for line in text.strip().splitlines():
+                parsed = _parse_jsonstream_line(line)
+                if parsed is not None:
+                    abs_ts, payload = parsed
+                    events.append((abs_ts, topic, payload))
+        except Exception as exc:
+            logger.warning("Failed to fetch %s stream: %s", topic, exc)
+        return events
 
-        ts_lines = ts_resp.text.strip().splitlines()
-        rc_lines = rc_resp.text.strip().splitlines()
+    def _find_lights_out(self, events: list[tuple[float, str, dict]]) -> float:
+        """Return the absolute session timestamp (seconds) of race lights-out."""
+        # Primary: look for "RACE STARTED" anywhere in a RaceControlMessages payload
+        for abs_ts, topic, payload in events:
+            if topic == "RaceControlMessages" and "RACE STARTED" in json.dumps(payload):
+                logger.info("Lights-out: RACE STARTED message at %.1fs", abs_ts)
+                return abs_ts
 
-        lights_out = self._find_lights_out(ts_lines, rc_lines)
-        logger.info("Replay lights-out offset: %.3fs", lights_out)
-
-        events: list[tuple[float, str]] = [(0.0, "race_start")]
-        for line in ts_lines:
-            parsed = _parse_jsonstream_line(line)
-            if parsed is None:
+        # Secondary: first transition TO AllClear (Status=1) from a non-clear state.
+        # Formation laps always include some Yellow/SC/VSC, so the first AllClear
+        # after any of those marks lights-out even when no RC message says so.
+        saw_non_clear = False
+        for abs_ts, topic, payload in events:
+            if topic != "TrackStatus":
                 continue
-            abs_ts, payload = parsed
-            race_time = abs_ts - lights_out
-            if race_time <= 0:
-                continue
-            flag_state = TRACK_STATUS_MAP.get(str(payload.get("Status", "")))
-            if flag_state:
-                events.append((race_time, flag_state))
+            status = str(payload.get("Status", ""))
+            if status in ("2", "4", "5", "6", "7"):
+                saw_non_clear = True
+            elif status == "1" and saw_non_clear and abs_ts >= 60:
+                logger.info("Lights-out: first post-formation AllClear at %.1fs", abs_ts)
+                return abs_ts
 
-        events.sort(key=lambda x: x[0])
-        self._events = events
-        self._session_name = session_name or path
-        preview = [(f"{t:.1f}s", s) for t, s in events[:6]]
-        logger.info("Replay loaded %d events (lights_out=%.3fs); first events: %s", len(events), lights_out, preview)
-        return len(events)
-
-    def _find_lights_out(self, ts_lines: list[str], rc_lines: list[str]) -> float:
-        """Return the absolute session timestamp of race lights-out (seconds)."""
-        # Primary: "RACE STARTED" anywhere in a RaceControlMessages line
-        for line in rc_lines:
-            parsed = _parse_jsonstream_line(line)
-            if parsed is None:
-                continue
-            ts, payload = parsed
-            if "RACE STARTED" in json.dumps(payload):
-                return ts
-
-        # Fallback: first AllClear after a >= 5 min gap (end of formation lap)
-        prev_ts = 0.0
-        for line in ts_lines:
-            parsed = _parse_jsonstream_line(line)
-            if parsed is None:
-                continue
-            ts, payload = parsed
-            if str(payload.get("Status", "")) == "1" and (ts - prev_ts) >= 300:
-                return ts
-            prev_ts = ts
-
+        logger.warning("Could not detect lights-out — treating session start as t=0")
         return 0.0
 
-    async def play(self, on_event: Callable[[str], None]) -> None:
-        """Start playback from the beginning of the loaded events."""
-        self._on_event = on_event
+    async def load_session(self, path: str, session_name: str = "") -> int:
+        """Download all timing streams and return the count of real-time events (race_time >= 0)."""
+        base = f"{BASE_URL}/{path}"
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            results = await asyncio.gather(
+                *[self._fetch_stream(client, base, topic) for topic in REPLAY_STREAMS],
+                return_exceptions=True,
+            )
+
+        all_events: list[tuple[float, str, dict]] = []
+        for result in results:
+            if isinstance(result, list):
+                all_events.extend(result)
+
+        all_events.sort(key=lambda x: x[0])
+
+        lights_out = self._find_lights_out(all_events)
+
+        self._events = [(ts - lights_out, topic, data) for ts, topic, data in all_events]
+        self._session_name = session_name or path
+
+        realtime_count = sum(1 for rt, _, _ in self._events if rt >= 0)
+        logger.info(
+            "Replay loaded: %d total events, %d real-time, lights_out=%.1fs, session=%r",
+            len(self._events), realtime_count, lights_out, self._session_name,
+        )
+        return realtime_count
+
+    async def play(self, on_event: Callable[[str], None] | None = None) -> None:
+        """Start playback. on_event is a legacy flag-only callback used when no on_feed is set."""
         self._paused = False
         self._play_wall_origin = time.monotonic()
-        self._task = asyncio.create_task(self._playback_loop())
+        self._task = asyncio.create_task(self._playback_loop(on_event))
 
-    async def _playback_loop(self) -> None:
-        for race_time, flag_state in self._events:
-            target = self._play_wall_origin + race_time + self._sync_offset
-            secs_from_now = target - time.monotonic()
-            logger.info("Replay next: %s at race_time=%.1fs (fires in %.1fs)", flag_state, race_time, secs_from_now)
+    async def _playback_loop(self, on_event: Callable[[str], None] | None = None) -> None:
+        # Phase 1 — instant snapshot: replay everything before lights-out to restore
+        # pre-race state (driver list, weather, session info, tyre data) without
+        # firing any LED callbacks.
+        for race_time, topic, data in self._events:
+            if race_time >= 0:
+                break
+            if self._on_feed:
+                self._on_feed(topic, data, True)
+
+        # Phase 2 — real-time playback from lights-out onwards
+        for race_time, topic, data in self._events:
+            if race_time < 0:
+                continue
+
+            # Wait until the wall clock matches this event's race time (accounting for
+            # pause durations and the sync offset slider)
             while True:
                 if self._paused:
                     await asyncio.sleep(0.05)
                     continue
-                target = self._play_wall_origin + race_time + self._sync_offset
-                remaining = target - time.monotonic()
+                remaining = (self._play_wall_origin + race_time + self._sync_offset) - time.monotonic()
                 if remaining <= 0:
                     break
                 await asyncio.sleep(min(remaining, 0.05))
-            if self._on_event:
-                self._on_event(flag_state)
+
+            if self._on_feed:
+                self._on_feed(topic, data, False)
+            elif on_event and topic == "TrackStatus":
+                # Legacy path: no on_feed callback, drive LEDs directly via flag state
+                flag_state = TRACK_STATUS_MAP.get(str(data.get("Status", "")))
+                if flag_state:
+                    on_event(flag_state)
 
     def pause(self) -> None:
-        """Freeze the replay clock at the current race position."""
         if not self._paused:
             self._pause_wall = time.monotonic()
             self._paused = True
 
     def resume(self) -> None:
-        """Unfreeze the replay clock, shifting origin forward by the pause duration."""
         if self._paused:
+            # Shift the wall-clock origin forward by the pause duration so
+            # race_time positions stay correct after resuming
             self._play_wall_origin += time.monotonic() - self._pause_wall
             self._paused = False
 
     def stop(self) -> None:
-        """Cancel playback and clear all loaded data."""
         if self._task:
             self._task.cancel()
             self._task = None
@@ -182,5 +231,4 @@ class ReplayManager:
         self._session_name = ""
 
     def set_sync_offset(self, seconds: float) -> None:
-        """Set a timing offset in seconds, clamped to [-30.0, 30.0]."""
         self._sync_offset = max(-30.0, min(30.0, float(seconds)))

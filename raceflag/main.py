@@ -131,7 +131,7 @@ async def main() -> None:
             asyncio.ensure_future(_delayed_ui())
 
     listener = F1Listener(state=state, on_track_status_change=on_flag_change)
-    replay = ReplayManager()
+    replay = ReplayManager(on_feed=listener.process_replay_event)
 
     current_version = VERSION_FILE.read_text().strip() if VERSION_FILE.exists() else ""
     app = create_app(
