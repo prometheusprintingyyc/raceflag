@@ -11,6 +11,7 @@ from raceflag.state import AppState
 from raceflag.f1_listener import F1Listener
 from raceflag.api_client import JolpicaClient
 from raceflag.web_server import create_app
+from raceflag.replay_manager import ReplayManager
 from raceflag.wifi_manager import WiFiManager
 from raceflag.ota import OTAUpdater
 
@@ -130,10 +131,21 @@ async def main() -> None:
             asyncio.ensure_future(_delayed_ui())
 
     listener = F1Listener(state=state, on_track_status_change=on_flag_change)
+    replay = ReplayManager()
 
     current_version = VERSION_FILE.read_text().strip() if VERSION_FILE.exists() else ""
-    app = create_app(state=state, config=config, led=led, config_path=CONFIG_PATH,
-                     wifi_manager=wifi, ota=ota, version=current_version)
+    app = create_app(
+        state=state,
+        config=config,
+        led=led,
+        config_path=CONFIG_PATH,
+        wifi_manager=wifi,
+        ota=ota,
+        version=current_version,
+        replay_manager=replay,
+        listener=listener,
+        on_replay_event=on_flag_change,
+    )
 
     server_config = uvicorn.Config(app, host="0.0.0.0", port=8080, log_level="warning")
     server = uvicorn.Server(server_config)
