@@ -270,13 +270,42 @@ document.getElementById('delay-slider').addEventListener('change', async functio
   }
 });
 
-document.getElementById('btn-live').addEventListener('click', () => { manualView = 'live'; fetchState(); });
+let _pendingView = null;
+
+function _switchToView(view) {
+  manualView = view;
+  fetchState();
+}
+
+function _requestViewSwitch(view) {
+  if (replayMode) {
+    _pendingView = view;
+    document.getElementById('confirm-replay-overlay').classList.add('open');
+  } else {
+    _switchToView(view);
+  }
+}
+
+document.getElementById('btn-live').addEventListener('click', () => _requestViewSwitch('live'));
 document.getElementById('btn-replay').addEventListener('click', () => {
   manualView = 'replay';
   fetchState();
   _loadReplaySessions();
 });
-document.getElementById('btn-standings').addEventListener('click', () => { manualView = 'standings'; fetchState(); });
+document.getElementById('btn-standings').addEventListener('click', () => _requestViewSwitch('standings'));
+
+document.getElementById('btn-confirm-cancel').addEventListener('click', () => {
+  document.getElementById('confirm-replay-overlay').classList.remove('open');
+  _pendingView = null;
+});
+
+document.getElementById('btn-confirm-stop').addEventListener('click', async () => {
+  document.getElementById('confirm-replay-overlay').classList.remove('open');
+  const target = _pendingView || 'live';
+  _pendingView = null;
+  await fetch('/api/replay/stop', { method: 'POST' });
+  _switchToView(target);
+});
 
 document.getElementById('btn-settings').addEventListener('click', () => {
   document.getElementById('settings-overlay').classList.add('open');
