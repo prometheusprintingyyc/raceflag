@@ -46,7 +46,7 @@ class ReplayManager:
         self._on_event: Callable[[str], None] | None = None
 
     async def get_sessions(self, year: int = 2025) -> list[dict]:
-        """Fetch Index.json fresh and return Race sessions only."""
+        """Fetch Index.json fresh and return Race and Sprint sessions."""
         url = f"{BASE_URL}/{year}/Index.json"
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(url)
@@ -58,12 +58,18 @@ class ReplayManager:
             meeting_name = meeting.get("Name", "")
             circuit = meeting.get("Circuit", {}).get("ShortName", "")
             for session in meeting.get("Sessions", []):
-                if session.get("Type") != "Race":
+                session_type = session.get("Type", "")
+                session_name = session.get("Name", "")
+                if session_type != "Race":
                     continue
+                is_sprint = "sprint" in session_name.lower()
                 start = session.get("StartDate", "")
                 year_str = start[:4] if start else str(year)
+                label = f"{year_str} {meeting_name}"
+                if is_sprint:
+                    label += " (Sprint)"
                 sessions.append({
-                    "name": f"{year_str} {meeting_name}",
+                    "name": label,
                     "path": session.get("Path", ""),
                     "date": start[:10],
                     "circuit": circuit,

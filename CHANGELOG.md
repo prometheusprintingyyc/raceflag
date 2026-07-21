@@ -10,6 +10,7 @@ All notable changes to RaceFlag are documented here.
 - Replay Mode — select any completed 2025 F1 race session from the F1 livetiming archive, press Play at lights out, and the LED strip reacts to flag events identically to live mode
 - LED delay is bypassed in Replay mode — flag events fire immediately since the replay engine already handles timing
 - Debug logging in replay engine shows loaded event count, lights-out detection offset, and per-event schedule timing
+- Sprint races now appear in the Replay session list labelled with `(Sprint)` — previously they appeared as unlabelled duplicates alongside the main race for the same Grand Prix weekend
 - Sync Offset slider replaces LED Delay when in Replay mode (±30 s range, centred at 0); LED Delay is restored on return to Live mode
 - Pause and Resume replay without losing sync — pause both TV broadcast and RaceFlag simultaneously
 - REPLAY pill appears on the Session section title while a replay is active
