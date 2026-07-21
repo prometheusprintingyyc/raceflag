@@ -210,6 +210,16 @@ class AppState:
         with self._lock:
             self.next_race = race
 
+    def clear_time_remaining(self) -> None:
+        """Reset session clock fields — called when replay stops so the countdown doesn't persist."""
+        with self._lock:
+            self.session = replace(
+                self.session,
+                time_remaining="",
+                time_remaining_at="",
+                extrapolating=False,
+            )
+
     def freeze_countdown(self) -> None:
         """Compute current remaining time and freeze extrapolation for replay pause."""
         with self._lock:

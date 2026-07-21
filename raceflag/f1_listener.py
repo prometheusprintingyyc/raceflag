@@ -366,6 +366,7 @@ class F1Listener:
         self._timing_lines = {}
         self._timing_app_lines = {}
         self._state.set_driver_positions([])
+        self._state.clear_time_remaining()
 
     async def stop(self) -> None:
         self._running = False
