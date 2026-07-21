@@ -133,6 +133,10 @@ class AppState:
     demo_mode: bool = False
     led_enabled: bool = True
     feed_connected: bool = False
+    replay_mode: bool = False
+    replay_status: str = "idle"
+    replay_session_name: str = ""
+    replay_time_elapsed: str = ""
     session: SessionInfo = field(default_factory=SessionInfo)
     weather: WeatherInfo = field(default_factory=WeatherInfo)
     race_control_messages: List[RaceControlMessage] = field(default_factory=list)
@@ -161,6 +165,19 @@ class AppState:
     def set_feed_connected(self, connected: bool) -> None:
         with self._lock:
             self.feed_connected = connected
+
+    def set_replay_state(
+        self,
+        mode: bool,
+        status: str,
+        session_name: str = "",
+        elapsed: str = "",
+    ) -> None:
+        with self._lock:
+            self.replay_mode = mode
+            self.replay_status = status
+            self.replay_session_name = session_name
+            self.replay_time_elapsed = elapsed
 
     def set_session(self, session: SessionInfo) -> None:
         with self._lock:
@@ -200,6 +217,10 @@ class AppState:
                 "demo_mode": self.demo_mode,
                 "led_enabled": self.led_enabled,
                 "feed_connected": self.feed_connected,
+                "replay_mode": self.replay_mode,
+                "replay_status": self.replay_status,
+                "replay_session_name": self.replay_session_name,
+                "replay_time_elapsed": self.replay_time_elapsed,
                 "session": asdict(self.session),
                 "weather": asdict(self.weather),
                 "race_control_messages": [asdict(m) for m in self.race_control_messages],
