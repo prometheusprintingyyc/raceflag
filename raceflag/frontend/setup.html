@@ -25,7 +25,8 @@
       display: flex; align-items: flex-start;
       position: sticky; top: 0; z-index: 50;
     }
-    .nav-logo { font-weight: 900; letter-spacing: 3px; color: #e10600; font-size: 32px; line-height: 1; }
+    .nav-logo { display: flex; align-items: center; gap: 9px; font-weight: 900; letter-spacing: 3px; color: #e10600; font-size: 32px; line-height: 1; }
+    .nav-flag-icon { width: 20px; height: 20px; flex-shrink: 0; }
     .nav-sub { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: #555; margin-top: 2px; }
 
     .card {
@@ -121,7 +122,19 @@
 
   <nav class="nav">
     <div>
-      <div class="nav-logo">RaceFlag 🏁</div>
+      <div class="nav-logo">
+        <svg class="nav-flag-icon" viewBox="0 0 20 20" aria-hidden="true">
+          <rect x="0"  y="0"  width="5" height="5" fill="currentColor"/>
+          <rect x="10" y="0"  width="5" height="5" fill="currentColor"/>
+          <rect x="5"  y="5"  width="5" height="5" fill="currentColor"/>
+          <rect x="15" y="5"  width="5" height="5" fill="currentColor"/>
+          <rect x="0"  y="10" width="5" height="5" fill="currentColor"/>
+          <rect x="10" y="10" width="5" height="5" fill="currentColor"/>
+          <rect x="5"  y="15" width="5" height="5" fill="currentColor"/>
+          <rect x="15" y="15" width="5" height="5" fill="currentColor"/>
+        </svg>
+        RaceFlag
+      </div>
       <div class="nav-sub">WiFi Setup</div>
     </div>
   </nav>
