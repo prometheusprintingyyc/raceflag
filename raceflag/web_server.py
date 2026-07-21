@@ -236,6 +236,9 @@ def create_app(
                     if listener is not None:
                         listener.suspended = False
                     state.set_replay_state(mode=False, status="idle")
+                    state.set_track_status("unknown")
+                    state.set_display_track_status("unknown")
+                    led.set_idle(True)
 
             if replay_manager._task is not None:
                 replay_manager._task.add_done_callback(_on_complete)
@@ -262,6 +265,9 @@ def create_app(
             if listener is not None:
                 listener.suspended = False
             state.set_replay_state(mode=False, status="idle")
+            state.set_track_status("unknown")
+            state.set_display_track_status("unknown")
+            led.set_idle(True)
             return {"status": "idle"}
 
         @app.post("/api/replay/offset")
