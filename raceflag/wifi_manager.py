@@ -71,6 +71,26 @@ class WiFiManager:
         except Exception:
             return ""
 
+    async def _has_network_address(self) -> bool:
+        """Return True if any interface has a routable IP (not loopback or link-local)."""
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "ip", "-4", "addr",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await proc.communicate()
+            for line in stdout.decode().splitlines():
+                line = line.strip()
+                if not line.startswith("inet "):
+                    continue
+                addr = line.split()[1]
+                if not addr.startswith("127.") and not addr.startswith("169.254."):
+                    return True
+        except Exception:
+            pass
+        return False
+
     async def start(self) -> None:
         self._running = True
         if self._config.wifi_ssid:
@@ -78,11 +98,11 @@ class WiFiManager:
             if not success:
                 await self.enable_hotspot()
         else:
-            # No SSID in config — only start hotspot if there is genuinely no connection.
-            # Covers WiFi via NM cached credentials and Ethernet.
-            if await self._check_connectivity():
+            # No SSID in config — skip hotspot if a routable IP exists on any interface.
+            # Uses IP address detection (not ping) so corporate firewalls don't interfere.
+            if await self._has_network_address():
                 active_ssid = await self._get_active_ssid()
-                logger.info("Internet reachable (ssid=%r) — skipping hotspot", active_ssid or "non-wifi")
+                logger.info("Network address present (ssid=%r) — skipping hotspot", active_ssid or "non-wifi")
                 self._connected = True
                 self._ever_connected = True
                 self._current_ssid = active_ssid
@@ -99,7 +119,15 @@ class WiFiManager:
         fail_count = 0
         while self._running:
             if self._hotspot_active:
-                if await self._check_configured_available():
+                if not self._config.wifi_ssid and await self._has_network_address():
+                    # No configured SSID but a routable IP appeared — NM reconnected.
+                    logger.info("Network address appeared while in hotspot — disabling hotspot")
+                    await self.disable_hotspot()
+                    active_ssid = await self._get_active_ssid()
+                    self._connected = True
+                    self._ever_connected = True
+                    self._current_ssid = active_ssid
+                elif await self._check_configured_available():
                     await self.disable_hotspot()
                     success = await self._connect_to_configured()
                     if not success:
