@@ -206,11 +206,24 @@ class ReplayManager:
         # Phase 1 — instant snapshot: replay everything before lights-out to restore
         # pre-race state (driver list, weather, session info, tyre data) without
         # firing any LED callbacks.
+        # Also capture the last pre-race TrackStatus so we can re-fire it live at
+        # lights-out (see below).
+        last_track_status_data: dict | None = None
         for race_time, topic, data in self._events:
             if race_time >= 0:
                 break
             if self._on_feed:
                 self._on_feed(topic, data, True)
+            if topic == "TrackStatus":
+                last_track_status_data = data
+
+        # Re-fire the formation-lap TrackStatus as a live (non-snapshot) event so
+        # the display and LED update immediately at lights-out.  Without this, races
+        # where TrackStatus was already AllClear during the formation lap (e.g. Belgian
+        # GP) produce no TrackStatus change at race start, leaving the UI stuck on
+        # "unknown" and the race_start LED animation never firing.
+        if self._on_feed and last_track_status_data is not None:
+            self._on_feed("TrackStatus", last_track_status_data, False)
 
         # Phase 2 — real-time playback from lights-out onwards
         for race_time, topic, data in self._events:
