@@ -118,15 +118,31 @@ class ReplayManager:
 
     def _find_lights_out(self, events: list[tuple[float, str, dict]]) -> float:
         """Return the absolute session timestamp (seconds) of race lights-out."""
-        # Primary: look for "RACE STARTED" anywhere in a RaceControlMessages payload
+        # Primary: "RACE STARTED" anywhere in a RaceControlMessages payload
         for abs_ts, topic, payload in events:
             if topic == "RaceControlMessages" and "RACE STARTED" in json.dumps(payload):
                 logger.info("Lights-out: RACE STARTED message at %.1fs", abs_ts)
                 return abs_ts
 
-        # Secondary: first transition TO AllClear (Status=1) from a non-clear state.
-        # Formation laps always include some Yellow/SC/VSC, so the first AllClear
-        # after any of those marks lights-out even when no RC message says so.
+        # Secondary: SessionStatus changes to "Started" — fires at lights-out
+        for abs_ts, topic, payload in events:
+            if topic == "SessionStatus":
+                status_msg = str(payload.get("Status", "") or payload.get("Message", "")).strip()
+                if status_msg == "Started":
+                    logger.info("Lights-out: SessionStatus Started at %.1fs", abs_ts)
+                    return abs_ts
+
+        # Tertiary: LapCount CurrentLap transitions to 1 — fires at lights-out
+        for abs_ts, topic, payload in events:
+            if topic == "LapCount":
+                try:
+                    if int(payload.get("CurrentLap", 0)) == 1:
+                        logger.info("Lights-out: LapCount CurrentLap=1 at %.1fs", abs_ts)
+                        return abs_ts
+                except (ValueError, TypeError):
+                    pass
+
+        # Quaternary: first AllClear after a non-clear formation-lap state
         saw_non_clear = False
         for abs_ts, topic, payload in events:
             if topic != "TrackStatus":
@@ -138,7 +154,7 @@ class ReplayManager:
                 logger.info("Lights-out: first post-formation AllClear at %.1fs", abs_ts)
                 return abs_ts
 
-        logger.warning("Could not detect lights-out — treating session start as t=0")
+        logger.warning("Could not detect lights-out — defaulting to session start (t=0)")
         return 0.0
 
     async def load_session(self, path: str, session_name: str = "") -> int:

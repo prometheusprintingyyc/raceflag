@@ -71,8 +71,31 @@ def test_find_lights_out_fallback_to_first_allclear_after_non_clear():
     assert result == pytest.approx(33 * 60, abs=0.1)
 
 
+def test_find_lights_out_uses_session_status_started():
+    # No RC message, no TrackStatus non-clear; SessionStatus "Started" fires at lights-out
+    events = [
+        _ts_event("00:10:00.000", "1"),
+        (_parse_ts("00:32:55.000"), "SessionStatus", {"Status": "Started"}),
+        _ts_event("00:33:00.000", "1"),
+    ]
+    rm = ReplayManager()
+    result = rm._find_lights_out(events)
+    assert result == pytest.approx(32 * 60 + 55, abs=0.1)
+
+
+def test_find_lights_out_uses_lapcount_current_lap_1():
+    # No RC, no SessionStatus — LapCount CurrentLap=1 fires at lights-out
+    events = [
+        _ts_event("00:10:00.000", "1"),
+        (_parse_ts("00:33:00.000"), "LapCount", {"CurrentLap": 1, "TotalLaps": 44}),
+    ]
+    rm = ReplayManager()
+    result = rm._find_lights_out(events)
+    assert result == pytest.approx(33 * 60, abs=0.1)
+
+
 def test_find_lights_out_non_clear_required_before_allclear():
-    # Only AllClear events present — saw_non_clear never set, returns 0.0
+    # Only AllClear events present — saw_non_clear never set, quaternary fails, returns 0.0
     events = [
         _ts_event("00:10:00.000", "1"),
         _ts_event("00:33:00.000", "1"),
