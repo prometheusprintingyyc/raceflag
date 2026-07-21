@@ -108,7 +108,7 @@ class WiFiManager:
             return False
 
     async def _has_network_address(self) -> bool:
-        """Return True if any interface has a routable IP (not loopback or link-local)."""
+        """Return True if any interface has a routable non-hotspot IP."""
         try:
             proc = await asyncio.create_subprocess_exec(
                 "ip", "-4", "addr",
@@ -120,28 +120,44 @@ class WiFiManager:
                 line = line.strip()
                 if not line.startswith("inet "):
                     continue
-                addr = line.split()[1]
-                if not addr.startswith("127.") and not addr.startswith("169.254."):
+                ip = line.split()[1].split("/")[0]
+                if (not ip.startswith("127.")
+                        and not ip.startswith("169.254.")
+                        and ip != HOTSPOT_IP):
                     return True
         except Exception:
             pass
         return False
 
     async def start(self) -> None:
+        logger.info("WiFiManager starting (configured_ssid=%r)", self._config.wifi_ssid or "")
         self._running = True
-        if self._config.wifi_ssid:
+
+        if not self._config.wifi_ssid:
+            # Before deciding to hotspot, ask NM if wlan0 already has an active connection.
+            # This handles devices where NM has cached credentials but config.json is empty
+            # (first boot at a new location, or config was reset while NM kept credentials).
+            if await self._sync_nm_wifi_to_config():
+                self._connected = True
+                self._ever_connected = True
+                logger.info("Adopted existing NM connection — skipping hotspot")
+
+        if self._connected:
+            pass  # Already connected via NM adoption above
+        elif self._config.wifi_ssid:
             success = await self._connect_to_configured()
             if not success:
                 await self.enable_hotspot()
         else:
-            # No SSID in config — skip hotspot if a routable IP exists on any interface.
-            # Uses IP address detection (not ping) so corporate firewalls don't interfere.
+            # No SSID in config and NM has no WiFi profile.
+            # Still skip hotspot if a non-WiFi routable IP exists (e.g. Ethernet).
             if await self._has_network_address():
                 self._connected = True
                 self._ever_connected = True
-                await self._sync_nm_wifi_to_config()
+                logger.info("No WiFi config but routable IP found — skipping hotspot")
             else:
                 await self.enable_hotspot()
+
         self._task = asyncio.create_task(self._monitor_loop())
 
     async def stop(self) -> None:
@@ -196,16 +212,12 @@ class WiFiManager:
                 await asyncio.sleep(30)
 
     async def _check_connectivity(self) -> bool:
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "ping", "-c", "1", "-W", "3", "8.8.8.8",
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-            await proc.wait()
-            return proc.returncode == 0
-        except Exception:
-            return False
+        """Return True if a routable non-hotspot IP is present on any interface.
+
+        Uses IP address detection instead of ICMP ping so corporate firewalls
+        that block outbound ping don't cause false connectivity failures.
+        """
+        return await self._has_network_address()
 
     async def _check_configured_available(self) -> bool:
         if not self._config.wifi_ssid:

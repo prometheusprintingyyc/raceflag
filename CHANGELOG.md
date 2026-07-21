@@ -20,9 +20,11 @@ All notable changes to RaceFlag are documented here.
 - LED Strip on/off toggle in Settings — darkens the LED strip immediately while keeping the app and web UI active; hotspot setup mode always shows regardless of toggle state
 
 ### Fixed
-- Setup hotspot no longer activates when the device already has a routable IP address but no SSID in config.json — uses IP address detection instead of ICMP ping so corporate firewalls don't interfere; covers WiFi via NetworkManager cached credentials and Ethernet
-- When an existing connection is adopted (no SSID in config), the active WiFi SSID and password are read from the NetworkManager profile and written back to config.json, so subsequent restarts use the normal configured path without needing detection
-- If the hotspot started at boot before the network was ready, the monitor loop now detects when a routable IP appears, exits hotspot mode, and syncs credentials automatically
+- Setup hotspot no longer activates when the device has an active WiFi connection via NetworkManager but config.json is empty — NM credentials are adopted at startup (local nmcli query, no network round-trip needed) and written to config.json before any hotspot decision is made
+- Ongoing connectivity monitoring now uses IP address detection instead of ICMP ping — prevents false "WiFi lost" triggers on corporate/enterprise networks that block outbound ping, which previously caused the setup hotspot to re-enable every 5 minutes even on a healthy connection
+- Hotspot's own IP (192.168.4.1) is now excluded from the routable-address check — prevents the monitor loop from counting the hotspot itself as a "real" internet connection
+- When an existing NM connection is adopted, the active WiFi SSID and password are read from the NetworkManager profile and written to config.json, so subsequent restarts use the normal configured path
+- WiFiManager now logs at startup so the configured SSID and startup path are always visible in the journal
 - Wrong password during WiFi setup no longer leaves the device in a dark period — the setup hotspot re-enables within 35 seconds (previously up to 2 minutes) and the LED strip resumes flashing white
 - WiFi connectivity monitoring now tolerates up to 5 minutes of outage before re-enabling the setup hotspot, preventing false triggers during router reboots (previously 60 seconds)
 - Repeated wrong-password auto-retries in the monitor loop stop after 3 consecutive failures — saved credentials are cleared so the device stays in setup mode cleanly
