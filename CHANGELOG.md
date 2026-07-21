@@ -20,7 +20,7 @@ All notable changes to RaceFlag are documented here.
 - `_find_lights_out` improved: primary detection unchanged ("RACE STARTED" RC message); secondary detection now finds the first AllClear transition out of a non-clear formation-lap state (Yellow/SC/VSC/Red) rather than a ≥300s gap — correctly handles races with long SC periods that previously caused the SC-end AllClear to be mistaken for lights-out (e.g. 2026 Belgian GP)
 - Pre-race snapshot phase: all events before lights-out are replayed instantly with `is_snapshot=True` to restore weather, driver positions, and tyre state before playback begins — no LED callbacks fire during the snapshot
 - `ReplayManager(on_feed=...)` constructor parameter replaces the internal `on_event` callback; `on_feed` receives `(topic, data, is_snapshot)` and is wired to `listener.process_replay_event` in `main.py`
-- `F1Listener.process_replay_event(topic, data, is_snapshot)` — new method that calls `_handle_feed` directly, bypassing `suspended` so replay events reach the handler while the live WebSocket feed is blocked
+- `F1Listener.process_replay_event(topic, data, is_snapshot)` — new method that calls `_handle_feed` with `_bypass_suspended=True` so replay events reach the handler while the live WebSocket feed is blocked
 - Fixed: chequered flag LED callback no longer fires during the live-feed snapshot (initial state restore on connection) — the `is_snapshot` guard was missing from the RaceControlMessages chequered branch
 - Password show/hide toggle on the WiFi setup page password fields
 - LED Strip on/off toggle in Settings — darkens the LED strip immediately while keeping the app and web UI active; hotspot setup mode always shows regardless of toggle state
