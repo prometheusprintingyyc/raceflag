@@ -1,5 +1,7 @@
 const POLL_MS = 2000;
 let manualView = null;
+let replayMode = false;
+let _savedDelay = 0;
 let _clockBase = null;
 
 function _parseRemainingToSeconds(timeStr) {
@@ -42,12 +44,71 @@ async function fetchState() {
 function updateUI(data) {
   const isActive = data.session && data.session.is_active;
   const targetView = manualView || (isActive ? 'live' : 'standings');
-  document.getElementById('view-live').classList.toggle('active', targetView === 'live');
+  // Both 'live' and 'replay' render view-live content
+  document.getElementById('view-live').classList.toggle('active', targetView === 'live' || targetView === 'replay');
   document.getElementById('view-standings').classList.toggle('active', targetView === 'standings');
   document.getElementById('btn-live').classList.toggle('active', targetView === 'live');
+  document.getElementById('btn-replay').classList.toggle('active', targetView === 'replay');
   document.getElementById('btn-standings').classList.toggle('active', targetView === 'standings');
   const _pill = document.getElementById('view-toggle-pill');
-  if (_pill) _pill.classList.toggle('right', targetView === 'standings');
+  if (_pill) {
+    _pill.classList.remove('centre', 'right');
+    if (targetView === 'replay') _pill.classList.add('centre');
+    else if (targetView === 'standings') _pill.classList.add('right');
+  }
+
+  const isReplay = targetView === 'replay';
+  document.getElementById('replay-bar').style.display = isReplay ? 'flex' : 'none';
+
+  const rs = data.replay_status || 'idle';
+  const autoLabel = document.getElementById('auto-label');
+  if (autoLabel) {
+    const rn = data.replay_session_name || '';
+    if (!isReplay) {
+      autoLabel.textContent = 'Switches automatically · Manual override above';
+    } else if (rs === 'idle' || rs === 'loading') {
+      autoLabel.textContent = 'Select a race to begin';
+    } else if (rs === 'ready') {
+      autoLabel.textContent = 'Press Play at lights out · Use slider to fine-tune sync';
+    } else if (rs === 'playing') {
+      autoLabel.textContent = `Replaying: ${rn}`;
+    } else if (rs === 'paused') {
+      autoLabel.textContent = `Paused · ${rn}`;
+    }
+  }
+
+  document.getElementById('replay-idle-row').style.display =
+    (isReplay && (rs === 'idle' || rs === 'loading')) ? 'flex' : 'none';
+  document.getElementById('replay-ready-row').style.display =
+    (isReplay && rs === 'ready') ? 'flex' : 'none';
+  document.getElementById('replay-playback-row').style.display =
+    (isReplay && (rs === 'playing' || rs === 'paused')) ? 'flex' : 'none';
+
+  const pauseBtn = document.getElementById('btn-replay-pause');
+  if (pauseBtn) pauseBtn.textContent = rs === 'paused' ? '▶ Resume' : '⏸ Pause';
+
+  const replayPill = document.getElementById('session-replay-pill');
+  if (replayPill) replayPill.style.display = data.replay_mode ? 'inline' : 'none';
+
+  const newReplayMode = !!data.replay_mode;
+  if (newReplayMode !== replayMode) {
+    replayMode = newReplayMode;
+    const slider = document.getElementById('delay-slider');
+    const label = document.getElementById('delay-label');
+    if (replayMode) {
+      label.textContent = 'Sync Offset';
+      slider.min = -30;
+      slider.max = 30;
+      slider.value = 0;
+      document.getElementById('delay-value').textContent = '0';
+    } else {
+      label.textContent = 'LED Delay';
+      slider.min = 0;
+      slider.max = 90;
+      slider.value = _savedDelay;
+      document.getElementById('delay-value').textContent = _savedDelay;
+    }
+  }
 
   const color = data.flag_color || '#444';
   const status = (data.track_status || 'unknown').replace(/_/g, ' ').toUpperCase();
@@ -192,14 +253,29 @@ document.getElementById('delay-slider').addEventListener('input', function () {
   document.getElementById('delay-value').textContent = this.value;
 });
 document.getElementById('delay-slider').addEventListener('change', async function () {
-  await fetch('/api/config/delay', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ seconds: parseFloat(this.value) }),
-  });
+  const val = parseFloat(this.value);
+  if (replayMode) {
+    await fetch('/api/replay/offset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seconds: val }),
+    });
+  } else {
+    _savedDelay = val;
+    await fetch('/api/config/delay', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seconds: val }),
+    });
+  }
 });
 
 document.getElementById('btn-live').addEventListener('click', () => { manualView = 'live'; fetchState(); });
+document.getElementById('btn-replay').addEventListener('click', () => {
+  manualView = 'replay';
+  fetchState();
+  _loadReplaySessions();
+});
 document.getElementById('btn-standings').addEventListener('click', () => { manualView = 'standings'; fetchState(); });
 
 document.getElementById('btn-settings').addEventListener('click', () => {
@@ -417,6 +493,68 @@ document.getElementById('btn-send-logs').addEventListener('click', async () => {
   btn.disabled = false;
 });
 
+// ── Replay ──────────────────────────────────────────────────────────────────
+async function _loadReplaySessions() {
+  const dropdown = document.getElementById('replay-dropdown');
+  if (!dropdown) return;
+  dropdown.innerHTML = '<option value="">Loading…</option>';
+  document.getElementById('btn-replay-load').disabled = true;
+  try {
+    const resp = await fetch('/api/replay/sessions');
+    if (!resp.ok) throw new Error('fetch failed');
+    const sessions = await resp.json();
+    dropdown.innerHTML = '<option value="">Select a race…</option>' +
+      sessions.map(s =>
+        `<option value="${s.path}" data-name="${s.name}">${s.name} · ${s.date}</option>`
+      ).join('');
+  } catch (e) {
+    dropdown.innerHTML = '<option value="">Failed to load</option>';
+  }
+}
+
+document.getElementById('replay-dropdown').addEventListener('change', function () {
+  document.getElementById('btn-replay-load').disabled = !this.value;
+});
+
+document.getElementById('btn-replay-load').addEventListener('click', async () => {
+  const dropdown = document.getElementById('replay-dropdown');
+  const path = dropdown.value;
+  const name = dropdown.options[dropdown.selectedIndex]?.dataset?.name || '';
+  if (!path) return;
+  const btn = document.getElementById('btn-replay-load');
+  btn.textContent = 'Loading…';
+  btn.disabled = true;
+  try {
+    await fetch('/api/replay/load', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_path: path, session_name: name }),
+    });
+    document.getElementById('replay-race-chip').textContent = name;
+    await fetchState();
+  } catch (e) {
+    btn.textContent = 'Load';
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('btn-replay-play').addEventListener('click', async () => {
+  await fetch('/api/replay/play', { method: 'POST' });
+  await fetchState();
+});
+
+document.getElementById('btn-replay-pause').addEventListener('click', async () => {
+  const isPaused = document.getElementById('btn-replay-pause').textContent.includes('Resume');
+  await fetch(isPaused ? '/api/replay/resume' : '/api/replay/pause', { method: 'POST' });
+  await fetchState();
+});
+
+document.getElementById('btn-replay-stop').addEventListener('click', async () => {
+  await fetch('/api/replay/stop', { method: 'POST' });
+  await fetchState();
+  _loadReplaySessions();
+});
+
 fetchState();
 loadNavVersion();
 (async () => {
@@ -424,8 +562,9 @@ loadNavVersion();
     const resp = await fetch('/api/config');
     if (!resp.ok) return;
     const cfg = await resp.json();
+    _savedDelay = cfg.delay_seconds ?? 0;
     const slider = document.getElementById('delay-slider');
-    slider.value = cfg.delay_seconds ?? 0;
+    slider.value = _savedDelay;
     document.getElementById('delay-value').textContent = slider.value;
   } catch (e) {}
 })();

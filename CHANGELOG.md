@@ -7,6 +7,10 @@ All notable changes to RaceFlag are documented here.
 ## [Unreleased]
 
 ### Added
+- Replay Mode — select any completed 2025 F1 race session from the F1 livetiming archive, press Play at lights out, and the LED strip reacts to flag events identically to live mode
+- Sync Offset slider replaces LED Delay when in Replay mode (±30 s range, centred at 0); LED Delay is restored on return to Live mode
+- Pause and Resume replay without losing sync — pause both TV broadcast and RaceFlag simultaneously
+- REPLAY pill appears on the Session section title while a replay is active
 - Six `/api/replay/*` endpoints (`GET sessions`, `POST load/play/pause/resume/stop/offset`) gated on `replay_manager` presence in `create_app`; `create_app` gains optional `replay_manager`, `listener`, and `on_replay_event` params; 7 new tests
 - `ReplayManager` playback engine: `play`, `pause`, `resume`, `stop`, `set_sync_offset` — pause/resume uses wall-clock origin shifting so the replay position stays frozen during a pause; sync offset clamped to ±30 s; 6 new async/sync tests
 - `ReplayManager` data layer: `get_sessions` fetches Race sessions from F1 livetiming Index.json, `load_session` downloads TrackStatus + RaceControlMessages streams and builds a sorted `_events` list anchored to lights-out, `_find_lights_out` detects race start via "RACE STARTED" RC message with a ≥300s formation-lap gap fallback
