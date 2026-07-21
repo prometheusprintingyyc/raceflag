@@ -495,7 +495,7 @@ document.getElementById('btn-led-toggle').addEventListener('click', async () => 
 
 // ── Shutdown ────────────────────────────────────────────────────────────────
 document.getElementById('btn-shutdown').addEventListener('click', async () => {
-  if (!confirm('Shut down the Raspberry Pi?\n\nWait 30 seconds before unplugging power.')) return;
+  if (!confirm('Shut down RaceFlag?\n\nWait 30 seconds before unplugging power.')) return;
   const btn = document.getElementById('btn-shutdown');
   btn.textContent = 'Shutting down…';
   btn.disabled = true;
