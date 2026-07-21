@@ -104,3 +104,37 @@ def test_to_dict_includes_led_enabled():
     d = s.to_dict()
     assert "led_enabled" in d
     assert d["led_enabled"] is True
+
+
+def test_replay_fields_default():
+    s = AppState()
+    assert s.replay_mode is False
+    assert s.replay_status == "idle"
+    assert s.replay_session_name == ""
+    assert s.replay_time_elapsed == ""
+
+
+def test_set_replay_state_updates_all_fields():
+    s = AppState()
+    s.set_replay_state(mode=True, status="playing", session_name="2025 British GP", elapsed="00:32:00")
+    assert s.replay_mode is True
+    assert s.replay_status == "playing"
+    assert s.replay_session_name == "2025 British GP"
+    assert s.replay_time_elapsed == "00:32:00"
+
+
+def test_set_replay_state_defaults_optional_args():
+    s = AppState()
+    s.set_replay_state(mode=False, status="idle")
+    assert s.replay_session_name == ""
+    assert s.replay_time_elapsed == ""
+
+
+def test_to_dict_includes_replay_fields():
+    s = AppState()
+    s.set_replay_state(mode=True, status="ready", session_name="Test GP", elapsed="")
+    d = s.to_dict()
+    assert d["replay_mode"] is True
+    assert d["replay_status"] == "ready"
+    assert d["replay_session_name"] == "Test GP"
+    assert d["replay_time_elapsed"] == ""

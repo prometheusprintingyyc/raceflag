@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, asdict, replace
+from datetime import datetime, timezone
 from threading import Lock
 from typing import List, Optional
 
@@ -133,6 +134,10 @@ class AppState:
     demo_mode: bool = False
     led_enabled: bool = True
     feed_connected: bool = False
+    replay_mode: bool = False
+    replay_status: str = "idle"
+    replay_session_name: str = ""
+    replay_time_elapsed: str = ""
     session: SessionInfo = field(default_factory=SessionInfo)
     weather: WeatherInfo = field(default_factory=WeatherInfo)
     race_control_messages: List[RaceControlMessage] = field(default_factory=list)
@@ -161,6 +166,19 @@ class AppState:
     def set_feed_connected(self, connected: bool) -> None:
         with self._lock:
             self.feed_connected = connected
+
+    def set_replay_state(
+        self,
+        mode: bool,
+        status: str,
+        session_name: str = "",
+        elapsed: str = "",
+    ) -> None:
+        with self._lock:
+            self.replay_mode = mode
+            self.replay_status = status
+            self.replay_session_name = session_name
+            self.replay_time_elapsed = elapsed
 
     def set_session(self, session: SessionInfo) -> None:
         with self._lock:
@@ -192,6 +210,56 @@ class AppState:
         with self._lock:
             self.next_race = race
 
+    def clear_time_remaining(self) -> None:
+        """Reset session clock fields — called when replay stops so the countdown doesn't persist."""
+        with self._lock:
+            self.session = replace(
+                self.session,
+                time_remaining="",
+                time_remaining_at="",
+                extrapolating=False,
+            )
+
+    def freeze_countdown(self) -> None:
+        """Compute current remaining time and freeze extrapolation for replay pause."""
+        with self._lock:
+            if not self.session.time_remaining or not self.session.time_remaining_at:
+                return
+            try:
+                parts = self.session.time_remaining.split(":")
+                remaining_secs = int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+                at_time = datetime.fromisoformat(
+                    self.session.time_remaining_at.replace("Z", "+00:00")
+                )
+                elapsed = (datetime.now(timezone.utc) - at_time).total_seconds()
+                frozen_secs = max(0.0, remaining_secs - elapsed)
+                frozen_str = "{:02d}:{:02d}:{:02d}".format(
+                    int(frozen_secs // 3600),
+                    int((frozen_secs % 3600) // 60),
+                    int(frozen_secs % 60),
+                )
+                now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+                self.session = replace(
+                    self.session,
+                    time_remaining=frozen_str,
+                    time_remaining_at=now_utc,
+                    extrapolating=False,
+                )
+            except Exception:
+                pass
+
+    def unfreeze_countdown(self, extrapolating: bool = True) -> None:
+        """Restart the frontend countdown from the frozen remaining time."""
+        with self._lock:
+            if not self.session.time_remaining:
+                return
+            now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+            self.session = replace(
+                self.session,
+                time_remaining_at=now_utc,
+                extrapolating=extrapolating,
+            )
+
     def to_dict(self) -> dict:
         with self._lock:
             return {
@@ -200,6 +268,10 @@ class AppState:
                 "demo_mode": self.demo_mode,
                 "led_enabled": self.led_enabled,
                 "feed_connected": self.feed_connected,
+                "replay_mode": self.replay_mode,
+                "replay_status": self.replay_status,
+                "replay_session_name": self.replay_session_name,
+                "replay_time_elapsed": self.replay_time_elapsed,
                 "session": asdict(self.session),
                 "weather": asdict(self.weather),
                 "race_control_messages": [asdict(m) for m in self.race_control_messages],

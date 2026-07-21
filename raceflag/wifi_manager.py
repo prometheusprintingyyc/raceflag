@@ -57,14 +57,104 @@ class WiFiManager:
     def is_hotspot_active(self) -> bool:
         return self._hotspot_active
 
+    async def _sync_nm_wifi_to_config(self) -> bool:
+        """Read the active wlan0 WiFi profile from NM and save SSID+password to config.json.
+
+        Returns True if credentials were found and saved. This makes config self-healing:
+        after one restart the normal configured-SSID path takes over without needing
+        any detection logic.
+        """
+        try:
+            # Step 1: get the active connection profile name for wlan0
+            proc = await asyncio.create_subprocess_exec(
+                "nmcli", "-g", "GENERAL.CONNECTION", "device", "show", "wlan0",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await proc.communicate()
+            profile = stdout.decode().strip()
+            if not profile or profile == "--":
+                return False
+
+            # Step 2: get the actual SSID from that profile
+            proc = await asyncio.create_subprocess_exec(
+                "nmcli", "-g", "802-11-wireless.ssid", "connection", "show", profile,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await proc.communicate()
+            ssid = stdout.decode().strip()
+            if not ssid:
+                return False
+
+            # Step 3: get the password (may be empty for open networks)
+            proc = await asyncio.create_subprocess_exec(
+                "nmcli", "-g", "802-11-wireless-security.psk", "connection", "show", profile,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await proc.communicate()
+            password = stdout.decode().strip()
+
+            self._config.wifi_ssid = ssid
+            self._config.wifi_password = password
+            self._current_ssid = ssid
+            if self._config_path:
+                save_config(self._config, self._config_path)
+            logger.info("Synced WiFi credentials from NM profile %r: ssid=%r", profile, ssid)
+            return True
+        except Exception as e:
+            logger.warning("Failed to sync NM credentials to config: %s", e)
+            return False
+
+    async def _has_network_address(self) -> bool:
+        """Return True if any interface has a routable non-hotspot IP."""
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "ip", "-4", "addr",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await proc.communicate()
+            for line in stdout.decode().splitlines():
+                line = line.strip()
+                if not line.startswith("inet "):
+                    continue
+                ip = line.split()[1].split("/")[0]
+                if (not ip.startswith("127.")
+                        and not ip.startswith("169.254.")
+                        and ip != HOTSPOT_IP):
+                    return True
+        except Exception:
+            pass
+        return False
+
     async def start(self) -> None:
+        logger.info("WiFiManager starting (configured_ssid=%r)", self._config.wifi_ssid or "")
         self._running = True
-        if self._config.wifi_ssid:
+
+        # Always ask NM what wlan0 is currently connected to before making any
+        # hotspot decision — this handles both "config is empty but NM has creds"
+        # AND "config has SSID but device is already connected" (nmcli connect
+        # returns an error when the interface is already on that network).
+        if await self._sync_nm_wifi_to_config():
+            self._connected = True
+            self._ever_connected = True
+            logger.info("Already connected via NM to %r — skipping hotspot", self._config.wifi_ssid)
+        elif self._config.wifi_ssid:
+            # NM not currently connected but we have credentials — try to connect.
             success = await self._connect_to_configured()
             if not success:
                 await self.enable_hotspot()
         else:
-            await self.enable_hotspot()
+            # No SSID anywhere — skip hotspot if a non-WiFi routable IP exists (Ethernet).
+            if await self._has_network_address():
+                self._connected = True
+                self._ever_connected = True
+                logger.info("No WiFi config but routable IP found — skipping hotspot")
+            else:
+                await self.enable_hotspot()
+
         self._task = asyncio.create_task(self._monitor_loop())
 
     async def stop(self) -> None:
@@ -76,7 +166,14 @@ class WiFiManager:
         fail_count = 0
         while self._running:
             if self._hotspot_active:
-                if await self._check_configured_available():
+                if not self._config.wifi_ssid and await self._has_network_address():
+                    # No configured SSID but a routable IP appeared — NM reconnected.
+                    logger.info("Network address appeared while in hotspot — disabling hotspot")
+                    await self.disable_hotspot()
+                    self._connected = True
+                    self._ever_connected = True
+                    await self._sync_nm_wifi_to_config()
+                elif await self._check_configured_available():
                     await self.disable_hotspot()
                     success = await self._connect_to_configured()
                     if not success:
@@ -112,16 +209,12 @@ class WiFiManager:
                 await asyncio.sleep(30)
 
     async def _check_connectivity(self) -> bool:
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "ping", "-c", "1", "-W", "3", "8.8.8.8",
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-            await proc.wait()
-            return proc.returncode == 0
-        except Exception:
-            return False
+        """Return True if a routable non-hotspot IP is present on any interface.
+
+        Uses IP address detection instead of ICMP ping so corporate firewalls
+        that block outbound ping don't cause false connectivity failures.
+        """
+        return await self._has_network_address()
 
     async def _check_configured_available(self) -> bool:
         if not self._config.wifi_ssid:

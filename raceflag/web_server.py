@@ -64,6 +64,15 @@ class LEDEnabledRequest(BaseModel):
     enabled: bool
 
 
+class LoadSessionRequest(BaseModel):
+    session_path: str
+    session_name: str = ""
+
+
+class ReplayOffsetRequest(BaseModel):
+    seconds: float = Field(ge=-30.0, le=30.0)
+
+
 def create_app(
     state: AppState,
     config: Config,
@@ -72,6 +81,9 @@ def create_app(
     wifi_manager=None,
     ota=None,
     version: str = "",
+    replay_manager=None,
+    listener=None,
+    on_replay_event=None,
 ) -> FastAPI:
     app = FastAPI(title="RaceFlag")
 
@@ -188,14 +200,103 @@ def create_app(
         lines = await _fetch_logs()
         return {"lines": lines, "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M")}
 
+    if replay_manager is not None:
+        _pre_pause_extrapolating: bool = False
+
+        @app.get("/api/replay/sessions")
+        async def get_replay_sessions():
+            import datetime
+            year = datetime.datetime.now().year
+            return await replay_manager.get_sessions(year=year)
+
+        @app.post("/api/replay/load")
+        async def load_replay_session(req: LoadSessionRequest):
+            state.set_replay_state(mode=True, status="loading",
+                                   session_name=req.session_name)
+            try:
+                event_count = await replay_manager.load_session(
+                    req.session_path, session_name=req.session_name
+                )
+            except Exception as exc:
+                state.set_replay_state(mode=False, status="idle")
+                raise HTTPException(status_code=502, detail=f"Failed to load session: {exc}")
+            state.set_replay_state(mode=True, status="ready",
+                                   session_name=req.session_name)
+            return {"status": "ready", "session_name": req.session_name,
+                    "event_count": event_count}
+
+        @app.post("/api/replay/play")
+        async def play_replay():
+            if listener is not None:
+                listener.suspended = True
+            state.set_replay_state(mode=True, status="playing",
+                                   session_name=replay_manager._session_name)
+            await replay_manager.play(on_event=on_replay_event or state.set_track_status)
+
+            def _on_complete(task: asyncio.Task) -> None:
+                if not task.cancelled():
+                    if listener is not None:
+                        listener.suspended = False
+                        listener.reset_timing_state()
+                    state.set_replay_state(mode=False, status="idle")
+                    state.set_track_status("unknown")
+                    state.set_display_track_status("unknown")
+                    led.set_idle(True)
+
+            if replay_manager._task is not None:
+                replay_manager._task.add_done_callback(_on_complete)
+
+            return {"status": "playing"}
+
+        @app.post("/api/replay/pause")
+        async def pause_replay():
+            nonlocal _pre_pause_extrapolating
+            replay_manager.pause()
+            _pre_pause_extrapolating = state.session.extrapolating
+            state.freeze_countdown()
+            state.set_replay_state(mode=True, status="paused",
+                                   session_name=replay_manager._session_name)
+            return {"status": "paused"}
+
+        @app.post("/api/replay/resume")
+        async def resume_replay():
+            replay_manager.resume()
+            state.unfreeze_countdown(extrapolating=_pre_pause_extrapolating)
+            state.set_replay_state(mode=True, status="playing",
+                                   session_name=replay_manager._session_name)
+            return {"status": "playing"}
+
+        @app.post("/api/replay/stop")
+        async def stop_replay():
+            replay_manager.stop()
+            if listener is not None:
+                listener.suspended = False
+                listener.reset_timing_state()
+            state.set_replay_state(mode=False, status="idle")
+            state.set_track_status("unknown")
+            state.set_display_track_status("unknown")
+            led.set_idle(True)
+            return {"status": "idle"}
+
+        @app.post("/api/replay/offset")
+        async def set_replay_offset(req: ReplayOffsetRequest):
+            replay_manager.set_sync_offset(req.seconds)
+            return {"offset_seconds": req.seconds}
+
+    def _asset_tag(filename: str) -> str:
+        """Return a cache-busting query param based on file mtime (changes on git pull)."""
+        try:
+            return str(int((FRONTEND_DIR / filename).stat().st_mtime))
+        except Exception:
+            return version or "0"
+
     @app.get("/", include_in_schema=False)
     async def index():
         if wifi_manager and wifi_manager.is_hotspot_active():
             return RedirectResponse(url="/setup")
         html = (FRONTEND_DIR / "index.html").read_text()
-        if version:
-            html = html.replace('href="/style.css"', f'href="/style.css?v={version}"')
-            html = html.replace('src="/app.js"', f'src="/app.js?v={version}"')
+        html = html.replace('href="/style.css"', f'href="/style.css?v={_asset_tag("style.css")}"')
+        html = html.replace('src="/app.js"', f'src="/app.js?v={_asset_tag("app.js")}"')
         return Response(content=html, media_type="text/html",
                         headers={"Cache-Control": "no-cache"})
 

@@ -4,13 +4,39 @@ All notable changes to RaceFlag are documented here.
 
 ---
 
-## [Unreleased]
+## [v0.2.19] — 2026-07-21
 
 ### Added
+- Replay Mode — select any completed 2025 F1 race session from the F1 livetiming archive, press Play at lights out, and the LED strip reacts to flag events identically to live mode
+- LED delay is bypassed in Replay mode — flag events fire immediately since the replay engine already handles timing
+- Debug logging in replay engine shows loaded event count, lights-out detection offset, and per-event schedule timing
+- Sprint races now appear in the Replay session list labelled with `(Sprint)` — previously they appeared as unlabelled duplicates alongside the main race for the same Grand Prix weekend
+- Sync Offset slider replaces LED Delay when in Replay mode (±30 s range, centred at 0); LED Delay is restored on return to Live mode
+- Pause and Resume replay without losing sync — pause both TV broadcast and RaceFlag simultaneously
+- REPLAY pill appears on the Session section title while a replay is active
+- Six `/api/replay/*` endpoints (`GET sessions`, `POST load/play/pause/resume/stop/offset`) gated on `replay_manager` presence in `create_app`; `create_app` gains optional `replay_manager`, `listener`, and `on_replay_event` params; 7 new tests
+- `ReplayManager` playback engine: `play`, `pause`, `resume`, `stop`, `set_sync_offset` — pause/resume uses wall-clock origin shifting so the replay position stays frozen during a pause; sync offset clamped to ±30 s; 6 new async/sync tests
+- `ReplayManager` data layer: `get_sessions` fetches Race sessions from F1 livetiming Index.json, `load_session` now downloads all 10 timing streams in parallel (TrackStatus, RaceControlMessages, SessionInfo, SessionStatus, WeatherData, TimingData, TimingAppData, DriverList, LapCount, ExtrapolatedClock), builds a unified chronological event list anchored to lights-out, and replays every event through the same `F1Listener._handle_feed` handler that live mode uses — so weather, driver positions, circuit info, countdown, and lap counts all update identically to a live session
+- `_find_lights_out` now uses four cascading detection methods: (1) "RACE STARTED" RC message, (2) `SessionStatus "Started"` — fires exactly at lights-out, (3) `LapCount CurrentLap=1` — also fires at lights-out, (4) first AllClear after a non-clear formation-lap state; methods 2 and 3 reliably catch races like the 2026 Belgian GP that have no "RACE STARTED" message and a formation-lap that is pure AllClear
+- Pre-race snapshot phase: all events before lights-out are replayed instantly with `is_snapshot=True` to restore weather, driver positions, and tyre state before playback begins — no LED callbacks fire during the snapshot
+- Fixed: replay mode now uses `led.force_trigger` instead of `led.trigger` so the LED hardware bypasses its internal delay queue — previously `led.trigger` still waited `delay_seconds` even though the UI delay was already suppressed in replay mode
+- Fixed: pressing Play now fires the race_start green-flash animation and updates the track status display immediately, even when the formation lap was pure AllClear and no new TrackStatus event exists right at lights-out (e.g. Belgian GP) — the last pre-race TrackStatus is re-fired as a live event at the start of playback
+- Driver positions, weather, and session info now populate in the UI immediately after a session loads (before Play is pressed) — the pre-lights-out snapshot is applied at load time so the user can verify the correct race is loaded
+- Fixed: stopping replay (via Stop button or natural end of playback) now resets the LED to idle, clears the track status to "unknown", and clears accumulated timing data from the listener so stale replay positions don't persist into the next live session
+- Switching away from Replay mode while a session is loaded or playing now shows a confirmation dialog ("Cancel Replay? / Keep Watching / Stop Replay") — confirming calls `/api/replay/stop`, resets the LED to idle, and navigates to the target view; cancelling leaves the replay running
+- Session time remaining countdown now works in replay mode — `ExtrapolatedClock` stream is downloaded alongside the other 8 timing streams; pausing replay freezes the countdown at the correct remaining time, and resuming restarts it from that same point (preserving the original extrapolating state so red-flag clock freezes are respected)
+- `ReplayManager(on_feed=...)` constructor parameter replaces the internal `on_event` callback; `on_feed` receives `(topic, data, is_snapshot)` and is wired to `listener.process_replay_event` in `main.py`
+- `F1Listener.process_replay_event(topic, data, is_snapshot)` — new method that calls `_handle_feed` with `_bypass_suspended=True` so replay events reach the handler while the live WebSocket feed is blocked
+- Fixed: chequered flag LED callback no longer fires during the live-feed snapshot (initial state restore on connection) — the `is_snapshot` guard was missing from the RaceControlMessages chequered branch
 - Password show/hide toggle on the WiFi setup page password fields
 - LED Strip on/off toggle in Settings — darkens the LED strip immediately while keeping the app and web UI active; hotspot setup mode always shows regardless of toggle state
 
 ### Fixed
+- Setup hotspot no longer activates when the device already has an active WiFi connection — startup now always checks NM first via a local nmcli query; if NM is connected the hotspot is skipped without calling `nmcli device wifi connect` (which errors when the interface is already on that network and was triggering the hotspot)
+- Ongoing connectivity monitoring now uses IP address detection instead of ICMP ping — prevents false "WiFi lost" triggers on corporate/enterprise networks that block outbound ping, which previously caused the setup hotspot to re-enable every 5 minutes even on a healthy connection
+- Hotspot's own IP (192.168.4.1) is now excluded from the routable-address check — prevents the monitor loop from counting the hotspot itself as a "real" internet connection
+- When an existing NM connection is adopted, the active WiFi SSID and password are read from the NetworkManager profile and written to config.json, so subsequent restarts use the normal configured path
+- WiFiManager now logs at startup so the configured SSID and startup path are always visible in the journal
 - Wrong password during WiFi setup no longer leaves the device in a dark period — the setup hotspot re-enables within 35 seconds (previously up to 2 minutes) and the LED strip resumes flashing white
 - WiFi connectivity monitoring now tolerates up to 5 minutes of outage before re-enabling the setup hotspot, preventing false triggers during router reboots (previously 60 seconds)
 - Repeated wrong-password auto-retries in the monitor loop stop after 3 consecutive failures — saved credentials are cleared so the device stays in setup mode cleanly

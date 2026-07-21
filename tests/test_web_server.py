@@ -1,9 +1,11 @@
 import pytest
+from unittest.mock import AsyncMock, MagicMock
 from fastapi.testclient import TestClient
 from raceflag.web_server import create_app
 from raceflag.state import AppState
 from raceflag.config import Config
 from raceflag.led_controller import LEDController, MockStrip
+from raceflag.replay_manager import ReplayManager
 
 
 @pytest.fixture
@@ -188,3 +190,103 @@ def test_set_led_enabled_updates_led_controller(client, led):
 def test_get_state_includes_led_enabled(client):
     resp = client.get("/api/state")
     assert "led_enabled" in resp.json()
+
+
+# ---------------------------------------------------------------------------
+# Replay endpoint tests
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def replay_manager():
+    rm = ReplayManager()
+    rm.get_sessions = AsyncMock(return_value=[
+        {"name": "2025 British GP", "path": "2025/brit/", "date": "2025-07-06", "circuit": "Silverstone"}
+    ])
+    rm.load_session = AsyncMock(return_value=42)
+    rm.play = AsyncMock()
+    rm.pause = MagicMock()
+    rm.resume = MagicMock()
+    rm.stop = MagicMock()
+    rm.set_sync_offset = MagicMock()
+    rm._paused = False
+    return rm
+
+
+@pytest.fixture
+def client_with_replay(app_state, config, led, replay_manager):
+    app = create_app(state=app_state, config=config, led=led, replay_manager=replay_manager)
+    return TestClient(app)
+
+
+def test_get_replay_sessions(client_with_replay):
+    resp = client_with_replay.get("/api/replay/sessions")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert isinstance(data, list)
+    assert data[0]["name"] == "2025 British GP"
+
+
+def test_post_replay_load(client_with_replay, app_state):
+    resp = client_with_replay.post(
+        "/api/replay/load",
+        json={"session_path": "2025/brit/", "session_name": "2025 British GP"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "ready"
+    assert body["event_count"] == 42
+    assert app_state.replay_status == "ready"
+
+
+def test_post_replay_play(client_with_replay, app_state):
+    client_with_replay.post("/api/replay/load",
+                            json={"session_path": "2025/brit/", "session_name": "2025 British GP"})
+    resp = client_with_replay.post("/api/replay/play")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "playing"
+    assert app_state.replay_status == "playing"
+
+
+def test_post_replay_pause(client_with_replay, app_state):
+    client_with_replay.post("/api/replay/load",
+                            json={"session_path": "2025/brit/", "session_name": "2025 British GP"})
+    client_with_replay.post("/api/replay/play")
+    resp = client_with_replay.post("/api/replay/pause")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "paused"
+    assert app_state.replay_status == "paused"
+
+
+def test_post_replay_stop(client_with_replay, app_state):
+    client_with_replay.post("/api/replay/load",
+                            json={"session_path": "2025/brit/", "session_name": "2025 British GP"})
+    client_with_replay.post("/api/replay/play")
+    resp = client_with_replay.post("/api/replay/stop")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "idle"
+    assert app_state.replay_mode is False
+    assert app_state.replay_status == "idle"
+
+
+def test_post_replay_offset(client_with_replay, replay_manager):
+    resp = client_with_replay.post("/api/replay/offset", json={"seconds": 5.0})
+    assert resp.status_code == 200
+    assert resp.json()["offset_seconds"] == 5.0
+    replay_manager.set_sync_offset.assert_called_once_with(5.0)
+
+
+def test_replay_load_resets_state_on_error(client_with_replay, app_state, replay_manager):
+    """If load_session raises, the endpoint returns 502 and resets replay state to idle."""
+    replay_manager.load_session.side_effect = Exception("network error")
+    resp = client_with_replay.post(
+        "/api/replay/load",
+        json={"session_path": "2025/brit/", "session_name": "2025 British GP"},
+    )
+    assert resp.status_code == 502
+    assert "network error" in resp.json()["detail"]
+    assert app_state.replay_mode is False
+    assert app_state.replay_status == "idle"
+
+
+def test_replay_endpoints_absent_without_replay_manager(client):
+    assert client.get("/api/replay/sessions").status_code == 404

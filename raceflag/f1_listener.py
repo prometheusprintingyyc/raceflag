@@ -102,6 +102,7 @@ class F1Listener:
         self._driver_list: dict = {}
         self._timing_lines: dict = {}
         self._timing_app_lines: dict = {}
+        self.suspended: bool = False
 
     def _ensure_active(self) -> None:
         """Mark session active on first feed message — any data means a live session is running."""
@@ -188,7 +189,9 @@ class F1Listener:
         self._merge_timing_lines(data)
         self._rebuild_positions()
 
-    def _handle_feed(self, topic: str, data: dict, is_snapshot: bool = False) -> None:
+    def _handle_feed(self, topic: str, data: dict, is_snapshot: bool = False, _bypass_suspended: bool = False) -> None:
+        if self.suspended and not _bypass_suspended:
+            return
         logger.debug("Feed received: %s", topic)
 
         # Session-ending status must be handled before _ensure_active to avoid
@@ -231,7 +234,7 @@ class F1Listener:
                     _msg = str(msg_data.get("Message", "")).upper()
                     if _flag == "CHEQUERED" or "CHEQUERED" in _msg or "CHECKERED" in _msg:
                         self._state.set_track_status("checkered")
-                        if self._on_track_status_change:
+                        if self._on_track_status_change and not is_snapshot:
                             self._on_track_status_change("checkered")
         elif topic == "LapCount":
             session = self._state.session
@@ -352,6 +355,18 @@ class F1Listener:
                 logger.warning("SignalR connection lost: %s — reconnecting in 5s", e)
                 if self._running:
                     await asyncio.sleep(5)
+
+    def process_replay_event(self, topic: str, data: dict, is_snapshot: bool = False) -> None:
+        """Process one archived event during replay, bypassing the suspended check."""
+        self._handle_feed(topic, data, is_snapshot, _bypass_suspended=True)
+
+    def reset_timing_state(self) -> None:
+        """Clear accumulated timing data so stale replay state doesn't persist after stop."""
+        self._driver_list = {}
+        self._timing_lines = {}
+        self._timing_app_lines = {}
+        self._state.set_driver_positions([])
+        self._state.clear_time_remaining()
 
     async def stop(self) -> None:
         self._running = False
