@@ -497,8 +497,13 @@ document.getElementById('btn-send-logs').addEventListener('click', async () => {
 async function _loadReplaySessions() {
   const dropdown = document.getElementById('replay-dropdown');
   if (!dropdown) return;
-  dropdown.innerHTML = '<option value="">Loading…</option>';
-  document.getElementById('btn-replay-load').disabled = true;
+  dropdown.innerHTML = '<option value="">Loading races…</option>';
+  const loadBtn = document.getElementById('btn-replay-load');
+  loadBtn.textContent = 'Load';
+  loadBtn.disabled = true;
+  // Always reset server replay state so the dropdown shows (not a stale Play button)
+  await fetch('/api/replay/stop', { method: 'POST' }).catch(() => {});
+  await fetchState();
   try {
     const resp = await fetch('/api/replay/sessions');
     if (!resp.ok) throw new Error('fetch failed');
@@ -525,13 +530,17 @@ document.getElementById('btn-replay-load').addEventListener('click', async () =>
   btn.textContent = 'Loading…';
   btn.disabled = true;
   try {
-    await fetch('/api/replay/load', {
+    const resp = await fetch('/api/replay/load', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_path: path, session_name: name }),
     });
+    if (!resp.ok) throw new Error(`load failed: ${resp.status}`);
     document.getElementById('replay-race-chip').textContent = name;
-    await fetchState();
+    // Transition immediately without waiting for the poll cycle
+    document.getElementById('replay-idle-row').style.display = 'none';
+    document.getElementById('replay-ready-row').style.display = 'flex';
+    fetchState();
   } catch (e) {
     btn.textContent = 'Load';
     btn.disabled = false;
