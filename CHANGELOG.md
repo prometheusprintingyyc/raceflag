@@ -7,6 +7,7 @@ All notable changes to RaceFlag are documented here.
 ## [Unreleased]
 
 ### Added
+- `ReplayManager` data layer: `get_sessions` fetches Race sessions from F1 livetiming Index.json, `load_session` downloads TrackStatus + RaceControlMessages streams and builds a sorted `_events` list anchored to lights-out, `_find_lights_out` detects race start via "RACE STARTED" RC message with a ≥300s formation-lap gap fallback
 - Password show/hide toggle on the WiFi setup page password fields
 - LED Strip on/off toggle in Settings — darkens the LED strip immediately while keeping the app and web UI active; hotspot setup mode always shows regardless of toggle state
 
