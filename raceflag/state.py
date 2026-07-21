@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, asdict, replace
+from datetime import datetime, timezone
 from threading import Lock
 from typing import List, Optional
 
@@ -208,6 +209,46 @@ class AppState:
     def set_next_race(self, race: NextRace) -> None:
         with self._lock:
             self.next_race = race
+
+    def freeze_countdown(self) -> None:
+        """Compute current remaining time and freeze extrapolation for replay pause."""
+        with self._lock:
+            if not self.session.time_remaining or not self.session.time_remaining_at:
+                return
+            try:
+                parts = self.session.time_remaining.split(":")
+                remaining_secs = int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+                at_time = datetime.fromisoformat(
+                    self.session.time_remaining_at.replace("Z", "+00:00")
+                )
+                elapsed = (datetime.now(timezone.utc) - at_time).total_seconds()
+                frozen_secs = max(0.0, remaining_secs - elapsed)
+                frozen_str = "{:02d}:{:02d}:{:02d}".format(
+                    int(frozen_secs // 3600),
+                    int((frozen_secs % 3600) // 60),
+                    int(frozen_secs % 60),
+                )
+                now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+                self.session = replace(
+                    self.session,
+                    time_remaining=frozen_str,
+                    time_remaining_at=now_utc,
+                    extrapolating=False,
+                )
+            except Exception:
+                pass
+
+    def unfreeze_countdown(self, extrapolating: bool = True) -> None:
+        """Restart the frontend countdown from the frozen remaining time."""
+        with self._lock:
+            if not self.session.time_remaining:
+                return
+            now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+            self.session = replace(
+                self.session,
+                time_remaining_at=now_utc,
+                extrapolating=extrapolating,
+            )
 
     def to_dict(self) -> dict:
         with self._lock:

@@ -24,6 +24,7 @@ REPLAY_STREAMS = [
     "TimingAppData",
     "DriverList",
     "LapCount",
+    "ExtrapolatedClock",
 ]
 
 

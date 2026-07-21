@@ -201,6 +201,8 @@ def create_app(
         return {"lines": lines, "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M")}
 
     if replay_manager is not None:
+        _pre_pause_extrapolating: bool = False
+
         @app.get("/api/replay/sessions")
         async def get_replay_sessions():
             import datetime
@@ -248,7 +250,10 @@ def create_app(
 
         @app.post("/api/replay/pause")
         async def pause_replay():
+            nonlocal _pre_pause_extrapolating
             replay_manager.pause()
+            _pre_pause_extrapolating = state.session.extrapolating
+            state.freeze_countdown()
             state.set_replay_state(mode=True, status="paused",
                                    session_name=replay_manager._session_name)
             return {"status": "paused"}
@@ -256,6 +261,7 @@ def create_app(
         @app.post("/api/replay/resume")
         async def resume_replay():
             replay_manager.resume()
+            state.unfreeze_countdown(extrapolating=_pre_pause_extrapolating)
             state.set_replay_state(mode=True, status="playing",
                                    session_name=replay_manager._session_name)
             return {"status": "playing"}
