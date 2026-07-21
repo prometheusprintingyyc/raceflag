@@ -4,7 +4,7 @@ All notable changes to RaceFlag are documented here.
 
 ---
 
-## [Unreleased]
+## [v0.2.19] — 2026-07-21
 
 ### Added
 - Replay Mode — select any completed 2025 F1 race session from the F1 livetiming archive, press Play at lights out, and the LED strip reacts to flag events identically to live mode
