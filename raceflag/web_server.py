@@ -235,6 +235,7 @@ def create_app(
                 if not task.cancelled():
                     if listener is not None:
                         listener.suspended = False
+                        listener.reset_timing_state()
                     state.set_replay_state(mode=False, status="idle")
                     state.set_track_status("unknown")
                     state.set_display_track_status("unknown")
@@ -264,6 +265,7 @@ def create_app(
             replay_manager.stop()
             if listener is not None:
                 listener.suspended = False
+                listener.reset_timing_state()
             state.set_replay_state(mode=False, status="idle")
             state.set_track_status("unknown")
             state.set_display_track_status("unknown")

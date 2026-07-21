@@ -360,5 +360,12 @@ class F1Listener:
         """Process one archived event during replay, bypassing the suspended check."""
         self._handle_feed(topic, data, is_snapshot, _bypass_suspended=True)
 
+    def reset_timing_state(self) -> None:
+        """Clear accumulated timing data so stale replay state doesn't persist after stop."""
+        self._driver_list = {}
+        self._timing_lines = {}
+        self._timing_app_lines = {}
+        self._state.set_driver_positions([])
+
     async def stop(self) -> None:
         self._running = False

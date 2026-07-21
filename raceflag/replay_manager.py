@@ -178,6 +178,15 @@ class ReplayManager:
         self._events = [(ts - lights_out, topic, data) for ts, topic, data in all_events]
         self._session_name = session_name or path
 
+        # Apply pre-lights-out events immediately as a snapshot so driver positions,
+        # weather, and session info populate in the UI right after loading —
+        # before the user presses Play.
+        if self._on_feed:
+            for race_time, topic, data in self._events:
+                if race_time >= 0:
+                    break
+                self._on_feed(topic, data, True)
+
         realtime_count = sum(1 for rt, _, _ in self._events if rt >= 0)
         logger.info(
             "Replay loaded: %d total events, %d real-time, lights_out=%.1fs, session=%r",
