@@ -20,7 +20,7 @@ All notable changes to RaceFlag are documented here.
 - LED Strip on/off toggle in Settings — darkens the LED strip immediately while keeping the app and web UI active; hotspot setup mode always shows regardless of toggle state
 
 ### Fixed
-- Setup hotspot no longer activates when the device already has an active WiFi connection that isn't recorded in config.json (e.g. a NetworkManager cached credential from a prior connection) — the existing connection is adopted and the white LED / setup page are suppressed
+- Setup hotspot no longer activates when the device already has internet connectivity but no SSID in config.json — covers both WiFi via NetworkManager cached credentials and Ethernet connections; white LED and setup page are suppressed
 - Wrong password during WiFi setup no longer leaves the device in a dark period — the setup hotspot re-enables within 35 seconds (previously up to 2 minutes) and the LED strip resumes flashing white
 - WiFi connectivity monitoring now tolerates up to 5 minutes of outage before re-enabling the setup hotspot, preventing false triggers during router reboots (previously 60 seconds)
 - Repeated wrong-password auto-retries in the monitor loop stop after 3 consecutive failures — saved credentials are cleared so the device stays in setup mode cleanly

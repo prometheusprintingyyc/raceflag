@@ -58,15 +58,16 @@ class WiFiManager:
         return self._hotspot_active
 
     async def _get_active_ssid(self) -> str:
-        """Return the SSID wlan0 is currently connected to, or '' if not connected."""
+        """Return the SSID wlan0 is currently connected to via nmcli, or '' if not connected."""
         try:
             proc = await asyncio.create_subprocess_exec(
-                "iwgetid", "-r", "wlan0",
+                "nmcli", "-g", "GENERAL.CONNECTION", "device", "show", "wlan0",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
             )
             stdout, _ = await proc.communicate()
-            return stdout.decode().strip()
+            ssid = stdout.decode().strip()
+            return ssid if ssid and ssid != "--" else ""
         except Exception:
             return ""
 
@@ -77,9 +78,11 @@ class WiFiManager:
             if not success:
                 await self.enable_hotspot()
         else:
-            active_ssid = await self._get_active_ssid()
-            if active_ssid:
-                logger.info("wlan0 already connected to %r (not in config) — adopting", active_ssid)
+            # No SSID in config — only start hotspot if there is genuinely no connection.
+            # Covers WiFi via NM cached credentials and Ethernet.
+            if await self._check_connectivity():
+                active_ssid = await self._get_active_ssid()
+                logger.info("Internet reachable (ssid=%r) — skipping hotspot", active_ssid or "non-wifi")
                 self._connected = True
                 self._ever_connected = True
                 self._current_ssid = active_ssid
