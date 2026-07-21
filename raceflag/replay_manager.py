@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import time
 from typing import Callable
 
 import httpx
@@ -36,12 +38,11 @@ class ReplayManager:
     def __init__(self) -> None:
         self._events: list[tuple[float, str]] = []  # (race_time_seconds, flag_state)
         self._session_name: str = ""
-        # Playback state (populated by Task 4)
         self._play_wall_origin: float = 0.0
         self._paused: bool = False
         self._pause_wall: float = 0.0
         self._sync_offset: float = 0.0
-        self._task = None
+        self._task: asyncio.Task | None = None
         self._on_event: Callable[[str], None] | None = None
 
     async def get_sessions(self, year: int = 2025) -> list[dict]:
@@ -125,3 +126,49 @@ class ReplayManager:
             prev_ts = ts
 
         return 0.0
+
+    async def play(self, on_event: Callable[[str], None]) -> None:
+        """Start playback from the beginning of the loaded events."""
+        self._on_event = on_event
+        self._paused = False
+        self._play_wall_origin = time.monotonic()
+        self._task = asyncio.create_task(self._playback_loop())
+
+    async def _playback_loop(self) -> None:
+        for race_time, flag_state in self._events:
+            while True:
+                if self._paused:
+                    await asyncio.sleep(0.05)
+                    continue
+                target = self._play_wall_origin + race_time + self._sync_offset
+                remaining = target - time.monotonic()
+                if remaining <= 0:
+                    break
+                await asyncio.sleep(min(remaining, 0.05))
+            if self._on_event:
+                self._on_event(flag_state)
+
+    def pause(self) -> None:
+        """Freeze the replay clock at the current race position."""
+        if not self._paused:
+            self._pause_wall = time.monotonic()
+            self._paused = True
+
+    def resume(self) -> None:
+        """Unfreeze the replay clock, shifting origin forward by the pause duration."""
+        if self._paused:
+            self._play_wall_origin += time.monotonic() - self._pause_wall
+            self._paused = False
+
+    def stop(self) -> None:
+        """Cancel playback and clear all loaded data."""
+        if self._task:
+            self._task.cancel()
+            self._task = None
+        self._paused = False
+        self._events = []
+        self._session_name = ""
+
+    def set_sync_offset(self, seconds: float) -> None:
+        """Set a timing offset in seconds, clamped to [-30.0, 30.0]."""
+        self._sync_offset = max(-30.0, min(30.0, float(seconds)))

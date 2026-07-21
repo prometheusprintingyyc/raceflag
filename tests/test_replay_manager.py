@@ -1,3 +1,6 @@
+import asyncio
+import time
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -171,3 +174,78 @@ async def test_load_session_parses_events_after_lights_out():
     assert rm._events[0] == pytest.approx((0.0, "race_start"), abs=0.1)
     # all events at t >= 0
     assert all(t >= 0 for t, _ in rm._events)
+
+
+# ── Playback engine ───────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_play_fires_events_in_order():
+    rm = ReplayManager()
+    rm._events = [(0.0, "race_start"), (0.05, "yellow_flag"), (0.1, "track_clear")]
+    received = []
+    await rm.play(on_event=received.append)
+    await asyncio.sleep(0.3)
+    rm.stop()
+    assert received == ["race_start", "yellow_flag", "track_clear"]
+
+
+@pytest.mark.asyncio
+async def test_pause_stops_event_delivery():
+    rm = ReplayManager()
+    rm._events = [(0.0, "race_start"), (0.15, "yellow_flag")]
+    received = []
+    await rm.play(on_event=received.append)
+    await asyncio.sleep(0.02)
+    rm.pause()
+    await asyncio.sleep(0.3)  # yellow_flag would fire here if not paused
+    rm.stop()
+    assert received == ["race_start"]
+    assert "yellow_flag" not in received
+
+
+@pytest.mark.asyncio
+async def test_resume_continues_from_same_position():
+    rm = ReplayManager()
+    rm._events = [(0.0, "race_start"), (0.15, "yellow_flag")]
+    received = []
+    await rm.play(on_event=received.append)
+    await asyncio.sleep(0.02)
+    rm.pause()
+    await asyncio.sleep(0.1)
+    rm.resume()
+    await asyncio.sleep(0.3)
+    rm.stop()
+    assert "race_start" in received
+    assert "yellow_flag" in received
+
+
+@pytest.mark.asyncio
+async def test_stop_cancels_playback():
+    rm = ReplayManager()
+    rm._events = [(0.0, "race_start"), (10.0, "yellow_flag")]
+    received = []
+    await rm.play(on_event=received.append)
+    await asyncio.sleep(0.02)
+    rm.stop()
+    await asyncio.sleep(0.05)
+    assert received == ["race_start"]
+    assert rm._task is None
+
+
+def test_set_sync_offset_clamps_to_range():
+    rm = ReplayManager()
+    rm.set_sync_offset(50.0)
+    assert rm._sync_offset == 30.0
+    rm.set_sync_offset(-50.0)
+    assert rm._sync_offset == -30.0
+    rm.set_sync_offset(10.0)
+    assert rm._sync_offset == 10.0
+
+
+def test_stop_clears_events_and_name():
+    rm = ReplayManager()
+    rm._events = [(0.0, "race_start")]
+    rm._session_name = "Test GP"
+    rm.stop()
+    assert rm._events == []
+    assert rm._session_name == ""
