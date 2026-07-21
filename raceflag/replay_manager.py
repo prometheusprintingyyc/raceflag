@@ -166,6 +166,7 @@ class ReplayManager:
             self._task.cancel()
             self._task = None
         self._paused = False
+        self._sync_offset = 0.0
         self._events = []
         self._session_name = ""
 

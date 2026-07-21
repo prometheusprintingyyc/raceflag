@@ -249,3 +249,11 @@ def test_stop_clears_events_and_name():
     rm.stop()
     assert rm._events == []
     assert rm._session_name == ""
+
+
+def test_stop_resets_sync_offset():
+    rm = ReplayManager()
+    rm.set_sync_offset(15.0)
+    assert rm._sync_offset == 15.0
+    rm.stop()
+    assert rm._sync_offset == 0.0

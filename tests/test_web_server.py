@@ -275,5 +275,18 @@ def test_post_replay_offset(client_with_replay, replay_manager):
     replay_manager.set_sync_offset.assert_called_once_with(5.0)
 
 
+def test_replay_load_resets_state_on_error(client_with_replay, app_state, replay_manager):
+    """If load_session raises, the endpoint returns 502 and resets replay state to idle."""
+    replay_manager.load_session.side_effect = Exception("network error")
+    resp = client_with_replay.post(
+        "/api/replay/load",
+        json={"session_path": "2025/brit/", "session_name": "2025 British GP"},
+    )
+    assert resp.status_code == 502
+    assert "network error" in resp.json()["detail"]
+    assert app_state.replay_mode is False
+    assert app_state.replay_status == "idle"
+
+
 def test_replay_endpoints_absent_without_replay_manager(client):
     assert client.get("/api/replay/sessions").status_code == 404

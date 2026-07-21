@@ -211,9 +211,13 @@ def create_app(
         async def load_replay_session(req: LoadSessionRequest):
             state.set_replay_state(mode=True, status="loading",
                                    session_name=req.session_name)
-            event_count = await replay_manager.load_session(
-                req.session_path, session_name=req.session_name
-            )
+            try:
+                event_count = await replay_manager.load_session(
+                    req.session_path, session_name=req.session_name
+                )
+            except Exception as exc:
+                state.set_replay_state(mode=False, status="idle")
+                raise HTTPException(status_code=502, detail=f"Failed to load session: {exc}")
             state.set_replay_state(mode=True, status="ready",
                                    session_name=req.session_name)
             return {"status": "ready", "session_name": req.session_name,
@@ -226,6 +230,16 @@ def create_app(
             state.set_replay_state(mode=True, status="playing",
                                    session_name=replay_manager._session_name)
             await replay_manager.play(on_event=on_replay_event or state.set_track_status)
+
+            def _on_complete(task: asyncio.Task) -> None:
+                if not task.cancelled():
+                    if listener is not None:
+                        listener.suspended = False
+                    state.set_replay_state(mode=False, status="idle")
+
+            if replay_manager._task is not None:
+                replay_manager._task.add_done_callback(_on_complete)
+
             return {"status": "playing"}
 
         @app.post("/api/replay/pause")
