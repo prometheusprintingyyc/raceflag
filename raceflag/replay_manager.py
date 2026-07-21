@@ -101,6 +101,8 @@ class ReplayManager:
         events.sort(key=lambda x: x[0])
         self._events = events
         self._session_name = session_name or path
+        preview = [(f"{t:.1f}s", s) for t, s in events[:6]]
+        logger.info("Replay loaded %d events (lights_out=%.3fs); first events: %s", len(events), lights_out, preview)
         return len(events)
 
     def _find_lights_out(self, ts_lines: list[str], rc_lines: list[str]) -> float:
@@ -136,6 +138,9 @@ class ReplayManager:
 
     async def _playback_loop(self) -> None:
         for race_time, flag_state in self._events:
+            target = self._play_wall_origin + race_time + self._sync_offset
+            secs_from_now = target - time.monotonic()
+            logger.info("Replay next: %s at race_time=%.1fs (fires in %.1fs)", flag_state, race_time, secs_from_now)
             while True:
                 if self._paused:
                     await asyncio.sleep(0.05)
