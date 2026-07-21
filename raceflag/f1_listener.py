@@ -102,6 +102,7 @@ class F1Listener:
         self._driver_list: dict = {}
         self._timing_lines: dict = {}
         self._timing_app_lines: dict = {}
+        self.suspended: bool = False
 
     def _ensure_active(self) -> None:
         """Mark session active on first feed message — any data means a live session is running."""
@@ -189,6 +190,8 @@ class F1Listener:
         self._rebuild_positions()
 
     def _handle_feed(self, topic: str, data: dict, is_snapshot: bool = False) -> None:
+        if self.suspended:
+            return
         logger.debug("Feed received: %s", topic)
 
         # Session-ending status must be handled before _ensure_active to avoid

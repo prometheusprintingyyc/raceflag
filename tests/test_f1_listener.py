@@ -321,3 +321,22 @@ def test_driver_list_merges_on_update():
     })
     assert "1" in listener._driver_list
     assert "44" in listener._driver_list
+
+
+def test_suspended_flag_suppresses_callbacks():
+    received = []
+    state = AppState()
+    listener = F1Listener(state=state, on_track_status_change=received.append)
+    listener.suspended = True
+    # Simulate an incoming TrackStatus update
+    listener._handle_feed("TrackStatus", {"Status": "2"}, is_snapshot=False)
+    assert received == [], "callback must not fire while suspended"
+
+
+def test_suspended_false_allows_callbacks():
+    received = []
+    state = AppState()
+    listener = F1Listener(state=state, on_track_status_change=received.append)
+    listener.suspended = False
+    listener._handle_feed("TrackStatus", {"Status": "2"}, is_snapshot=False)
+    assert "yellow_flag" in received
