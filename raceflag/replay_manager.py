@@ -18,6 +18,7 @@ BASE_URL = "https://livetiming.formula1.com/static"
 REPLAY_STREAMS = [
     "TrackStatus",
     "RaceControlMessages",
+    "SessionInfo",
     "SessionStatus",
     "WeatherData",
     "TimingData",
