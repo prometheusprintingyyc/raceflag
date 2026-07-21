@@ -57,6 +57,19 @@ class WiFiManager:
     def is_hotspot_active(self) -> bool:
         return self._hotspot_active
 
+    async def _get_active_ssid(self) -> str:
+        """Return the SSID wlan0 is currently connected to, or '' if not connected."""
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "iwgetid", "-r", "wlan0",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await proc.communicate()
+            return stdout.decode().strip()
+        except Exception:
+            return ""
+
     async def start(self) -> None:
         self._running = True
         if self._config.wifi_ssid:
@@ -64,7 +77,14 @@ class WiFiManager:
             if not success:
                 await self.enable_hotspot()
         else:
-            await self.enable_hotspot()
+            active_ssid = await self._get_active_ssid()
+            if active_ssid:
+                logger.info("wlan0 already connected to %r (not in config) — adopting", active_ssid)
+                self._connected = True
+                self._ever_connected = True
+                self._current_ssid = active_ssid
+            else:
+                await self.enable_hotspot()
         self._task = asyncio.create_task(self._monitor_loop())
 
     async def stop(self) -> None:
