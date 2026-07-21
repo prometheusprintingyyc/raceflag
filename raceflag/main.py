@@ -112,7 +112,10 @@ async def main() -> None:
             effective = "race_start"
 
         if effective not in _IDLE_STATUSES and effective not in _TIMED_EFFECTS and (state.session.is_active or state.replay_mode):
-            led.trigger(effective)
+            if state.replay_mode:
+                led.force_trigger(effective)
+            else:
+                led.trigger(effective)
 
         if delay <= 0:
             state.set_display_track_status(status)
