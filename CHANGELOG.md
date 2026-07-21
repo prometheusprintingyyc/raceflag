@@ -4,6 +4,10 @@ All notable changes to RaceFlag are documented here.
 
 ---
 
+## [Unreleased]
+
+---
+
 ## [v0.2.19] — 2026-07-21
 
 ### Added
