@@ -31,9 +31,31 @@
   <div class="view-toggle">
     <div class="view-toggle-pill" id="view-toggle-pill"></div>
     <button class="view-btn active" id="btn-live">Live Race</button>
+    <button class="view-btn" id="btn-replay">Replay</button>
     <button class="view-btn" id="btn-standings">Standings</button>
   </div>
-  <div class="auto-label">Switches automatically · Manual override above</div>
+  <div class="auto-label" id="auto-label">Switches automatically · Manual override above</div>
+
+  <!-- Replay selector bar — shown only when Replay tab is active -->
+  <div class="replay-bar" id="replay-bar" style="display:none">
+    <!-- Row A-idle: shown in idle state -->
+    <div class="replay-idle-row" id="replay-idle-row">
+      <select class="replay-dropdown" id="replay-dropdown">
+        <option value="">Loading races…</option>
+      </select>
+      <button class="btn-replay-action" id="btn-replay-load" disabled>Load</button>
+    </div>
+    <!-- Row A-ready: shown when session is loaded, not yet playing -->
+    <div class="replay-ready-row" id="replay-ready-row" style="display:none">
+      <div class="replay-race-chip" id="replay-race-chip"></div>
+      <button class="btn-replay-action" id="btn-replay-play">▶ Play</button>
+    </div>
+    <!-- Row B: shown when playing or paused -->
+    <div class="replay-playback-row" id="replay-playback-row" style="display:none">
+      <button class="btn-replay-action flex1" id="btn-replay-pause">⏸ Pause</button>
+      <button class="btn-replay-action flex1" id="btn-replay-stop">■ Stop</button>
+    </div>
+  </div>
 
   <div class="view active" id="view-live">
     <div class="flag-banner" id="flag-banner">
@@ -45,7 +67,7 @@
     </div>
 
     <div class="delay-bar">
-      <div><div class="delay-label">LED Delay</div></div>
+      <div><div class="delay-label" id="delay-label">LED Delay</div></div>
       <div class="delay-value" id="delay-value">0</div>
       <div class="delay-unit">sec</div>
       <input type="range" class="delay-slider" id="delay-slider" min="0" max="90" value="0">
@@ -59,7 +81,7 @@
       <div class="led-track" id="led-track"></div>
     </div>
 
-    <div class="section-title">Session</div>
+    <div class="section-title">Session <span class="replay-pill" id="session-replay-pill" style="display:none">REPLAY</span></div>
     <div class="card-grid">
       <div class="card wide">
         <div class="card-label">Circuit</div>
