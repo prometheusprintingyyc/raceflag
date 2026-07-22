@@ -6,6 +6,9 @@ All notable changes to RaceFlag are documented here.
 
 ## [Unreleased]
 
+### Fixed
+- Stopping replay (via Stop button or natural end of playback) now clears the time remaining countdown — `clear_time_remaining` was not being called in either path
+
 ---
 
 ## [v0.2.19] — 2026-07-21

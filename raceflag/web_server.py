@@ -241,6 +241,7 @@ def create_app(
                     state.set_replay_state(mode=False, status="idle")
                     state.set_track_status("unknown")
                     state.set_display_track_status("unknown")
+                    state.clear_time_remaining()
                     led.set_idle(True)
 
             if replay_manager._task is not None:
@@ -275,6 +276,7 @@ def create_app(
             state.set_replay_state(mode=False, status="idle")
             state.set_track_status("unknown")
             state.set_display_track_status("unknown")
+            state.clear_time_remaining()
             led.set_idle(True)
             return {"status": "idle"}
 
