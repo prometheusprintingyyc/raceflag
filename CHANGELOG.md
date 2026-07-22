@@ -8,6 +8,8 @@ All notable changes to RaceFlag are documented here.
 
 ### Fixed
 - Stopping replay (via Stop button or natural end of playback) now clears the time remaining countdown — `clear_time_remaining` was not being called in either path
+- WiFi manager no longer enters hotspot mode when the device has an active connection but `nmcli` fails to return a clean profile name at startup — a routable IP check now gates the hotspot decision before trying stored credentials
+- WiFi monitor loop no longer stays stuck in hotspot mode when the device reconnects to a network that differs from `config.json` — the routable IP check now fires regardless of whether a configured SSID is present
 
 ---
 
