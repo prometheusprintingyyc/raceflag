@@ -269,6 +269,8 @@ class WiFiManager:
             Path(HOSTAPD_CONF).write_text(HOSTAPD_CONF_CONTENT)
             Path(DNSMASQ_CONF).write_text(DNSMASQ_CONF_CONTENT)
             for cmd in [
+                # Stop NM managing wlan0 so it doesn't kill hostapd after it starts
+                ["nmcli", "device", "set", "wlan0", "managed", "no"],
                 ["ip", "addr", "add", f"{HOTSPOT_IP}/24", "dev", "wlan0"],
                 ["systemctl", "restart", "hostapd"],
                 ["systemctl", "restart", "dnsmasq"],
@@ -291,6 +293,8 @@ class WiFiManager:
                 ["systemctl", "stop", "hostapd"],
                 ["systemctl", "stop", "dnsmasq"],
                 ["ip", "addr", "del", f"{HOTSPOT_IP}/24", "dev", "wlan0"],
+                # Hand wlan0 back to NM so it can connect to WiFi
+                ["nmcli", "device", "set", "wlan0", "managed", "yes"],
             ]:
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
