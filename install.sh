@@ -19,13 +19,22 @@ pip3 install rpi_ws281x --break-system-packages 2>/dev/null || pip3 install rpi_
 # 3. Unmask hostapd (masked by default on Raspberry Pi OS)
 systemctl unmask hostapd
 
-# 4. Clone or update repo
+# 4. Clone or update repo, then check out the latest release tag
 if [ -d "$INSTALL_DIR/.git" ]; then
   echo "Updating existing installation..."
+  git -C "$INSTALL_DIR" fetch --tags
   git -C "$INSTALL_DIR" pull --ff-only
 else
   echo "Cloning repository..."
   git clone "$REPO_URL" "$INSTALL_DIR"
+  git -C "$INSTALL_DIR" fetch --tags
+fi
+
+LATEST_TAG=$(git -C "$INSTALL_DIR" describe --tags "$(git -C "$INSTALL_DIR" rev-list --tags --max-count=1)" 2>/dev/null || true)
+if [ -n "$LATEST_TAG" ]; then
+  echo "Checking out latest release: $LATEST_TAG"
+  git -C "$INSTALL_DIR" checkout "$LATEST_TAG"
+  echo "${LATEST_TAG#v}" > "$INSTALL_DIR/version.txt"
 fi
 
 # 5. Install Python dependencies
