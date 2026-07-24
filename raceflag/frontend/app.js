@@ -133,6 +133,8 @@ function updateUI(data) {
     const totalSeconds = _parseRemainingToSeconds(s.time_remaining);
     const receivedAt = s.time_remaining_at ? new Date(s.time_remaining_at).getTime() : Date.now();
     if (totalSeconds !== null) _clockBase = { totalSeconds, receivedAt, extrapolating: !!s.extrapolating };
+  } else {
+    _clockBase = null;
   }
   if (!_clockBase || !_clockBase.extrapolating) {
     document.getElementById('time-remaining').textContent = s.time_remaining || '—';
