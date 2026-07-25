@@ -38,8 +38,12 @@ if [ -n "$LATEST_TAG" ]; then
 fi
 
 # 5. Install Python dependencies
-pip3 install -r "$INSTALL_DIR/requirements.txt" --break-system-packages 2>/dev/null \
-  || pip3 install -r "$INSTALL_DIR/requirements.txt"
+# piwheels provides pre-compiled ARMv6/ARMv7 wheels (e.g. pydantic-core) that aren't on PyPI
+pip3 install -r "$INSTALL_DIR/requirements.txt" \
+  --extra-index-url https://www.piwheels.org/simple/ \
+  --break-system-packages 2>/dev/null \
+  || pip3 install -r "$INSTALL_DIR/requirements.txt" \
+     --extra-index-url https://www.piwheels.org/simple/
 
 # 6. Create default config if absent
 CONFIG="$INSTALL_DIR/config.json"
