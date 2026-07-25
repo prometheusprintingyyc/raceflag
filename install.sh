@@ -25,7 +25,6 @@ systemctl unmask hostapd
 if [ -d "$INSTALL_DIR/.git" ]; then
   echo "Updating existing installation..."
   git -C "$INSTALL_DIR" fetch --tags
-  git -C "$INSTALL_DIR" pull --ff-only
 else
   echo "Cloning repository..."
   git clone "$REPO_URL" "$INSTALL_DIR"
