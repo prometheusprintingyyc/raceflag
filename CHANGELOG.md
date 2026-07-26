@@ -6,6 +6,10 @@ All notable changes to RaceFlag are documented here.
 
 ## [Unreleased]
 
+---
+
+## [v0.2.20] — 2026-07-25
+
 ### Changed
 - `requirements.txt` now pins `pydantic<2` and `fastapi<0.100.0` — pydantic v1 is pure Python (no Rust/Cargo required) which fixes installation on ARMv6 (Pi Zero W) where pydantic-core v2 fails to compile; pydantic usage in the codebase is limited to `BaseModel` and `Field(ge=, le=)`, both of which are identical in v1 and v2
 
