@@ -4,6 +4,25 @@ All notable changes to RaceFlag are documented here.
 
 ---
 
+## [Unreleased]
+
+---
+
+## [v0.2.20] — 2026-07-25
+
+### Changed
+- `requirements.txt` now pins `pydantic<2` and `fastapi<0.100.0` — pydantic v1 is pure Python (no Rust/Cargo required) which fixes installation on ARMv6 (Pi Zero W) where pydantic-core v2 fails to compile; pydantic usage in the codebase is limited to `BaseModel` and `Field(ge=, le=)`, both of which are identical in v1 and v2
+
+### Fixed
+- Stopping replay (via Stop button or natural end of playback) now clears the time remaining countdown — `clear_time_remaining` was not being called in either path
+- WiFi manager no longer enters hotspot mode when the device has an active connection but `nmcli` fails to return a clean profile name at startup — a routable IP check now gates the hotspot decision before trying stored credentials
+- WiFi monitor loop no longer stays stuck in hotspot mode when the device reconnects to a network that differs from `config.json` — the routable IP check now fires regardless of whether a configured SSID is present
+- `enable_hotspot` now tells NetworkManager to stop managing wlan0 before starting hostapd, preventing NM from killing the AP seconds after it starts; `disable_hotspot` hands wlan0 back to NM afterward
+- Stopping or cancelling replay while a live session is active no longer leaves the frontend countdown stuck on the replay's timer — `_clockBase` (the JS clock reference) was never cleared when `time_remaining` was empty, so the stale replay timestamp kept ticking; it is now nulled out whenever the server reports no time remaining
+- Yellow flag (and other continuous animations) no longer get silently discarded when they arrive while the LED delay is active and a timed effect (track_clear, race_start, checkered) is also pending — `trigger_timed` previously called `_flush_queue()` unconditionally when its delayed callback fired, wiping any flag that had queued during the delay window; it now only flushes events that predate the current status, so a yellow flag received 5 s after track_clear correctly cancels the track_clear animation once the configured LED delay expires
+
+---
+
 ## [v0.2.19] — 2026-07-21
 
 ### Added

@@ -141,19 +141,21 @@ class WiFiManager:
             self._connected = True
             self._ever_connected = True
             logger.info("Already connected via NM to %r — skipping hotspot", self._config.wifi_ssid)
+        elif await self._has_network_address():
+            # Device has a routable IP but NM profile query didn't return a clean result
+            # (e.g. nmcli returned "--", or NM isn't managing wlan0 directly).
+            # We're connected — sync credentials if possible and skip the hotspot.
+            self._connected = True
+            self._ever_connected = True
+            logger.info("Routable IP present but NM profile unreadable — skipping hotspot")
+            await self._sync_nm_wifi_to_config()
         elif self._config.wifi_ssid:
             # NM not currently connected but we have credentials — try to connect.
             success = await self._connect_to_configured()
             if not success:
                 await self.enable_hotspot()
         else:
-            # No SSID anywhere — skip hotspot if a non-WiFi routable IP exists (Ethernet).
-            if await self._has_network_address():
-                self._connected = True
-                self._ever_connected = True
-                logger.info("No WiFi config but routable IP found — skipping hotspot")
-            else:
-                await self.enable_hotspot()
+            await self.enable_hotspot()
 
         self._task = asyncio.create_task(self._monitor_loop())
 
@@ -166,8 +168,10 @@ class WiFiManager:
         fail_count = 0
         while self._running:
             if self._hotspot_active:
-                if not self._config.wifi_ssid and await self._has_network_address():
-                    # No configured SSID but a routable IP appeared — NM reconnected.
+                if await self._has_network_address():
+                    # A routable IP is present — NM reconnected independently of RaceFlag
+                    # (happens when config has stale credentials but NM already has the
+                    # right profile, or when the device is on Ethernet).
                     logger.info("Network address appeared while in hotspot — disabling hotspot")
                     await self.disable_hotspot()
                     self._connected = True
@@ -265,6 +269,8 @@ class WiFiManager:
             Path(HOSTAPD_CONF).write_text(HOSTAPD_CONF_CONTENT)
             Path(DNSMASQ_CONF).write_text(DNSMASQ_CONF_CONTENT)
             for cmd in [
+                # Stop NM managing wlan0 so it doesn't kill hostapd after it starts
+                ["nmcli", "device", "set", "wlan0", "managed", "no"],
                 ["ip", "addr", "add", f"{HOTSPOT_IP}/24", "dev", "wlan0"],
                 ["systemctl", "restart", "hostapd"],
                 ["systemctl", "restart", "dnsmasq"],
@@ -287,6 +293,8 @@ class WiFiManager:
                 ["systemctl", "stop", "hostapd"],
                 ["systemctl", "stop", "dnsmasq"],
                 ["ip", "addr", "del", f"{HOTSPOT_IP}/24", "dev", "wlan0"],
+                # Hand wlan0 back to NM so it can connect to WiFi
+                ["nmcli", "device", "set", "wlan0", "managed", "yes"],
             ]:
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,

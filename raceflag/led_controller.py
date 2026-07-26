@@ -96,6 +96,19 @@ class LEDController:
             except queue.Empty:
                 break
 
+    def _flush_queue_before(self, cutoff: float) -> None:
+        """Flush only items that arrived strictly before `cutoff`; keep newer ones."""
+        keepers = []
+        while not self._queue.empty():
+            try:
+                item = self._queue.get_nowait()
+                if item[1] >= cutoff:
+                    keepers.append(item)
+            except queue.Empty:
+                break
+        for item in keepers:
+            self._queue.put(item)
+
     def set_hotspot_mode(self, active: bool) -> None:
         if active:
             self._flush_queue()
@@ -129,8 +142,14 @@ class LEDController:
         else:
             self._queue.put((flag_state, time.monotonic() - self._delay_seconds))
 
-    def trigger_timed(self, flag_state: str, duration: float) -> None:
-        self._flush_queue()
+    def trigger_timed(self, flag_state: str, duration: float, flush_before: float | None = None) -> None:
+        # flush_before: when set, only discard queue items that arrived before that timestamp.
+        # Items queued after the status was received (during the LED delay window) are preserved
+        # so they can override this timed effect when their delay expires.
+        if flush_before is not None:
+            self._flush_queue_before(flush_before)
+        else:
+            self._flush_queue()
         self._timed_effect = flag_state
         self._timed_effect_expiry = time.monotonic() + duration
         self._idle_active = False

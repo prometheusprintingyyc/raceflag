@@ -2,6 +2,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
 from pathlib import Path
 
 import uvicorn
@@ -125,12 +126,16 @@ async def main() -> None:
                 led.trigger_timed(effective, _TIMED_EFFECTS[effective])
         else:
             async def _delayed_ui(s: str = status, e: str = effective, d: float = delay) -> None:
+                # Record when this status was received so trigger_timed only flushes
+                # items that predate it — items queued during the delay window (e.g. a
+                # yellow flag that arrived while waiting to fire track_clear) are preserved.
+                scheduled_at = time.monotonic()
                 await asyncio.sleep(d)
                 state.set_display_track_status(s)
                 if s in _LED_IDLE_STATUSES:
                     led.set_idle(True)
                 elif e in _TIMED_EFFECTS:
-                    led.trigger_timed(e, _TIMED_EFFECTS[e])
+                    led.trigger_timed(e, _TIMED_EFFECTS[e], flush_before=scheduled_at)
             asyncio.ensure_future(_delayed_ui())
 
     listener = F1Listener(state=state, on_track_status_change=on_flag_change)
