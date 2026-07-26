@@ -133,6 +133,17 @@ class WiFiManager:
         logger.info("WiFiManager starting (configured_ssid=%r)", self._config.wifi_ssid or "")
         self._running = True
 
+        # Ensure NM is managing wlan0 — a previous unclean shutdown may have left
+        # it unmanaged if the hotspot was active when power was lost.
+        try:
+            await asyncio.create_subprocess_exec(
+                "nmcli", "device", "set", "wlan0", "managed", "yes",
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+        except Exception:
+            pass
+
         # Always ask NM what wlan0 is currently connected to before making any
         # hotspot decision — this handles both "config is empty but NM has creds"
         # AND "config has SSID but device is already connected" (nmcli connect
