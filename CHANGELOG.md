@@ -6,6 +6,9 @@ All notable changes to RaceFlag are documented here.
 
 ## [Unreleased]
 
+### Fixed
+- `WiFiManager.stop()` now calls `disable_hotspot()` before exiting — previously if the Pi shut down while the hotspot was active, `nmcli device set wlan0 managed no` would persist across reboots and prevent NetworkManager from reconnecting to WiFi on the next boot
+
 ---
 
 ## [v0.2.20] — 2026-07-25

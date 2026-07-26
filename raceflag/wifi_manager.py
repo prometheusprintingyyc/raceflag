@@ -163,6 +163,8 @@ class WiFiManager:
         self._running = False
         if self._task:
             self._task.cancel()
+        if self._hotspot_active:
+            await self.disable_hotspot()
 
     async def _monitor_loop(self) -> None:
         fail_count = 0
