@@ -136,11 +136,21 @@ class WiFiManager:
         # Ensure NM is managing wlan0 — a previous unclean shutdown may have left
         # it unmanaged if the hotspot was active when power was lost.
         try:
-            await asyncio.create_subprocess_exec(
-                "nmcli", "device", "set", "wlan0", "managed", "yes",
-                stdout=asyncio.subprocess.DEVNULL,
+            proc = await asyncio.create_subprocess_exec(
+                "nmcli", "-g", "GENERAL.NM-MANAGED", "device", "show", "wlan0",
+                stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
             )
+            stdout, _ = await proc.communicate()
+            if stdout.decode().strip().lower() != "yes":
+                logger.info("wlan0 was unmanaged — restoring NM control and waiting 5s for reconnect")
+                proc = await asyncio.create_subprocess_exec(
+                    "nmcli", "device", "set", "wlan0", "managed", "yes",
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                await proc.communicate()
+                await asyncio.sleep(5)
         except Exception:
             pass
 
