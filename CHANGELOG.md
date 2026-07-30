@@ -6,6 +6,9 @@ All notable changes to RaceFlag are documented here.
 
 ## [Unreleased]
 
+### Fixed
+- Replay Play button now starts instantly on slow hardware (Pi Zero W) — the pre-lights-out snapshot was being processed twice (once at load time, once at play time); it is now only processed during `load_session()` and the result is reused at play time, eliminating a 10+ second blocking loop on single-core ARMv6
+
 ### Added
 - Hardware WiFi reset button support — connect a momentary pushbutton between GPIO3 and GND; hold for 10 seconds to clear saved WiFi credentials and enable the RaceFlag-Setup hotspot; LEDs show a red animation after 3 seconds of holding as confirmation, then switch to the white hotspot flash at 10 seconds; GPIO pin is configurable via `RACEFLAG_BUTTON_GPIO` env var (default 3); gracefully disables on non-Pi hardware
 
