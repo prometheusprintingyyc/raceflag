@@ -15,6 +15,7 @@ from raceflag.web_server import create_app
 from raceflag.replay_manager import ReplayManager
 from raceflag.wifi_manager import WiFiManager
 from raceflag.ota import OTAUpdater
+from raceflag.button_manager import ButtonManager
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ INSTALL_DIR = Path(os.environ.get("RACEFLAG_DIR", "/opt/raceflag"))
 GITHUB_REPO = os.environ.get("RACEFLAG_REPO", "prometheusprintingyyc/raceflag")
 DEMO_MODE = os.environ.get("DEMO_MODE", "").lower() in ("1", "true", "yes")
 WIFI_ENABLED = os.environ.get("WIFI_ENABLED", "1").lower() not in ("0", "false", "no")
+BUTTON_GPIO = int(os.environ.get("RACEFLAG_BUTTON_GPIO", "3"))
 
 
 def _make_strip(config):
@@ -84,6 +86,7 @@ async def main() -> None:
     led.start()
 
     wifi = WiFiManager(config=config, config_path=CONFIG_PATH, on_hotspot_change=led.set_hotspot_mode)
+    button = ButtonManager(gpio_pin=BUTTON_GPIO, wifi_manager=wifi, led=led)
     ota = OTAUpdater(version_file=VERSION_FILE, install_dir=INSTALL_DIR, github_repo=GITHUB_REPO)
 
     jolpica = JolpicaClient()
@@ -158,7 +161,7 @@ async def main() -> None:
     server_config = uvicorn.Config(app, host="0.0.0.0", port=8080, log_level="warning")
     server = uvicorn.Server(server_config)
 
-    tasks = [_refresh_standings_loop(jolpica, state), listener.start(), server.serve()]
+    tasks = [_refresh_standings_loop(jolpica, state), listener.start(), server.serve(), button.start()]
     if WIFI_ENABLED:
         tasks.append(wifi.start())
     await asyncio.gather(*tasks)

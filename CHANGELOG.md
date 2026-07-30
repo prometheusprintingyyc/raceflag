@@ -6,6 +6,9 @@ All notable changes to RaceFlag are documented here.
 
 ## [Unreleased]
 
+### Added
+- Hardware WiFi reset button support — connect a momentary pushbutton between GPIO3 and GND; hold for 10 seconds to clear saved WiFi credentials and enable the RaceFlag-Setup hotspot; LEDs show a red animation after 3 seconds of holding as confirmation, then switch to the white hotspot flash at 10 seconds; GPIO pin is configurable via `RACEFLAG_BUTTON_GPIO` env var (default 3); gracefully disables on non-Pi hardware
+
 ### Fixed
 - `WiFiManager.stop()` now calls `disable_hotspot()` before exiting — previously if the Pi shut down while the hotspot was active, `nmcli device set wlan0 managed no` would persist across reboots and prevent NetworkManager from reconnecting to WiFi on the next boot
 - `WiFiManager.start()` now checks whether wlan0 was unmanaged on entry — if so, it restores NM control and waits 5 s before running connection checks, giving NM time to reconnect after an unclean shutdown that left `managed no` in place; normal boots where wlan0 is already managed are unaffected

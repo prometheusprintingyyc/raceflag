@@ -340,6 +340,16 @@ class WiFiManager:
         except Exception:
             return []
 
+    async def reset(self) -> None:
+        """Clear saved WiFi credentials and enable the setup hotspot."""
+        self._config.wifi_ssid = ""
+        self._config.wifi_password = ""
+        self._hotspot_attempt_count = 0
+        if self._config_path:
+            save_config(self._config, self._config_path)
+        logger.info("WiFi credentials cleared by hardware reset button")
+        await self.enable_hotspot()
+
     async def connect(self, ssid: str, password: str) -> None:
         self._config.wifi_ssid = ssid
         self._config.wifi_password = password
