@@ -106,11 +106,14 @@ async def main() -> None:
         if status in _IDLE_STATUSES:
             _race_started = False
 
-        # Promote the first track_clear in a Race/Sprint session to race_start
+        # Promote the first track_clear in a Race/Sprint session to race_start.
+        # Use `is_active or replay_mode` because in replay the re-fire of the last
+        # pre-race TrackStatus happens before SessionStatus "Started" is processed,
+        # so is_active is still False at the moment the promotion needs to fire.
         effective = status
         if (status == "track_clear"
                 and not _race_started
-                and state.session.is_active
+                and (state.session.is_active or state.replay_mode)
                 and state.session.session_type.lower() in _RACE_SESSION_TYPES):
             _race_started = True
             effective = "race_start"

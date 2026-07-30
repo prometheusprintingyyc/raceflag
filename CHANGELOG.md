@@ -7,6 +7,7 @@ All notable changes to RaceFlag are documented here.
 ## [Unreleased]
 
 ### Fixed
+- Replay now shows the green race_start animation at lights-out instead of the red/green track_clear animation — the race_start promotion was checking `session.is_active` which is `False` at the moment the re-fire fires (before `SessionStatus "Started"` is processed), so it never promoted; condition now mirrors the existing `is_active or replay_mode` pattern used elsewhere in the same function
 - Replay Play button now starts instantly on slow hardware (Pi Zero W) — the pre-lights-out snapshot was being processed twice (once at load time, once at play time); it is now only processed during `load_session()` and the result is reused at play time, eliminating a 10+ second blocking loop on single-core ARMv6
 
 ### Added
