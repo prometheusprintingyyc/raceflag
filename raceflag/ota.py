@@ -114,6 +114,7 @@ class OTAUpdater:
                 pip = await asyncio.create_subprocess_exec(
                     "pip3", "install", "-r",
                     str(self._install_dir / "requirements.txt"),
+                    "--extra-index-url", "https://www.piwheels.org/simple/",
                     "--break-system-packages",
                     stdout=asyncio.subprocess.DEVNULL,
                     stderr=asyncio.subprocess.DEVNULL,

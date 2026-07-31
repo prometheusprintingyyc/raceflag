@@ -7,6 +7,7 @@ All notable changes to RaceFlag are documented here.
 ## [Unreleased]
 
 ### Fixed
+- OTA updater pip reinstall now includes piwheels as an extra index URL, matching the initial installer — previously OTA could silently fail to find ARMv6/ARMv7 wheels for packages that aren't on PyPI
 - Checkered flag animation now plays its full 30 seconds even when `SessionStatus "Finished"` arrives immediately after — `set_idle` was clearing `_timed_effect` which cancelled the animation; continuous animations (yellow/red/SC) still stop correctly at session end since those use `_active_animation` which is still cleared
 - Live mode now reliably fires the green race_start animation at lights-out — previously the animation only triggered if TrackStatus changed to AllClear at that exact moment; in most races TrackStatus is already AllClear throughout the formation lap so no TrackStatus event arrives at lights-out and the animation never fired; `SessionStatus "Started"` is now used as the lights-out signal for race/sprint sessions, firing `track_clear` → `race_start` promotion regardless of whether TrackStatus changed
 - Replay now shows the green race_start animation at lights-out instead of the red/green track_clear animation — the race_start promotion was checking `session.is_active` which is `False` at the moment the re-fire fires (before `SessionStatus "Started"` is processed), so it never promoted; condition now mirrors the existing `is_active or replay_mode` pattern used elsewhere in the same function
