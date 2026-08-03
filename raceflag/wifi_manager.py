@@ -379,17 +379,6 @@ class WiFiManager:
             except Exception as e:
                 logger.warning("Could not delete NM profile %r: %s", active_profile, e)
 
-        # Explicitly disconnect wlan0 before handing it to hostapd
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "nmcli", "device", "disconnect", "wlan0",
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-            await proc.communicate()
-        except Exception:
-            pass
-
         logger.info("WiFi credentials cleared by hardware reset button")
         await self.enable_hotspot()
 
