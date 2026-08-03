@@ -365,8 +365,16 @@ class WiFiManager:
         if self._config_path:
             save_config(self._config, self._config_path)
 
-        # Delete the NM connection profile so NM has nothing to auto-reconnect
-        # with after hostapd takes over wlan0.
+        logger.info("WiFi credentials cleared by hardware reset button")
+
+        # Enable hotspot first — this sets managed no immediately, locking wlan0
+        # away from NM and preserving its cached scan results. Deleting the profile
+        # before enable_hotspot() was causing NM to flush its scan cache, so the
+        # setup page scan returned empty after a reset even though it worked normally.
+        await self.enable_hotspot()
+
+        # Delete the NM profile after managed no is set — NM can't auto-reconnect
+        # while the interface is unmanaged, so the order is safe.
         if active_profile:
             try:
                 proc = await asyncio.create_subprocess_exec(
@@ -378,9 +386,6 @@ class WiFiManager:
                 logger.info("Deleted NM connection profile %r", active_profile)
             except Exception as e:
                 logger.warning("Could not delete NM profile %r: %s", active_profile, e)
-
-        logger.info("WiFi credentials cleared by hardware reset button")
-        await self.enable_hotspot()
 
     async def connect(self, ssid: str, password: str) -> None:
         self._config.wifi_ssid = ssid
