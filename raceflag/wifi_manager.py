@@ -389,6 +389,21 @@ class WiFiManager:
             save_config(self._config, self._config_path)
         self._hotspot_attempt_count = 0
         await self.disable_hotspot()
+        # Wait for NM to bring wlan0 back up after hostapd releases it, then
+        # trigger a scan so nmcli can find the SSID before attempting to connect.
+        # Without this, nmcli fails immediately with "network not found" because
+        # NM has no scan results yet and returns a non-zero exit code instantly.
+        await asyncio.sleep(3)
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "nmcli", "device", "wifi", "rescan",
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await proc.communicate()
+            await asyncio.sleep(5)
+        except Exception:
+            pass
         success = await self._connect_to_configured()
         if not success:
             await self.enable_hotspot()
