@@ -341,12 +341,55 @@ class WiFiManager:
             return []
 
     async def reset(self) -> None:
-        """Clear saved WiFi credentials and enable the setup hotspot."""
+        """Clear saved WiFi credentials, delete the NM connection profile, and enable the setup hotspot."""
+        # Read the active NM profile name before changing anything — NM's profile
+        # name is not always the same as the SSID so we query it directly.
+        active_profile = ""
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "nmcli", "-g", "GENERAL.CONNECTION", "device", "show", "wlan0",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await proc.communicate()
+            profile = stdout.decode().strip()
+            if profile and profile != "--":
+                active_profile = profile
+        except Exception:
+            pass
+
+        # Clear RaceFlag's copy of the credentials
         self._config.wifi_ssid = ""
         self._config.wifi_password = ""
         self._hotspot_attempt_count = 0
         if self._config_path:
             save_config(self._config, self._config_path)
+
+        # Delete the NM connection profile so NM has nothing to auto-reconnect
+        # with after hostapd takes over wlan0.
+        if active_profile:
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    "nmcli", "connection", "delete", active_profile,
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                await proc.communicate()
+                logger.info("Deleted NM connection profile %r", active_profile)
+            except Exception as e:
+                logger.warning("Could not delete NM profile %r: %s", active_profile, e)
+
+        # Explicitly disconnect wlan0 before handing it to hostapd
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "nmcli", "device", "disconnect", "wlan0",
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await proc.communicate()
+        except Exception:
+            pass
+
         logger.info("WiFi credentials cleared by hardware reset button")
         await self.enable_hotspot()
 
