@@ -47,6 +47,7 @@ class WiFiManager:
         self._task: asyncio.Task | None = None
         self._ever_connected = False
         self._hotspot_attempt_count = 0
+        self._scan_cache: list[str] = []
 
     def is_connected(self) -> bool:
         return self._connected
@@ -340,9 +341,17 @@ class WiFiManager:
                 stderr=asyncio.subprocess.DEVNULL,
             )
             stdout, _ = await proc.communicate()
-            return [s.strip() for s in stdout.decode().splitlines() if s.strip()]
+            results = [s.strip() for s in stdout.decode().splitlines() if s.strip()]
+            if results:
+                return results
         except Exception:
-            return []
+            pass
+        # NM returns empty when wlan0 is managed no (hotspot active) — fall back
+        # to the snapshot taken before the interface was handed to hostapd.
+        if self._hotspot_active and self._scan_cache:
+            logger.debug("Returning cached scan results (%d networks)", len(self._scan_cache))
+            return self._scan_cache
+        return []
 
     async def reset(self) -> None:
         """Clear saved WiFi credentials, delete the NM connection profile, and enable the setup hotspot."""
@@ -388,20 +397,30 @@ class WiFiManager:
             except Exception as e:
                 logger.warning("Could not disable autoconnect on NM profile %r: %s", active_profile, e)
 
-        # Refresh NM's scan cache while wlan0 is still managed — if the Pi has
-        # been connected for several minutes the cache may be stale, and once
-        # managed no is set NM can't scan anymore, causing the setup page to
-        # return an empty network list.
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "nmcli", "device", "wifi", "rescan",
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-            await proc.communicate()
-            await asyncio.sleep(3)
-        except Exception:
-            pass
+        # Snapshot available networks while NM still manages wlan0. managed no
+        # clears NM's scan cache so nmcli device wifi list returns empty after
+        # the hotspot starts. We keep our own copy and serve it as a fallback
+        # in scan() when the live query returns nothing.
+        live = await self.scan()
+        if live:
+            self._scan_cache = live
+            logger.info("Cached %d networks before hotspot takeover", len(live))
+        else:
+            # Cache stale — trigger a rescan and try once more
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    "nmcli", "device", "wifi", "rescan",
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                await proc.communicate()
+                await asyncio.sleep(3)
+            except Exception:
+                pass
+            live = await self.scan()
+            if live:
+                self._scan_cache = live
+                logger.info("Cached %d networks after rescan", len(live))
 
         logger.info("WiFi credentials cleared by hardware reset button")
         await self.enable_hotspot()
