@@ -294,6 +294,10 @@ class WiFiManager:
             for cmd in [
                 # Stop NM managing wlan0 so it doesn't kill hostapd after it starts
                 ["nmcli", "device", "set", "wlan0", "managed", "no"],
+                # Flush any lingering IPs (e.g. prior WiFi connection) so the monitor
+                # loop's _has_network_address() check doesn't see a stale routable IP
+                # and falsely conclude the Pi reconnected, which would disable the hotspot
+                ["ip", "addr", "flush", "dev", "wlan0"],
                 ["ip", "addr", "add", f"{HOTSPOT_IP}/24", "dev", "wlan0"],
                 ["systemctl", "restart", "hostapd"],
                 ["systemctl", "restart", "dnsmasq"],
