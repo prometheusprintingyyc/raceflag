@@ -388,6 +388,21 @@ class WiFiManager:
             except Exception as e:
                 logger.warning("Could not disable autoconnect on NM profile %r: %s", active_profile, e)
 
+        # Refresh NM's scan cache while wlan0 is still managed — if the Pi has
+        # been connected for several minutes the cache may be stale, and once
+        # managed no is set NM can't scan anymore, causing the setup page to
+        # return an empty network list.
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "nmcli", "device", "wifi", "rescan",
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await proc.communicate()
+            await asyncio.sleep(3)
+        except Exception:
+            pass
+
         logger.info("WiFi credentials cleared by hardware reset button")
         await self.enable_hotspot()
 
