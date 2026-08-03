@@ -27,7 +27,7 @@ INSTALL_DIR = Path(os.environ.get("RACEFLAG_DIR", "/opt/raceflag"))
 GITHUB_REPO = os.environ.get("RACEFLAG_REPO", "prometheusprintingyyc/raceflag")
 DEMO_MODE = os.environ.get("DEMO_MODE", "").lower() in ("1", "true", "yes")
 WIFI_ENABLED = os.environ.get("WIFI_ENABLED", "1").lower() not in ("0", "false", "no")
-BUTTON_GPIO = int(os.environ.get("RACEFLAG_BUTTON_GPIO", "3"))
+BUTTON_GPIO = int(os.environ.get("RACEFLAG_BUTTON_GPIO", "21"))
 
 
 def _make_strip(config):
