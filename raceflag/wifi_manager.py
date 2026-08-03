@@ -365,27 +365,27 @@ class WiFiManager:
         if self._config_path:
             save_config(self._config, self._config_path)
 
-        logger.info("WiFi credentials cleared by hardware reset button")
-
-        # Enable hotspot first — this sets managed no immediately, locking wlan0
-        # away from NM and preserving its cached scan results. Deleting the profile
-        # before enable_hotspot() was causing NM to flush its scan cache, so the
-        # setup page scan returned empty after a reset even though it worked normally.
-        await self.enable_hotspot()
-
-        # Delete the NM profile after managed no is set — NM can't auto-reconnect
-        # while the interface is unmanaged, so the order is safe.
+        # Disable autoconnect on the active NM profile rather than deleting it.
+        # Deleting before enable_hotspot() flushes NM's scan cache (scan returns
+        # empty on the setup page). Deleting after causes NM to reassert managed yes
+        # in response to the deletion, killing hostapd. Disabling autoconnect avoids
+        # both problems: NM won't reconnect automatically, the scan cache stays intact,
+        # and NM has no reason to interfere with the interface.
         if active_profile:
             try:
                 proc = await asyncio.create_subprocess_exec(
-                    "nmcli", "connection", "delete", active_profile,
+                    "nmcli", "connection", "modify", active_profile,
+                    "connection.autoconnect", "no",
                     stdout=asyncio.subprocess.DEVNULL,
                     stderr=asyncio.subprocess.DEVNULL,
                 )
                 await proc.communicate()
-                logger.info("Deleted NM connection profile %r", active_profile)
+                logger.info("Disabled autoconnect on NM profile %r", active_profile)
             except Exception as e:
-                logger.warning("Could not delete NM profile %r: %s", active_profile, e)
+                logger.warning("Could not disable autoconnect on NM profile %r: %s", active_profile, e)
+
+        logger.info("WiFi credentials cleared by hardware reset button")
+        await self.enable_hotspot()
 
     async def connect(self, ssid: str, password: str) -> None:
         self._config.wifi_ssid = ssid
