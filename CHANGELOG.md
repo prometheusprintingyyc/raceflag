@@ -4,22 +4,20 @@ All notable changes to RaceFlag are documented here.
 
 ---
 
-## [Unreleased]
-
-### Fixed
-- WiFi setup connect now waits for NetworkManager to bring wlan0 back up and complete a scan before attempting to join the network — previously nmcli failed immediately with "network not found" because NM had no scan results yet after hostapd released the interface, causing the hotspot to silently re-enable
-- OTA updater pip reinstall now includes piwheels as an extra index URL, matching the initial installer — previously OTA could silently fail to find ARMv6/ARMv7 wheels for packages that aren't on PyPI
-- Checkered flag animation now plays its full 30 seconds even when `SessionStatus "Finished"` arrives immediately after — `set_idle` was clearing `_timed_effect` which cancelled the animation; continuous animations (yellow/red/SC) still stop correctly at session end since those use `_active_animation` which is still cleared
-- Live mode now reliably fires the green race_start animation at lights-out — previously the animation only triggered if TrackStatus changed to AllClear at that exact moment; in most races TrackStatus is already AllClear throughout the formation lap so no TrackStatus event arrives at lights-out and the animation never fired; `SessionStatus "Started"` is now used as the lights-out signal for race/sprint sessions, firing `track_clear` → `race_start` promotion regardless of whether TrackStatus changed
-- Replay now shows the green race_start animation at lights-out instead of the red/green track_clear animation — the race_start promotion was checking `session.is_active` which is `False` at the moment the re-fire fires (before `SessionStatus "Started"` is processed), so it never promoted; condition now mirrors the existing `is_active or replay_mode` pattern used elsewhere in the same function
-- Replay Play button now starts instantly on slow hardware (Pi Zero W) — the pre-lights-out snapshot was being processed twice (once at load time, once at play time); it is now only processed during `load_session()` and the result is reused at play time, eliminating a 10+ second blocking loop on single-core ARMv6
+## [v0.2.21] — 2026-08-03
 
 ### Added
-- Hardware WiFi reset button support — connect a momentary pushbutton between GPIO21 and GND; hold for 10 seconds to clear saved WiFi credentials, delete the NetworkManager connection profile (preventing NM from auto-reconnecting after the hotspot starts), disconnect wlan0, and enable the RaceFlag-Setup hotspot; LEDs show a red animation after 3 seconds of holding as confirmation, then switch to the white hotspot flash at 10 seconds; GPIO pin is configurable via `RACEFLAG_BUTTON_GPIO` env var (default 21); gracefully disables on non-Pi hardware
+- Hardware WiFi reset button — connect a momentary pushbutton between GPIO21 and GND; hold for 10 seconds to clear saved WiFi credentials and enable the RaceFlag-Setup hotspot; LEDs show a red animation after 3 seconds of holding as confirmation, then switch to the white hotspot flash at 10 seconds; scan results are snapshotted before the hotspot starts so the setup page network list is populated after a reset; GPIO pin is configurable via `RACEFLAG_BUTTON_GPIO` env var (default 21); gracefully disables on non-Pi hardware
 
 ### Fixed
+- Live mode now reliably fires the green race_start animation at lights-out — previously the animation only triggered if TrackStatus changed to AllClear at that exact moment; in most races TrackStatus is already AllClear throughout the formation lap so no TrackStatus event arrives at lights-out and the animation never fired; `SessionStatus "Started"` is now used as the lights-out signal for race/sprint sessions
+- Replay now shows the green race_start animation at lights-out instead of the red/green track_clear animation — the race_start promotion was checking `session.is_active` which is `False` before `SessionStatus "Started"` is processed
+- Replay Play button now starts instantly on slow hardware (Pi Zero W) — the pre-lights-out snapshot was being processed twice (once at load time, once at play time); eliminated a 10+ second blocking loop on single-core ARMv6
+- Checkered flag animation now plays its full 30 seconds even when `SessionStatus "Finished"` arrives immediately after — `set_idle` was clearing `_timed_effect` which cancelled the animation
+- WiFi setup connect now waits for NetworkManager to bring wlan0 back up and complete a scan before attempting to join the network — previously nmcli failed immediately with "network not found" causing the hotspot to silently re-enable
 - `WiFiManager.stop()` now calls `disable_hotspot()` before exiting — previously if the Pi shut down while the hotspot was active, `nmcli device set wlan0 managed no` would persist across reboots and prevent NetworkManager from reconnecting to WiFi on the next boot
 - `WiFiManager.start()` now checks whether wlan0 was unmanaged on entry — if so, it restores NM control and waits 5 s before running connection checks, giving NM time to reconnect after an unclean shutdown that left `managed no` in place; normal boots where wlan0 is already managed are unaffected
+- OTA updater pip reinstall now includes piwheels as an extra index URL, matching the initial installer — previously OTA could silently fail to find ARMv6/ARMv7 wheels for packages that aren't on PyPI
 
 ---
 
