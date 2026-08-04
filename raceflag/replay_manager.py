@@ -63,6 +63,7 @@ class ReplayManager:
         self._pause_wall: float = 0.0
         self._sync_offset: float = 0.0
         self._task: asyncio.Task | None = None
+        self._last_pre_race_track_status: dict | None = None
 
     async def get_sessions(self, year: int = 2025) -> list[dict]:
         """Fetch Index.json and return Race and Sprint sessions."""
@@ -182,12 +183,16 @@ class ReplayManager:
 
         # Apply pre-lights-out events immediately as a snapshot so driver positions,
         # weather, and session info populate in the UI right after loading —
-        # before the user presses Play.
+        # before the user presses Play. Capture the last TrackStatus so play()
+        # can re-fire it live at lights-out without re-scanning the event list.
+        self._last_pre_race_track_status = None
         if self._on_feed:
             for race_time, topic, data in self._events:
                 if race_time >= 0:
                     break
                 self._on_feed(topic, data, True)
+                if topic == "TrackStatus":
+                    self._last_pre_race_track_status = data
 
         realtime_count = sum(1 for rt, _, _ in self._events if rt >= 0)
         logger.info(
@@ -203,29 +208,17 @@ class ReplayManager:
         self._task = asyncio.create_task(self._playback_loop(on_event))
 
     async def _playback_loop(self, on_event: Callable[[str], None] | None = None) -> None:
-        # Phase 1 — instant snapshot: replay everything before lights-out to restore
-        # pre-race state (driver list, weather, session info, tyre data) without
-        # firing any LED callbacks.
-        # Also capture the last pre-race TrackStatus so we can re-fire it live at
-        # lights-out (see below).
-        last_track_status_data: dict | None = None
-        for race_time, topic, data in self._events:
-            if race_time >= 0:
-                break
-            if self._on_feed:
-                self._on_feed(topic, data, True)
-            if topic == "TrackStatus":
-                last_track_status_data = data
-
-        # Re-fire the formation-lap TrackStatus as a live (non-snapshot) event so
+        # Re-fire the last pre-race TrackStatus as a live (non-snapshot) event so
         # the display and LED update immediately at lights-out.  Without this, races
         # where TrackStatus was already AllClear during the formation lap (e.g. Belgian
         # GP) produce no TrackStatus change at race start, leaving the UI stuck on
         # "unknown" and the race_start LED animation never firing.
-        if self._on_feed and last_track_status_data is not None:
-            self._on_feed("TrackStatus", last_track_status_data, False)
+        # The snapshot itself was already applied in load_session(), so there is
+        # nothing to re-process here — play() starts real-time immediately.
+        if self._on_feed and self._last_pre_race_track_status is not None:
+            self._on_feed("TrackStatus", self._last_pre_race_track_status, False)
 
-        # Phase 2 — real-time playback from lights-out onwards
+        # Real-time playback from lights-out onwards
         for race_time, topic, data in self._events:
             if race_time < 0:
                 continue
@@ -269,6 +262,7 @@ class ReplayManager:
         self._sync_offset = 0.0
         self._events = []
         self._session_name = ""
+        self._last_pre_race_track_status = None
 
     def set_sync_offset(self, seconds: float) -> None:
         self._sync_offset = max(-30.0, min(30.0, float(seconds)))

@@ -47,6 +47,7 @@ class WiFiManager:
         self._task: asyncio.Task | None = None
         self._ever_connected = False
         self._hotspot_attempt_count = 0
+        self._scan_cache: list[str] = []
 
     def is_connected(self) -> bool:
         return self._connected
@@ -133,6 +134,27 @@ class WiFiManager:
         logger.info("WiFiManager starting (configured_ssid=%r)", self._config.wifi_ssid or "")
         self._running = True
 
+        # Ensure NM is managing wlan0 — a previous unclean shutdown may have left
+        # it unmanaged if the hotspot was active when power was lost.
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "nmcli", "-g", "GENERAL.NM-MANAGED", "device", "show", "wlan0",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await proc.communicate()
+            if stdout.decode().strip().lower() != "yes":
+                logger.info("wlan0 was unmanaged — restoring NM control and waiting 5s for reconnect")
+                proc = await asyncio.create_subprocess_exec(
+                    "nmcli", "device", "set", "wlan0", "managed", "yes",
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                await proc.communicate()
+                await asyncio.sleep(5)
+        except Exception:
+            pass
+
         # Always ask NM what wlan0 is currently connected to before making any
         # hotspot decision — this handles both "config is empty but NM has creds"
         # AND "config has SSID but device is already connected" (nmcli connect
@@ -163,6 +185,8 @@ class WiFiManager:
         self._running = False
         if self._task:
             self._task.cancel()
+        if self._hotspot_active:
+            await self.disable_hotspot()
 
     async def _monitor_loop(self) -> None:
         fail_count = 0
@@ -271,6 +295,10 @@ class WiFiManager:
             for cmd in [
                 # Stop NM managing wlan0 so it doesn't kill hostapd after it starts
                 ["nmcli", "device", "set", "wlan0", "managed", "no"],
+                # Flush any lingering IPs (e.g. prior WiFi connection) so the monitor
+                # loop's _has_network_address() check doesn't see a stale routable IP
+                # and falsely conclude the Pi reconnected, which would disable the hotspot
+                ["ip", "addr", "flush", "dev", "wlan0"],
                 ["ip", "addr", "add", f"{HOTSPOT_IP}/24", "dev", "wlan0"],
                 ["systemctl", "restart", "hostapd"],
                 ["systemctl", "restart", "dnsmasq"],
@@ -313,9 +341,89 @@ class WiFiManager:
                 stderr=asyncio.subprocess.DEVNULL,
             )
             stdout, _ = await proc.communicate()
-            return [s.strip() for s in stdout.decode().splitlines() if s.strip()]
+            results = [s.strip() for s in stdout.decode().splitlines() if s.strip()]
+            if results:
+                return results
         except Exception:
-            return []
+            pass
+        # NM returns empty when wlan0 is managed no (hotspot active) — fall back
+        # to the snapshot taken before the interface was handed to hostapd.
+        if self._hotspot_active and self._scan_cache:
+            logger.debug("Returning cached scan results (%d networks)", len(self._scan_cache))
+            return self._scan_cache
+        return []
+
+    async def reset(self) -> None:
+        """Clear saved WiFi credentials, delete the NM connection profile, and enable the setup hotspot."""
+        # Read the active NM profile name before changing anything — NM's profile
+        # name is not always the same as the SSID so we query it directly.
+        active_profile = ""
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "nmcli", "-g", "GENERAL.CONNECTION", "device", "show", "wlan0",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await proc.communicate()
+            profile = stdout.decode().strip()
+            if profile and profile != "--":
+                active_profile = profile
+        except Exception:
+            pass
+
+        # Clear RaceFlag's copy of the credentials
+        self._config.wifi_ssid = ""
+        self._config.wifi_password = ""
+        self._hotspot_attempt_count = 0
+        if self._config_path:
+            save_config(self._config, self._config_path)
+
+        # Disable autoconnect on the active NM profile rather than deleting it.
+        # Deleting before enable_hotspot() flushes NM's scan cache (scan returns
+        # empty on the setup page). Deleting after causes NM to reassert managed yes
+        # in response to the deletion, killing hostapd. Disabling autoconnect avoids
+        # both problems: NM won't reconnect automatically, the scan cache stays intact,
+        # and NM has no reason to interfere with the interface.
+        if active_profile:
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    "nmcli", "connection", "modify", active_profile,
+                    "connection.autoconnect", "no",
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                await proc.communicate()
+                logger.info("Disabled autoconnect on NM profile %r", active_profile)
+            except Exception as e:
+                logger.warning("Could not disable autoconnect on NM profile %r: %s", active_profile, e)
+
+        # Snapshot available networks while NM still manages wlan0. managed no
+        # clears NM's scan cache so nmcli device wifi list returns empty after
+        # the hotspot starts. We keep our own copy and serve it as a fallback
+        # in scan() when the live query returns nothing.
+        live = await self.scan()
+        if live:
+            self._scan_cache = live
+            logger.info("Cached %d networks before hotspot takeover", len(live))
+        else:
+            # Cache stale — trigger a rescan and try once more
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    "nmcli", "device", "wifi", "rescan",
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                await proc.communicate()
+                await asyncio.sleep(3)
+            except Exception:
+                pass
+            live = await self.scan()
+            if live:
+                self._scan_cache = live
+                logger.info("Cached %d networks after rescan", len(live))
+
+        logger.info("WiFi credentials cleared by hardware reset button")
+        await self.enable_hotspot()
 
     async def connect(self, ssid: str, password: str) -> None:
         self._config.wifi_ssid = ssid
@@ -324,6 +432,21 @@ class WiFiManager:
             save_config(self._config, self._config_path)
         self._hotspot_attempt_count = 0
         await self.disable_hotspot()
+        # Wait for NM to bring wlan0 back up after hostapd releases it, then
+        # trigger a scan so nmcli can find the SSID before attempting to connect.
+        # Without this, nmcli fails immediately with "network not found" because
+        # NM has no scan results yet and returns a non-zero exit code instantly.
+        await asyncio.sleep(3)
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "nmcli", "device", "wifi", "rescan",
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await proc.communicate()
+            await asyncio.sleep(5)
+        except Exception:
+            pass
         success = await self._connect_to_configured()
         if not success:
             await self.enable_hotspot()

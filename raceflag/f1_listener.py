@@ -207,11 +207,22 @@ class F1Listener:
                 if self._on_track_status_change and not is_snapshot:
                     self._on_track_status_change(new_status)
                 return
-            if status_msg == "Started" and self._state.track_status in ("break", "finished"):
-                self._state.set_track_status("unknown")
-                logger.info("New session segment started — clearing break state")
-                if self._on_track_status_change and not is_snapshot:
-                    self._on_track_status_change("unknown")
+            if status_msg == "Started":
+                if self._state.track_status in ("break", "finished"):
+                    self._state.set_track_status("unknown")
+                    logger.info("New session segment started — clearing break state")
+                    if self._on_track_status_change and not is_snapshot:
+                        self._on_track_status_change("unknown")
+                elif (not is_snapshot
+                      and self._on_track_status_change
+                      and self._state.session.session_type.lower() in ("race", "sprint")
+                      and not self._state.replay_mode):
+                    # Lights-out in a live race — fire track_clear so main.py promotes
+                    # it to race_start. In replay mode _playback_loop handles this via
+                    # the last-pre-race TrackStatus re-fire instead.
+                    logger.info("Race lights-out (SessionStatus Started) — triggering race_start")
+                    self._state.set_track_status("track_clear")
+                    self._on_track_status_change("track_clear")
 
         self._ensure_active()
 

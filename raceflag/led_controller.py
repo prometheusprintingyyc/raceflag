@@ -126,7 +126,11 @@ class LEDController:
         if active:
             self._flush_queue()
             self._active_animation = ""
-            self._timed_effect = ""
+            # _timed_effect is intentionally not cleared — checkered, race_start, and
+            # track_clear should play their full duration even when the session ends
+            # immediately after (e.g. SessionStatus Finished arrives within seconds of
+            # the checkered RC message). The _run loop transitions to idle naturally
+            # when the timed effect expires.
         self._idle_active = active
 
     def trigger(self, flag_state: str) -> None:
