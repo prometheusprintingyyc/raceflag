@@ -4,6 +4,23 @@ All notable changes to RaceFlag are documented here.
 
 ---
 
+## [Unreleased]
+
+---
+
+## [v0.2.22] — 2026-08-22
+
+### Added
+- overlayroot SD card protection — root filesystem is now mounted read-only with a tmpfs overlay on boot, protecting against corruption from unexpected power loss; implemented via the `overlayroot` Debian package (installed automatically by `install.sh` and by OTA on first update); already-deployed units receive protection automatically on the first OTA update without any manual intervention
+- Persistent storage partition at `/boot/raceflag/` — config, version file, and NetworkManager WiFi profiles now live on the FAT32 boot partition which remains writable under overlayroot; existing installations are migrated automatically during OTA
+- NM connection symlink — `/etc/NetworkManager/system-connections/` is replaced with a symlink to `/boot/raceflag/nm-connections/` so saved WiFi credentials survive reboots with overlayroot active; existing profiles are copied across during migration
+- Volatile journald logging — systemd journal now uses RAM storage, eliminating continuous SD card writes from system logs
+- OTA overlayroot awareness — `OTAUpdater.apply()` detects whether overlayroot is active and routes accordingly: active units use `overlayroot-chroot` to write new files to the real underlying filesystem; units without overlayroot use the existing direct write path and then enable overlayroot as part of the same update cycle; the enabling update issues a full reboot (rather than a service restart) so protection activates immediately
+- Graceful shutdown via button — holding the GPIO reset button for 3 seconds then releasing (before the 10-second WiFi reset threshold) triggers a clean `shutdown -h now`; the red LED feedback at 3 seconds now serves as a dual-purpose confirmation: release to shut down, keep holding to reset WiFi
+- Local IP address in web UI — the unit's IP address is now shown beside the live timing feed status (e.g. `Connected / 192.168.1.42`), making it easier to find the device on the local network
+
+---
+
 ## [v0.2.21] — 2026-08-03
 
 ### Added

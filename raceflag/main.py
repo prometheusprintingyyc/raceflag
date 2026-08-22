@@ -20,9 +20,9 @@ from raceflag.button_manager import ButtonManager
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-CONFIG_PATH = Path(os.environ.get("RACEFLAG_CONFIG", "/opt/raceflag/config.json"))
+CONFIG_PATH = Path(os.environ.get("RACEFLAG_CONFIG", "/boot/raceflag/config.json"))
 EFFECTS_PATH = Path(os.environ.get("RACEFLAG_EFFECTS", "/opt/raceflag/raceflag/effects/effects.json"))
-VERSION_FILE = Path(os.environ.get("RACEFLAG_VERSION", "/opt/raceflag/version.txt"))
+VERSION_FILE = Path(os.environ.get("RACEFLAG_VERSION", "/boot/raceflag/version.txt"))
 INSTALL_DIR = Path(os.environ.get("RACEFLAG_DIR", "/opt/raceflag"))
 GITHUB_REPO = os.environ.get("RACEFLAG_REPO", "prometheusprintingyyc/raceflag")
 DEMO_MODE = os.environ.get("DEMO_MODE", "").lower() in ("1", "true", "yes")

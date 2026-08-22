@@ -156,8 +156,10 @@ function updateUI(data) {
 
   const feedEl = document.getElementById('feed-status');
   if (feedEl) {
-    feedEl.textContent = data.feed_connected ? 'Connected' : 'Disconnected';
-    feedEl.style.color = data.feed_connected ? '#00C853' : '#FF5252';
+    const status = data.feed_connected ? 'Connected' : 'Disconnected';
+    const color = data.feed_connected ? '#00C853' : '#FF5252';
+    const ipHtml = data.local_ip ? `<span style="color:#999"> / ${data.local_ip}</span>` : '';
+    feedEl.innerHTML = `<span style="color:${color}">${status}</span>${ipHtml}`;
   }
 
   renderPositions(data.driver_positions || []);
