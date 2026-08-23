@@ -8,7 +8,8 @@ All notable changes to RaceFlag are documented here.
 
 ### Fixed
 - Boot partition path corrected to `/boot/firmware/raceflag/` for Raspberry Pi OS Bookworm and later, where the FAT32 boot partition is mounted at `/boot/firmware/` instead of `/boot/`; affects `main.py`, `ota.py`, and `install.sh`
-- Replaced NM connections symlink approach with a plain directory — the symlink to `/boot/firmware/raceflag/nm-connections/` caused NetworkManager to reject profiles due to FAT32 not supporting the `chmod 600` permissions NM requires; WiFi credentials are now persisted via `config.json` on the boot partition instead
+- Replaced NM connections symlink approach with a plain directory — the symlink to `/boot/firmware/raceflag/nm-connections/` caused NetworkManager to reject profiles due to FAT32 not supporting the `chmod 600` permissions NM requires; WiFi credentials are now persisted via `config.json` on the boot partition instead (already saved there by `wifi_manager.connect()`)
+- Corrected `DEFAULT_PATH` in `config.py` to `/boot/firmware/raceflag/config.json`
 
 ---
 

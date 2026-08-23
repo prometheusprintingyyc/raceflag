@@ -2,7 +2,7 @@ from dataclasses import dataclass, asdict
 import json
 from pathlib import Path
 
-DEFAULT_PATH = Path("/opt/raceflag/config.json")
+DEFAULT_PATH = Path("/boot/firmware/raceflag/config.json")
 
 
 @dataclass
