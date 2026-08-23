@@ -11,12 +11,11 @@ logger = logging.getLogger(__name__)
 
 GITHUB_API = "https://api.github.com/repos/{repo}/releases/latest"
 
-# /boot/raceflag/ is on the FAT32 boot partition — always writable even when
+# /boot/firmware/raceflag/ is on the FAT32 boot partition — always writable even when
 # overlayroot makes the root filesystem read-only.
-BOOT_DIR = Path("/boot/raceflag")
+BOOT_DIR = Path("/boot/firmware/raceflag")
 _OVERLAYROOT_CONF = Path("/etc/overlayroot.conf")
 _NM_CONN_SRC = Path("/etc/NetworkManager/system-connections")
-_NM_CONN_DEST = BOOT_DIR / "nm-connections"
 
 
 class OTAUpdater:
@@ -93,7 +92,7 @@ class OTAUpdater:
             # on new installs; may not exist on units upgrading from older versions).
             BOOT_DIR.mkdir(parents=True, exist_ok=True)
 
-            # Download to /boot/raceflag/ — writable under both normal and overlayroot
+            # Download to /boot/firmware/raceflag/ — writable under both normal and overlayroot
             # operation, and accessible inside overlayroot-chroot via the /boot bind-mount.
             archive_path = BOOT_DIR / f"raceflag-{tag}.tar.gz"
 
@@ -112,7 +111,7 @@ class OTAUpdater:
             if not success:
                 return False
 
-            # Write version to /boot/raceflag/ — always writable regardless of overlayroot.
+            # Write version to /boot/firmware/raceflag/ — always writable regardless of overlayroot.
             self._version_file.write_text(tag.lstrip("v"))
 
             # Schedule restart. If overlayroot is not yet active, _deferred_restart will
@@ -265,7 +264,7 @@ class OTAUpdater:
     async def _setup_overlayroot(self) -> None:
         """Configure overlayroot SD card protection. Idempotent — safe to call multiple times."""
 
-        # 1. Ensure /boot/raceflag/ exists.
+        # 1. Ensure /boot/firmware/raceflag/ exists.
         BOOT_DIR.mkdir(parents=True, exist_ok=True)
 
         # 2. Migrate config.json and version.txt from old /opt/raceflag/ location if needed.
@@ -276,19 +275,13 @@ class OTAUpdater:
                 shutil.copy(old_path, new_path)
                 logger.info("Migrated %s → %s", old_path, new_path)
 
-        # 3. Migrate NM WiFi profiles to /boot/raceflag/nm-connections/ and replace
-        #    the original directory with a symlink. NM follows the symlink transparently.
-        _NM_CONN_DEST.mkdir(parents=True, exist_ok=True)
-        if _NM_CONN_SRC.exists() and not _NM_CONN_SRC.is_symlink():
-            for profile in _NM_CONN_SRC.iterdir():
-                dest = _NM_CONN_DEST / profile.name
-                if not dest.exists():
-                    shutil.copy2(profile, dest)
-            shutil.rmtree(_NM_CONN_SRC)
-            _NM_CONN_SRC.symlink_to(_NM_CONN_DEST)
-            logger.info("Migrated NM connections to /boot/raceflag/nm-connections/ and created symlink")
-        elif not _NM_CONN_SRC.exists():
-            _NM_CONN_SRC.symlink_to(_NM_CONN_DEST)
+        # 3. Ensure NM connections directory exists and remove any legacy symlink
+        #    from the previous migration approach.
+        if _NM_CONN_SRC.is_symlink():
+            _NM_CONN_SRC.unlink()
+            logger.info("Removed legacy NM connections symlink")
+        _NM_CONN_SRC.mkdir(parents=True, exist_ok=True)
+        _NM_CONN_SRC.chmod(0o700)
 
         # 4. Move journald logs to tmpfs to reduce SD card writes.
         journald_dir = Path("/etc/systemd/journald.conf.d")

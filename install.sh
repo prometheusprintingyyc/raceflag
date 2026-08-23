@@ -2,7 +2,7 @@
 set -euo pipefail
 
 INSTALL_DIR="/opt/raceflag"
-BOOT_DIR="/boot/raceflag"
+BOOT_DIR="/boot/firmware/raceflag"
 SERVICE_FILE="/etc/systemd/system/raceflag.service"
 REPO_URL="https://github.com/prometheusprintingyyc/raceflag"
 
@@ -70,20 +70,17 @@ EOF
   echo "Created default config at $CONFIG"
 fi
 
-# 7. Migrate NetworkManager WiFi profiles to /boot so they survive overlayroot reboots.
-#    Replace /etc/NetworkManager/system-connections/ with a symlink — NM is unaware.
-NM_CONN_SRC="/etc/NetworkManager/system-connections"
-NM_CONN_DEST="$BOOT_DIR/nm-connections"
-mkdir -p "$NM_CONN_DEST"
+# 7. Ensure NM connections directory exists (WiFi credentials are stored in
+#    config.json on the boot partition and applied by the app on startup).
+mkdir -p /etc/NetworkManager/system-connections
+chmod 700 /etc/NetworkManager/system-connections
 
-if [ -d "$NM_CONN_SRC" ] && [ ! -L "$NM_CONN_SRC" ]; then
-  # Copy existing profiles to boot partition before replacing the directory
-  cp -r "$NM_CONN_SRC/." "$NM_CONN_DEST/" 2>/dev/null || true
-  rm -rf "$NM_CONN_SRC"
-  ln -sf "$NM_CONN_DEST" "$NM_CONN_SRC"
-  echo "Migrated NM connections to $NM_CONN_DEST"
-elif [ ! -e "$NM_CONN_SRC" ]; then
-  ln -sf "$NM_CONN_DEST" "$NM_CONN_SRC"
+# Remove any legacy symlink from the previous NM migration approach.
+if [ -L /etc/NetworkManager/system-connections ]; then
+  rm /etc/NetworkManager/system-connections
+  mkdir -p /etc/NetworkManager/system-connections
+  chmod 700 /etc/NetworkManager/system-connections
+  echo "Removed legacy NM symlink"
 fi
 
 # 8. Move systemd journal logs to RAM to reduce SD card writes.
