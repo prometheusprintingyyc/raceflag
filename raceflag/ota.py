@@ -14,7 +14,7 @@ GITHUB_API = "https://api.github.com/repos/{repo}/releases/latest"
 # /boot/firmware/raceflag/ is on the FAT32 boot partition — always writable even when
 # overlayroot makes the root filesystem read-only.
 BOOT_DIR = Path("/boot/firmware/raceflag")
-_OVERLAYROOT_CONF = Path("/etc/overlayroot.conf")
+_OVERLAYROOT_CONF = Path("/etc/overlayroot.local.conf")
 _NM_CONN_SRC = Path("/etc/NetworkManager/system-connections")
 
 
@@ -303,7 +303,13 @@ class OTAUpdater:
                 stderr=asyncio.subprocess.DEVNULL,
             )
             await asyncio.wait_for(proc.communicate(), timeout=300)
-            _OVERLAYROOT_CONF.write_text('overlayroot="tmpfs"\noverlayroot_cfgdisk="disabled"\n')
+            _OVERLAYROOT_CONF.write_text('overlayroot="tmpfs"\n')
+            initramfs = await asyncio.create_subprocess_exec(
+                "update-initramfs", "-u",
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await asyncio.wait_for(initramfs.communicate(), timeout=120)
             logger.info("overlayroot installed and configured — will activate on next boot")
         except asyncio.TimeoutError:
             logger.error("overlayroot install timed out — SD card protection not enabled")

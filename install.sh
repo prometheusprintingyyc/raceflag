@@ -93,9 +93,9 @@ EOF
 # 9. Configure overlayroot to protect the root filesystem from SD card corruption.
 #    Root becomes read-only with a tmpfs overlay; writes are lost on reboot unless
 #    they target /boot/raceflag/ or go through overlayroot-chroot (used by OTA).
-if [ ! -f /etc/overlayroot.conf ]; then
-  echo 'overlayroot="tmpfs"' > /etc/overlayroot.conf
-  echo 'overlayroot_cfgdisk="disabled"' >> /etc/overlayroot.conf
+if [ ! -f /etc/overlayroot.local.conf ]; then
+  echo 'overlayroot="tmpfs"' > /etc/overlayroot.local.conf
+  update-initramfs -u
   echo "overlayroot configured — will activate on next reboot"
 fi
 
