@@ -232,6 +232,10 @@ class WiFiManager:
                     threshold = RECONNECT_FAIL_THRESHOLD if self._ever_connected else CONNECT_FAIL_THRESHOLD
                     if fail_count >= threshold:
                         logger.warning("WiFi unreachable — starting hotspot")
+                        live = await self.scan()
+                        if live:
+                            self._scan_cache = live
+                            logger.info("Cached %d networks before hotspot fallback", len(live))
                         await self.enable_hotspot()
                         fail_count = 0
                 await asyncio.sleep(30)
