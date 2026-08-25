@@ -175,8 +175,16 @@ class WiFiManager:
             # NM not currently connected but we have credentials — try to connect.
             success = await self._connect_to_configured()
             if not success:
+                live = await self.scan()
+                if live:
+                    self._scan_cache = live
+                    logger.info("Cached %d networks before hotspot fallback", len(live))
                 await self.enable_hotspot()
         else:
+            live = await self.scan()
+            if live:
+                self._scan_cache = live
+                logger.info("Cached %d networks before hotspot start", len(live))
             await self.enable_hotspot()
 
         self._task = asyncio.create_task(self._monitor_loop())

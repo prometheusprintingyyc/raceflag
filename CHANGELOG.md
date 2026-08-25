@@ -10,7 +10,7 @@ All notable changes to RaceFlag are documented here.
 - Boot partition path corrected to `/boot/firmware/raceflag/` for Raspberry Pi OS Bookworm and later, where the FAT32 boot partition is mounted at `/boot/firmware/` instead of `/boot/`; affects `main.py`, `ota.py`, and `install.sh`
 - Replaced NM connections symlink approach with a plain directory — the symlink to `/boot/firmware/raceflag/nm-connections/` caused NetworkManager to reject profiles due to FAT32 not supporting the `chmod 600` permissions NM requires; WiFi credentials are now persisted via `config.json` on the boot partition instead (already saved there by `wifi_manager.connect()`)
 - Corrected `DEFAULT_PATH` in `config.py` to `/boot/firmware/raceflag/config.json`
-- WiFi scan cache now populated before hotspot fallback when connectivity is lost — previously only the hardware reset button path cached available networks, leaving the setup page empty if the unit fell back to hotspot due to network disappearing
+- WiFi scan cache now populated before hotspot fallback in all paths — connectivity loss during normal operation, failed connect on boot, and fresh install with no credentials; previously only the hardware reset button path cached available networks, leaving the setup page empty in other scenarios
 - Fixed overlayroot activation — `install.sh` and `ota.py` now write to `/etc/overlayroot.local.conf` instead of `/etc/overlayroot.conf` (which is a dpkg-managed conffile that resets on install); `update-initramfs -u` is now run after writing the conf so the initramfs includes the overlayroot hook on next boot
 
 ---
