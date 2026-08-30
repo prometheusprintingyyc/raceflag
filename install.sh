@@ -44,7 +44,7 @@ pip3 install -r "$INSTALL_DIR/requirements.txt" \
   --extra-index-url https://www.piwheels.org/simple/ \
   --break-system-packages
 
-# 6. Set up /boot/raceflag/ as persistent storage for config and version.
+# 6. Set up /boot/firmware/raceflag/ as persistent storage for config and version.
 #    This directory lives on the FAT32 boot partition, which remains writable even
 #    when overlayroot makes the root filesystem read-only.
 mkdir -p "$BOOT_DIR"
@@ -92,7 +92,7 @@ EOF
 
 # 9. Configure overlayroot to protect the root filesystem from SD card corruption.
 #    Root becomes read-only with a tmpfs overlay; writes are lost on reboot unless
-#    they target /boot/raceflag/ or go through overlayroot-chroot (used by OTA).
+#    they target /boot/firmware/raceflag/ or go through overlayroot-chroot (used by OTA).
 if [ ! -f /etc/overlayroot.local.conf ]; then
   echo 'overlayroot="tmpfs"' > /etc/overlayroot.local.conf
   update-initramfs -u

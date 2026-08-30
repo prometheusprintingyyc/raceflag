@@ -9,6 +9,9 @@ All notable changes to RaceFlag are documented here.
 ### Changed
 - overlayroot startup check now logs its result in all cases — `overlayroot active — SD card protection OK` on healthy boots, `overlayroot configured — SD card protection active on next reboot` if configured but not yet active
 
+### Fixed
+- Corrected two stale `/boot/raceflag/` path references in `install.sh` comments to `/boot/firmware/raceflag/`
+
 ---
 
 ### Added
