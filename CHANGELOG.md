@@ -6,6 +6,11 @@ All notable changes to RaceFlag are documented here.
 
 ## [Unreleased]
 
+### Changed
+- overlayroot startup check now logs its result in all cases — `overlayroot active — SD card protection OK` on healthy boots, `overlayroot configured — SD card protection active on next reboot` if configured but not yet active
+
+---
+
 ### Added
 - On every boot, RaceFlag now checks whether overlayroot SD card protection is configured and sets it up automatically if not — units updated from v0.2.21 via the old OTA path (which did not call `_setup_overlayroot`) will activate SD card protection on their first boot of new code without any manual intervention; units that already have overlayroot active skip the check instantly
 

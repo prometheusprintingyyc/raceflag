@@ -120,12 +120,14 @@ async def _ensure_overlayroot(ota: OTAUpdater) -> None:
         )
         await proc.communicate()
         if proc.returncode == 0:
+            logger.info("overlayroot active — SD card protection OK")
             return
     except Exception:
         pass
 
     # Already configured (will activate on next reboot) — nothing to do.
     if Path("/etc/overlayroot.local.conf").exists():
+        logger.info("overlayroot configured — SD card protection active on next reboot")
         return
 
     # Not configured. Wait for WiFi to be ready (apt-get needs network).
