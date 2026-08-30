@@ -186,8 +186,10 @@ body {
 }
 .seg-toggle:not(:has(input:checked)) .seg-off { color: #e10600; }
 .seg-toggle:has(input:checked) .seg-on { color: #00C853; }
-.btn-shutdown { background: #2a2a2a; border: 1px solid #e10600; color: #e10600; border-radius: 6px; padding: 8px 16px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.btn-row { display: flex; gap: 8px; width: 100%; }
+.btn-shutdown { background: #2a2a2a; border: 1px solid #e10600; color: #e10600; border-radius: 6px; padding: 8px 10px; font-size: 12px; font-weight: 700; cursor: pointer; flex: 1; text-align: center; }
 .btn-shutdown:disabled { opacity: 0.5; cursor: default; }
+.btn-neutral { background: #2a2a2a; border: 1px solid #555; color: #aaa; border-radius: 6px; padding: 8px 10px; font-size: 12px; font-weight: 700; cursor: pointer; text-decoration: none; display: inline-block; flex: 1; text-align: center; }
 
 .weather-panel { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; margin: 0 12px 12px; overflow: hidden; }
 .weather-row { display: grid; grid-template-columns: repeat(5, 1fr); }
