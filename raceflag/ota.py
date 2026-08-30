@@ -283,7 +283,30 @@ class OTAUpdater:
         _NM_CONN_SRC.mkdir(parents=True, exist_ok=True)
         _NM_CONN_SRC.chmod(0o700)
 
-        # 4. Move journald logs to tmpfs to reduce SD card writes.
+        # 4. Update service file if it still points config/version to the old /opt/raceflag/ paths.
+        #    Units installed before v0.2.26 have these hardcoded; update them so the service reads
+        #    and writes to the boot partition after the next reboot.
+        service_file = Path("/etc/systemd/system/raceflag.service")
+        if service_file.exists():
+            content = service_file.read_text()
+            updated = content.replace(
+                "Environment=RACEFLAG_CONFIG=/opt/raceflag/config.json",
+                "Environment=RACEFLAG_CONFIG=/boot/firmware/raceflag/config.json",
+            ).replace(
+                "Environment=RACEFLAG_VERSION=/opt/raceflag/version.txt",
+                "Environment=RACEFLAG_VERSION=/boot/firmware/raceflag/version.txt",
+            )
+            if updated != content:
+                service_file.write_text(updated)
+                proc = await asyncio.create_subprocess_exec(
+                    "systemctl", "daemon-reload",
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                await proc.wait()
+                logger.info("Updated service file paths to boot partition")
+
+        # 5. Move journald logs to tmpfs to reduce SD card writes.
         journald_dir = Path("/etc/systemd/journald.conf.d")
         journald_dir.mkdir(parents=True, exist_ok=True)
         journald_conf = journald_dir / "raceflag-volatile.conf"
@@ -291,7 +314,7 @@ class OTAUpdater:
             journald_conf.write_text("[Journal]\nStorage=volatile\n")
             logger.info("Configured journald to use volatile (RAM) storage")
 
-        # 5. Install and enable overlayroot (skipped if already configured).
+        # 6. Install and enable overlayroot (skipped if already configured).
         if _OVERLAYROOT_CONF.exists():
             logger.info("overlayroot already configured — skipping install")
             return

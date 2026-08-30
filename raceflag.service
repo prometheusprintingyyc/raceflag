@@ -6,9 +6,9 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=/opt/raceflag
-Environment=RACEFLAG_CONFIG=/opt/raceflag/config.json
+Environment=RACEFLAG_CONFIG=/boot/firmware/raceflag/config.json
 Environment=RACEFLAG_EFFECTS=/opt/raceflag/raceflag/effects/effects.json
-Environment=RACEFLAG_VERSION=/opt/raceflag/version.txt
+Environment=RACEFLAG_VERSION=/boot/firmware/raceflag/version.txt
 Environment=RACEFLAG_DIR=/opt/raceflag
 ExecStart=/usr/bin/python3 -m raceflag.main
 Restart=always

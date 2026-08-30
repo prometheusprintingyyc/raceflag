@@ -4,6 +4,14 @@ All notable changes to RaceFlag are documented here.
 
 ---
 
+## [v0.2.26] — 2026-08-30
+
+### Fixed
+- Service file (`raceflag.service`) now uses `/boot/firmware/raceflag/` for `RACEFLAG_CONFIG` and `RACEFLAG_VERSION` — units installed before v0.2.26 had these hardcoded to `/opt/raceflag/`, causing config and version reads/writes to bypass the boot partition entirely
+- OTA overlayroot setup now updates the service file on existing installs when the old paths are detected, so field units get corrected paths on their next OTA without a manual reinstall
+
+---
+
 ## [v0.2.25] — 2026-08-30
 
 ### Fixed
