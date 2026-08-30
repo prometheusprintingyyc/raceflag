@@ -4,7 +4,7 @@ All notable changes to RaceFlag are documented here.
 
 ---
 
-## [Unreleased]
+## [v0.2.23] — 2026-08-30
 
 ### Added
 - User Manual button in settings panel — opens raceflag.prometheusprinting.ca in a new tab; sits between Shut Down and Send Logs in a neutral grey style
