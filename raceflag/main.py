@@ -70,6 +70,9 @@ async def _refresh_standings_loop(client: JolpicaClient, state: AppState) -> Non
         if drivers or constructors:
             state.set_standings(drivers, constructors)
             state.set_next_race(next_race)
+        # Retry in 60 s if either standings fetch returned empty (e.g. network
+        # not ready at startup); only wait the full 4-hour cycle when both succeeded.
+        if drivers and constructors:
             await asyncio.sleep(4 * 3600)
         else:
             await asyncio.sleep(60)
