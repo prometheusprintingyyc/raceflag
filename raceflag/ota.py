@@ -188,6 +188,14 @@ class OTAUpdater:
             f"pip3 install -r {install}/requirements.txt"
             f" --extra-index-url https://www.piwheels.org/simple/"
             f" --break-system-packages -q 2>/dev/null || true\n"
+            # Update service file on the real underlying filesystem so the corrected
+            # paths survive the next reboot (chroot writes bypass the tmpfs overlay).
+            "sed -i"
+            " 's|RACEFLAG_CONFIG=/opt/raceflag/config.json"
+            "|RACEFLAG_CONFIG=/boot/firmware/raceflag/config.json|g;"
+            " s|RACEFLAG_VERSION=/opt/raceflag/version.txt"
+            "|RACEFLAG_VERSION=/boot/firmware/raceflag/version.txt|g'"
+            " /etc/systemd/system/raceflag.service 2>/dev/null || true\n"
         )
 
         try:
@@ -253,7 +261,28 @@ class OTAUpdater:
             await proc.wait()
         else:
             # overlayroot already active — pip ran inside the chroot in _apply_with_chroot.
-            # Just restart the service to pick up the new code.
+            # Patch the overlay copy of the service file (chroot already fixed the real FS copy)
+            # so the corrected paths take effect on this boot without waiting for a reboot.
+            _svc = Path("/etc/systemd/system/raceflag.service")
+            if _svc.exists():
+                content = _svc.read_text()
+                updated = content.replace(
+                    "Environment=RACEFLAG_CONFIG=/opt/raceflag/config.json",
+                    "Environment=RACEFLAG_CONFIG=/boot/firmware/raceflag/config.json",
+                ).replace(
+                    "Environment=RACEFLAG_VERSION=/opt/raceflag/version.txt",
+                    "Environment=RACEFLAG_VERSION=/boot/firmware/raceflag/version.txt",
+                )
+                if updated != content:
+                    _svc.write_text(updated)
+                    reload = await asyncio.create_subprocess_exec(
+                        "systemctl", "daemon-reload",
+                        stdout=asyncio.subprocess.DEVNULL,
+                        stderr=asyncio.subprocess.DEVNULL,
+                    )
+                    await reload.wait()
+                    logger.info("Updated service file paths to boot partition")
+            # Restart the service to pick up the new code and corrected environment.
             proc = await asyncio.create_subprocess_exec(
                 "systemctl", "restart", "raceflag",
                 stdout=asyncio.subprocess.DEVNULL,

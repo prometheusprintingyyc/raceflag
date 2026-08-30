@@ -4,6 +4,13 @@ All notable changes to RaceFlag are documented here.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- OTA on units with overlayroot already active now updates the service file both on the real underlying filesystem (via overlayroot-chroot, persists across reboots) and on the live overlay (so the corrected `RACEFLAG_CONFIG` and `RACEFLAG_VERSION` paths take effect immediately without a reboot)
+
+---
+
 ## [v0.2.26] — 2026-08-30
 
 ### Fixed
