@@ -156,8 +156,10 @@ function updateUI(data) {
 
   const feedEl = document.getElementById('feed-status');
   if (feedEl) {
-    feedEl.textContent = data.feed_connected ? 'Connected' : 'Disconnected';
-    feedEl.style.color = data.feed_connected ? '#00C853' : '#FF5252';
+    const status = data.feed_connected ? 'Connected' : 'Disconnected';
+    const color = data.feed_connected ? '#00C853' : '#FF5252';
+    const ipHtml = data.local_ip ? `<span style="color:#999"> / ${data.local_ip}</span>` : '';
+    feedEl.innerHTML = `<span style="color:${color}">${status}</span>${ipHtml}`;
   }
 
   renderPositions(data.driver_positions || []);
@@ -453,44 +455,37 @@ async function _pollLedState() {
 
 function _setDemoMode(enabled) {
   const panel = document.getElementById('led-strip-panel');
-  const btn = document.getElementById('btn-demo-mode');
+  const input = document.getElementById('demo-mode-input');
   if (enabled) {
     panel.classList.add('visible');
     if (!_ledPollInterval) _ledPollInterval = setInterval(_pollLedState, 100);
-    if (btn) { btn.textContent = 'ON'; btn.classList.add('on'); }
+    if (input) input.checked = true;
   } else {
     panel.classList.remove('visible');
     if (_ledPollInterval) { clearInterval(_ledPollInterval); _ledPollInterval = null; }
-    if (btn) { btn.textContent = 'OFF'; btn.classList.remove('on'); }
+    if (input) input.checked = false;
   }
 }
 
 function _setLedEnabled(enabled) {
-  const btn = document.getElementById('btn-led-toggle');
-  if (!btn) return;
-  btn.textContent = enabled ? 'ON' : 'OFF';
-  if (enabled) btn.classList.add('on');
-  else btn.classList.remove('on');
+  const input = document.getElementById('led-toggle-input');
+  if (input) input.checked = enabled;
 }
 
-document.getElementById('btn-demo-mode').addEventListener('click', async () => {
-  const btn = document.getElementById('btn-demo-mode');
-  const enabling = !btn.classList.contains('on');
+document.getElementById('demo-mode-input').addEventListener('change', async (e) => {
   await fetch('/api/config/demo-mode', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ enabled: enabling }),
+    body: JSON.stringify({ enabled: e.target.checked }),
   });
   await fetchState();
 });
 
-document.getElementById('btn-led-toggle').addEventListener('click', async () => {
-  const btn = document.getElementById('btn-led-toggle');
-  const enabling = !btn.classList.contains('on');
+document.getElementById('led-toggle-input').addEventListener('change', async (e) => {
   await fetch('/api/led/enabled', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ enabled: enabling }),
+    body: JSON.stringify({ enabled: e.target.checked }),
   });
   await fetchState();
 });

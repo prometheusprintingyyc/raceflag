@@ -1,9 +1,19 @@
 from __future__ import annotations
 
+import socket
 from dataclasses import dataclass, field, asdict, replace
 from datetime import datetime, timezone
 from threading import Lock
 from typing import List, Optional
+
+
+def _get_local_ip() -> str:
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
+    except Exception:
+        return ""
 
 
 TEAM_COLORS: dict[str, str] = {
@@ -268,6 +278,7 @@ class AppState:
                 "demo_mode": self.demo_mode,
                 "led_enabled": self.led_enabled,
                 "feed_connected": self.feed_connected,
+                "local_ip": _get_local_ip(),
                 "replay_mode": self.replay_mode,
                 "replay_status": self.replay_status,
                 "replay_session_name": self.replay_session_name,

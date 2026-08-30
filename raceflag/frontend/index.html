@@ -192,11 +192,21 @@
       </div>
       <div class="settings-row">
         <span class="settings-label">Demo Mode</span>
-        <button class="btn-toggle" id="btn-demo-mode">OFF</button>
+        <label class="seg-toggle" id="btn-demo-mode">
+          <input type="checkbox" id="demo-mode-input">
+          <div class="seg-highlight"></div>
+          <span class="seg-label seg-off">OFF</span>
+          <span class="seg-label seg-on">ON</span>
+        </label>
       </div>
       <div class="settings-row">
         <span class="settings-label">LED Strip</span>
-        <button class="btn-toggle" id="btn-led-toggle">ON</button>
+        <label class="seg-toggle" id="btn-led-toggle">
+          <input type="checkbox" id="led-toggle-input">
+          <div class="seg-highlight"></div>
+          <span class="seg-label seg-off">OFF</span>
+          <span class="seg-label seg-on">ON</span>
+        </label>
       </div>
       <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:8px">
         <span class="settings-label">Test Effects</span>
@@ -212,8 +222,11 @@
         </div>
       </div>
       <div class="settings-row">
-        <button class="btn-shutdown" id="btn-shutdown">Shut Down</button>
-        <button class="btn-shutdown" id="btn-send-logs">Send Logs</button>
+        <div class="btn-row">
+          <button class="btn-shutdown" id="btn-shutdown">Shut Down</button>
+          <a class="btn-neutral" href="https://raceflag.prometheusprinting.ca/" target="_blank">User Manual</a>
+          <button class="btn-shutdown" id="btn-send-logs">Send Logs</button>
+        </div>
       </div>
     </div>
   </div>

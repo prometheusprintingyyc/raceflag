@@ -4,6 +4,37 @@ All notable changes to RaceFlag are documented here.
 
 ---
 
+## [v0.2.23] — 2026-08-30
+
+### Added
+- User Manual button in settings panel — opens raceflag.prometheusprinting.ca in a new tab; sits between Shut Down and Send Logs in a neutral grey style
+
+### Changed
+- Demo Mode and LED Strip settings now use a sliding segmented ON/OFF control — the active state pill slides between OFF (red highlight) and ON (green highlight) to give a clearer indication of current state
+
+### Fixed
+- Driver standings now retry every 60 seconds until both driver and constructor fetches succeed — previously if driver standings failed silently at startup (e.g. DNS not ready yet) but constructor standings succeeded, the loop would sleep 4 hours before retrying, leaving the drivers tab empty until the next cycle
+- Boot partition path corrected to `/boot/firmware/raceflag/` for Raspberry Pi OS Bookworm and later, where the FAT32 boot partition is mounted at `/boot/firmware/` instead of `/boot/`; affects `main.py`, `ota.py`, and `install.sh`
+- Replaced NM connections symlink approach with a plain directory — the symlink to `/boot/firmware/raceflag/nm-connections/` caused NetworkManager to reject profiles due to FAT32 not supporting the `chmod 600` permissions NM requires; WiFi credentials are now persisted via `config.json` on the boot partition instead (already saved there by `wifi_manager.connect()`)
+- Corrected `DEFAULT_PATH` in `config.py` to `/boot/firmware/raceflag/config.json`
+- WiFi scan cache now populated before hotspot fallback in all paths — connectivity loss during normal operation, failed connect on boot, and fresh install with no credentials; previously only the hardware reset button path cached available networks, leaving the setup page empty in other scenarios
+- Fixed overlayroot activation — `install.sh` and `ota.py` now write to `/etc/overlayroot.local.conf` instead of `/etc/overlayroot.conf` (which is a dpkg-managed conffile that resets on install); `update-initramfs -u` is now run after writing the conf so the initramfs includes the overlayroot hook on next boot
+
+---
+
+## [v0.2.22] — 2026-08-22
+
+### Added
+- overlayroot SD card protection — root filesystem is now mounted read-only with a tmpfs overlay on boot, protecting against corruption from unexpected power loss; implemented via the `overlayroot` Debian package (installed automatically by `install.sh` and by OTA on first update); already-deployed units receive protection automatically on the first OTA update without any manual intervention
+- Persistent storage partition at `/boot/raceflag/` — config, version file, and NetworkManager WiFi profiles now live on the FAT32 boot partition which remains writable under overlayroot; existing installations are migrated automatically during OTA
+- NM connection symlink — `/etc/NetworkManager/system-connections/` is replaced with a symlink to `/boot/raceflag/nm-connections/` so saved WiFi credentials survive reboots with overlayroot active; existing profiles are copied across during migration
+- Volatile journald logging — systemd journal now uses RAM storage, eliminating continuous SD card writes from system logs
+- OTA overlayroot awareness — `OTAUpdater.apply()` detects whether overlayroot is active and routes accordingly: active units use `overlayroot-chroot` to write new files to the real underlying filesystem; units without overlayroot use the existing direct write path and then enable overlayroot as part of the same update cycle; the enabling update issues a full reboot (rather than a service restart) so protection activates immediately
+- Graceful shutdown via button — holding the GPIO reset button for 3 seconds then releasing (before the 10-second WiFi reset threshold) triggers a clean `shutdown -h now`; the red LED feedback at 3 seconds now serves as a dual-purpose confirmation: release to shut down, keep holding to reset WiFi
+- Local IP address in web UI — the unit's IP address is now shown beside the live timing feed status (e.g. `Connected / 192.168.1.42`), making it easier to find the device on the local network
+
+---
+
 ## [v0.2.21] — 2026-08-03
 
 ### Added

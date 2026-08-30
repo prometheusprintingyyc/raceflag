@@ -165,14 +165,31 @@ body {
 .led-pixel { flex: 1; height: 16px; border-radius: 3px; min-width: 0; background: #111; }
 .led-segment-divider { width: 6px; flex-shrink: 0; height: 24px; background: #1e1e1e; border-left: 1px solid #333; border-right: 1px solid #333; }
 
-.btn-toggle {
-  background: #2a2a2a; border: 1px solid #444; color: #555;
-  border-radius: 4px; padding: 5px 14px; font-size: 11px;
-  font-weight: 700; cursor: pointer; letter-spacing: 0.5px;
+.seg-toggle {
+  position: relative; display: inline-flex; background: #2a2a2a;
+  border: none; border-radius: 5px; padding: 3px;
+  cursor: pointer; user-select: none; flex-shrink: 0;
 }
-.btn-toggle.on { background: rgba(0,200,83,0.12); border-color: #00C853; color: #00C853; }
-.btn-shutdown { background: #2a2a2a; border: 1px solid #e10600; color: #e10600; border-radius: 6px; padding: 8px 16px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.seg-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+.seg-highlight {
+  position: absolute; top: 3px; left: 3px; width: calc(50% - 3px); bottom: 3px;
+  background: rgba(225,6,0,0.12); border: 1px solid #e10600; border-radius: 5px;
+  transition: transform 0.18s cubic-bezier(0.4,0,0.2,1), background 0.18s, border-color 0.18s;
+}
+.seg-toggle input:checked ~ .seg-highlight {
+  transform: translateX(100%); background: rgba(0,200,83,0.15); border-color: #00C853;
+}
+.seg-label {
+  position: relative; z-index: 1; padding: 4px 12px; font-size: 11px;
+  font-weight: 700; letter-spacing: 0.5px; color: #555;
+  transition: color 0.18s; min-width: 36px; text-align: center; line-height: 1.4;
+}
+.seg-toggle:not(:has(input:checked)) .seg-off { color: #e10600; }
+.seg-toggle:has(input:checked) .seg-on { color: #00C853; }
+.btn-row { display: flex; gap: 8px; width: 100%; }
+.btn-shutdown { background: #2a2a2a; border: 1px solid #e10600; color: #e10600; border-radius: 6px; padding: 8px 10px; font-size: 12px; font-weight: 700; cursor: pointer; flex: 1; text-align: center; }
 .btn-shutdown:disabled { opacity: 0.5; cursor: default; }
+.btn-neutral { background: #2a2a2a; border: 1px solid #555; color: #aaa; border-radius: 6px; padding: 8px 10px; font-size: 12px; font-weight: 700; cursor: pointer; text-decoration: none; display: inline-block; flex: 1; text-align: center; }
 
 .weather-panel { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; margin: 0 12px 12px; overflow: hidden; }
 .weather-row { display: grid; grid-template-columns: repeat(5, 1fr); }

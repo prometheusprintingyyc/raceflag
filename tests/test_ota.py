@@ -59,3 +59,21 @@ def test_is_newer_version_same_is_not_newer(updater):
 
 def test_is_newer_version_older_is_not_newer(updater):
     assert updater._is_newer("v0.0.9", "0.1.0") is False
+
+
+@pytest.mark.asyncio
+async def test_is_overlayroot_active_returns_false_when_not_active(mocker: MockerFixture):
+    mock_proc = mocker.AsyncMock()
+    mock_proc.returncode = 1
+    mock_proc.communicate = mocker.AsyncMock(return_value=(b"", b""))
+    mocker.patch("asyncio.create_subprocess_exec", return_value=mock_proc)
+    assert await OTAUpdater._is_overlayroot_active() is False
+
+
+@pytest.mark.asyncio
+async def test_is_overlayroot_active_returns_true_when_active(mocker: MockerFixture):
+    mock_proc = mocker.AsyncMock()
+    mock_proc.returncode = 0
+    mock_proc.communicate = mocker.AsyncMock(return_value=(b"", b""))
+    mocker.patch("asyncio.create_subprocess_exec", return_value=mock_proc)
+    assert await OTAUpdater._is_overlayroot_active() is True
