@@ -4,6 +4,13 @@ All notable changes to RaceFlag are documented here.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- Units updated from v0.2.21 via the old OTA path now migrate `config.json` and `version.txt` from `/opt/raceflag/` to `/boot/firmware/raceflag/` on first boot — without this, WiFi credentials were lost after the update and the unit fell into hotspot mode, making it unreachable
+
+---
+
 ## [v0.2.23] — 2026-08-30
 
 ### Added

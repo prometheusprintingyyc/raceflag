@@ -2,6 +2,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import shutil
 import time
 from pathlib import Path
 
@@ -28,6 +29,32 @@ GITHUB_REPO = os.environ.get("RACEFLAG_REPO", "prometheusprintingyyc/raceflag")
 DEMO_MODE = os.environ.get("DEMO_MODE", "").lower() in ("1", "true", "yes")
 WIFI_ENABLED = os.environ.get("WIFI_ENABLED", "1").lower() not in ("0", "false", "no")
 BUTTON_GPIO = int(os.environ.get("RACEFLAG_BUTTON_GPIO", "21"))
+
+
+def _migrate_legacy_config() -> None:
+    """Migrate config and version from /opt/raceflag/ to /boot/firmware/raceflag/.
+
+    Units updated from v0.2.21 via the old OTA path land here with the new code
+    running but config still at the old location. Without this migration the unit
+    starts with an empty SSID and falls into hotspot mode, losing WiFi access.
+    """
+    boot_dir = CONFIG_PATH.parent
+    if not boot_dir.exists():
+        try:
+            boot_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            logger.warning("Could not create boot config dir: %s", e)
+            return
+
+    for filename in ("config.json", "version.txt"):
+        new_path = boot_dir / filename
+        old_path = INSTALL_DIR / filename
+        if not new_path.exists() and old_path.exists():
+            try:
+                shutil.copy(old_path, new_path)
+                logger.info("Migrated %s → %s", old_path, new_path)
+            except Exception as e:
+                logger.warning("Failed to migrate %s: %s", filename, e)
 
 
 def _make_strip(config):
@@ -79,6 +106,7 @@ async def _refresh_standings_loop(client: JolpicaClient, state: AppState) -> Non
 
 
 async def main() -> None:
+    _migrate_legacy_config()
     config = load_config(CONFIG_PATH)
     state = AppState()
     state.set_demo_mode(DEMO_MODE)
