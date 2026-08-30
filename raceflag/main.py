@@ -104,6 +104,45 @@ def _make_strip(config):
         return MockStrip(config.led_count)
 
 
+async def _ensure_overlayroot(ota: OTAUpdater) -> None:
+    """Set up overlayroot SD card protection if not yet configured.
+
+    Runs once per boot as a background task. Handles units that received new
+    code via the old v0.2.21 OTA path, which didn't call _setup_overlayroot.
+    Does nothing on units where overlayroot is already active or configured.
+    """
+    # Already active — nothing to do.
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "grep", "-q", "overlayroot", "/proc/mounts",
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await proc.communicate()
+        if proc.returncode == 0:
+            return
+    except Exception:
+        pass
+
+    # Already configured (will activate on next reboot) — nothing to do.
+    if Path("/etc/overlayroot.local.conf").exists():
+        return
+
+    # Not configured. Wait for WiFi to be ready (apt-get needs network).
+    logger.info("overlayroot not configured — will set up SD card protection in 60 s")
+    await asyncio.sleep(60)
+
+    await ota._setup_overlayroot()
+
+    logger.info("overlayroot setup complete — rebooting to activate SD card protection")
+    proc = await asyncio.create_subprocess_exec(
+        "reboot",
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    await proc.wait()
+
+
 async def _refresh_standings_loop(client: JolpicaClient, state: AppState) -> None:
     while True:
         try:
@@ -215,7 +254,7 @@ async def main() -> None:
     server_config = uvicorn.Config(app, host="0.0.0.0", port=8080, log_level="warning")
     server = uvicorn.Server(server_config)
 
-    tasks = [_refresh_standings_loop(jolpica, state), listener.start(), server.serve(), button.start()]
+    tasks = [_refresh_standings_loop(jolpica, state), listener.start(), server.serve(), button.start(), _ensure_overlayroot(ota)]
     if WIFI_ENABLED:
         tasks.append(wifi.start())
     await asyncio.gather(*tasks)
