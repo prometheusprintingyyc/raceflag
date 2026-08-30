@@ -4,6 +4,14 @@ All notable changes to RaceFlag are documented here.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- Config migration at startup now also runs when `config.json` exists at the new path but has an empty `wifi_ssid` (e.g. leftover default file from a partial setup), overwriting it with the old credentials rather than silently leaving the unit without WiFi
+- A default `config.json` is now created at `/boot/firmware/raceflag/` on every startup if no config file exists after migration — ensures the WiFi setup page always has somewhere to persist credentials
+
+---
+
 ## [v0.2.24] — 2026-08-30
 
 ### Fixed

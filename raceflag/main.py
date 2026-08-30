@@ -8,7 +8,7 @@ from pathlib import Path
 
 import uvicorn
 
-from raceflag.config import load as load_config
+from raceflag.config import load as load_config, save as save_config, Config
 from raceflag.state import AppState
 from raceflag.f1_listener import F1Listener
 from raceflag.api_client import JolpicaClient
@@ -34,27 +34,47 @@ BUTTON_GPIO = int(os.environ.get("RACEFLAG_BUTTON_GPIO", "21"))
 def _migrate_legacy_config() -> None:
     """Migrate config and version from /opt/raceflag/ to /boot/firmware/raceflag/.
 
-    Units updated from v0.2.21 via the old OTA path land here with the new code
-    running but config still at the old location. Without this migration the unit
-    starts with an empty SSID and falls into hotspot mode, losing WiFi access.
+    Runs on every startup. Covers three cases:
+    - New install / post-OTA: copies files from old location if missing at new location.
+    - New location exists but has empty wifi_ssid: overwrites with old config that has credentials.
+    - No source at all: creates a default config.json so wifi setup always has somewhere to save.
     """
     boot_dir = CONFIG_PATH.parent
-    if not boot_dir.exists():
-        try:
-            boot_dir.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
-            logger.warning("Could not create boot config dir: %s", e)
-            return
+    try:
+        boot_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        logger.warning("Could not create boot config dir: %s", e)
+        return
+
+    import json as _json
 
     for filename in ("config.json", "version.txt"):
         new_path = boot_dir / filename
         old_path = INSTALL_DIR / filename
-        if not new_path.exists() and old_path.exists():
+        if not old_path.exists():
+            continue
+        should_migrate = not new_path.exists()
+        if not should_migrate and filename == "config.json":
+            try:
+                if not _json.loads(new_path.read_text()).get("wifi_ssid"):
+                    should_migrate = True  # new config exists but has no credentials
+            except Exception:
+                should_migrate = True  # new config is unreadable — overwrite it
+        if should_migrate:
             try:
                 shutil.copy(old_path, new_path)
                 logger.info("Migrated %s → %s", old_path, new_path)
             except Exception as e:
                 logger.warning("Failed to migrate %s: %s", filename, e)
+
+    # Always ensure config.json exists — wifi setup writes credentials here.
+    # If migration had nothing to copy, create a default so save() has a target.
+    if not CONFIG_PATH.exists():
+        try:
+            save_config(Config(), CONFIG_PATH)
+            logger.info("Created default config at %s", CONFIG_PATH)
+        except Exception as e:
+            logger.warning("Could not create default config: %s", e)
 
 
 def _make_strip(config):
