@@ -361,7 +361,7 @@ class OTAUpdater:
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
             )
-            await asyncio.wait_for(initramfs.communicate(), timeout=120)
+            await asyncio.wait_for(initramfs.communicate(), timeout=300)
             logger.info("overlayroot installed and configured — will activate on next boot")
         except asyncio.TimeoutError:
             logger.error("overlayroot install timed out — SD card protection not enabled")

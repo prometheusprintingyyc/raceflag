@@ -6,8 +6,13 @@ All notable changes to RaceFlag are documented here.
 
 ## [Unreleased]
 
+---
+
+## [0.2.28] - 2026-08-30
+
 ### Changed
 - overlayroot startup check now logs its result in all cases — `overlayroot active — SD card protection OK` on healthy boots, `overlayroot configured — SD card protection active on next reboot` if configured but not yet active
+- Increased `update-initramfs` timeout in `_setup_overlayroot` from 120 s to 300 s — Pi Zero 2W regularly takes 90–120 s and was hitting the limit
 
 ### Fixed
 - Corrected two stale `/boot/raceflag/` path references in `install.sh` comments to `/boot/firmware/raceflag/`
