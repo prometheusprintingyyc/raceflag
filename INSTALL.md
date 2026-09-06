@@ -69,11 +69,7 @@ Find the line `dtparam=audio=on` and change it to:
 dtparam=audio=off
 ```
 
-Save and exit (`Ctrl+O`, `Enter`, `Ctrl+X`), then reboot:
-
-```bash
-sudo reboot
-```
+Save and exit (`Ctrl+O`, `Enter`, `Ctrl+X`). **Do not reboot yet** — you will do one reboot after the installer finishes.
 
 > **Note:** On older Raspberry Pi OS releases the file is at `/boot/config.txt` instead.
 
@@ -94,21 +90,33 @@ curl -fsSL https://raw.githubusercontent.com/prometheusprintingyyc/raceflag/main
 ```
 
 The installer will:
-- Install system packages (`git`, `python3`, `hostapd`, `dnsmasq`)
+- Install system packages (`git`, `python3`, `hostapd`, `dnsmasq`, `overlayroot`)
 - Install `rpi_ws281x` (the LED driver library)
 - Clone the RaceFlag repository to `/opt/raceflag`
 - Install Python dependencies (FastAPI, uvicorn, httpx, websockets)
-- Create a default `config.json`
+- Create a default `config.json` at `/boot/firmware/raceflag/config.json`
 - Enable and start the `raceflag` systemd service
+- Configure overlayroot to make the root filesystem read-only (protects the SD card)
+- Schedule a filesystem check (`e2fsck`) to run on the next reboot
+
+When the installer finishes, reboot to activate overlayroot and run the filesystem check:
+
+```bash
+sudo reboot
+```
+
+> **Note:** This reboot takes longer than usual — the filesystem check runs before the OS loads. This is normal.
+
+After rebooting, the root filesystem is read-only and protected against SD card corruption. All RaceFlag config and data is stored on `/boot/firmware/raceflag/` (the FAT32 boot partition), which remains writable.
 
 ---
 
 ## Step 5 — Configure
 
-The config file is at `/opt/raceflag/config.json`. Edit it to match your setup:
+The config file is at `/boot/firmware/raceflag/config.json`. Edit it to match your setup:
 
 ```bash
-sudo nano /opt/raceflag/config.json
+sudo nano /boot/firmware/raceflag/config.json
 ```
 
 ```json
@@ -168,6 +176,10 @@ sudo systemctl status raceflag
 sudo systemctl stop raceflag
 sudo systemctl start raceflag
 sudo systemctl restart raceflag
+
+# Check filesystem check results from last reboot (run after first reboot post-install)
+sudo journalctl -b | grep -iE "e2fsck|fsck"
+sudo dmesg | grep -iE "e2fsck|fsck"
 ```
 
 ---
@@ -179,7 +191,7 @@ If you tested the device on your own WiFi before sending it to someone else, cle
 **1. Clear the RaceFlag config:**
 
 ```bash
-sudo nano /opt/raceflag/config.json
+sudo nano /boot/firmware/raceflag/config.json
 ```
 
 Set `wifi_ssid` and `wifi_password` to empty strings:

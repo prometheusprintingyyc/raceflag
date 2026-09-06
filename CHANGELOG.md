@@ -4,6 +4,55 @@ All notable changes to RaceFlag are documented here.
 
 ---
 
+## [Unreleased]
+
+### Added
+- `install.sh` now runs `touch /forcefsck` alongside overlayroot setup so e2fsck checks the root filesystem on the same reboot that activates overlayroot protection
+
+---
+
+## [0.2.28] - 2026-08-30
+
+### Changed
+- overlayroot startup check now logs its result in all cases — `overlayroot active — SD card protection OK` on healthy boots, `overlayroot configured — SD card protection active on next reboot` if configured but not yet active
+- Increased `update-initramfs` timeout in `_setup_overlayroot` from 120 s to 300 s — Pi Zero 2W regularly takes 90–120 s and was hitting the limit
+
+### Fixed
+- Corrected two stale `/boot/raceflag/` path references in `install.sh` comments to `/boot/firmware/raceflag/`
+
+---
+
+### Added
+- On every boot, RaceFlag now checks whether overlayroot SD card protection is configured and sets it up automatically if not — units updated from v0.2.21 via the old OTA path (which did not call `_setup_overlayroot`) will activate SD card protection on their first boot of new code without any manual intervention; units that already have overlayroot active skip the check instantly
+
+### Fixed
+- OTA on units with overlayroot already active now updates the service file both on the real underlying filesystem (via overlayroot-chroot, persists across reboots) and on the live overlay (so the corrected `RACEFLAG_CONFIG` and `RACEFLAG_VERSION` paths take effect immediately without a reboot)
+
+---
+
+## [v0.2.26] — 2026-08-30
+
+### Fixed
+- Service file (`raceflag.service`) now uses `/boot/firmware/raceflag/` for `RACEFLAG_CONFIG` and `RACEFLAG_VERSION` — units installed before v0.2.26 had these hardcoded to `/opt/raceflag/`, causing config and version reads/writes to bypass the boot partition entirely
+- OTA overlayroot setup now updates the service file on existing installs when the old paths are detected, so field units get corrected paths on their next OTA without a manual reinstall
+
+---
+
+## [v0.2.25] — 2026-08-30
+
+### Fixed
+- Config migration at startup now also runs when `config.json` exists at the new path but has an empty `wifi_ssid` (e.g. leftover default file from a partial setup), overwriting it with the old credentials rather than silently leaving the unit without WiFi
+- A default `config.json` is now created at `/boot/firmware/raceflag/` on every startup if no config file exists after migration — ensures the WiFi setup page always has somewhere to persist credentials
+
+---
+
+## [v0.2.24] — 2026-08-30
+
+### Fixed
+- Units updated from v0.2.21 via the old OTA path now migrate `config.json` and `version.txt` from `/opt/raceflag/` to `/boot/firmware/raceflag/` on first boot — without this, WiFi credentials were lost after the update and the unit fell into hotspot mode, making it unreachable
+
+---
+
 ## [v0.2.23] — 2026-08-30
 
 ### Added
