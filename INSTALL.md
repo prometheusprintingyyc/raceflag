@@ -97,15 +97,12 @@ The installer will:
 - Create a default `config.json` at `/boot/firmware/raceflag/config.json`
 - Enable and start the `raceflag` systemd service
 - Configure overlayroot to make the root filesystem read-only (protects the SD card)
-- Schedule a filesystem check (`e2fsck`) to run on the next reboot
 
-When the installer finishes, reboot to activate overlayroot and run the filesystem check:
+When the installer finishes, reboot to activate overlayroot:
 
 ```bash
 sudo reboot
 ```
-
-> **Note:** This reboot takes longer than usual — the filesystem check runs before the OS loads. This is normal.
 
 After rebooting, the root filesystem is read-only and protected against SD card corruption. All RaceFlag config and data is stored on `/boot/firmware/raceflag/` (the FAT32 boot partition), which remains writable.
 
@@ -177,9 +174,6 @@ sudo systemctl stop raceflag
 sudo systemctl start raceflag
 sudo systemctl restart raceflag
 
-# Check filesystem check results from last reboot (run after first reboot post-install)
-sudo journalctl -b | grep -iE "e2fsck|fsck"
-sudo dmesg | grep -iE "e2fsck|fsck"
 ```
 
 ---
