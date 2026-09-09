@@ -6,9 +6,6 @@ All notable changes to RaceFlag are documented here.
 
 ## [Unreleased]
 
-### Added
-- `install.sh` now runs `touch /forcefsck` alongside overlayroot setup so e2fsck checks the root filesystem on the same reboot that activates overlayroot protection
-
 ---
 
 ## [0.2.28] - 2026-08-30
