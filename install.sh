@@ -96,7 +96,10 @@ EOF
 if [ ! -f /etc/overlayroot.local.conf ]; then
   echo 'overlayroot="tmpfs"' > /etc/overlayroot.local.conf
   update-initramfs -u
-  echo "overlayroot configured — will activate on next reboot"
+  # Schedule a filesystem check on the same reboot that activates overlayroot
+  # so e2fsck runs before the root fs goes read-only.
+  touch /forcefsck
+  echo "overlayroot configured — will activate on next reboot (filesystem check scheduled)"
 fi
 
 # 10. GPIO group permissions for non-root (optional hardening)
@@ -113,5 +116,5 @@ echo "=== Installation complete ==="
 echo "RaceFlag is running. Access the web UI at http://$(hostname -I | awk '{print $1}'):8080"
 echo "If WiFi is not configured, connect to 'RaceFlag-Setup' to set it up."
 echo ""
-echo "NOTE: SD card protection (overlayroot) will activate on the next reboot."
+echo "NOTE: SD card protection (overlayroot) and a filesystem check will run on next reboot."
 echo "      Reboot now with: sudo reboot"
