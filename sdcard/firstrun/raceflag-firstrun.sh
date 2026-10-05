@@ -77,8 +77,12 @@ rm -f /tmp/raceflag-install.sh
 systemctl disable raceflag-firstrun.service 2>/dev/null || true
 
 if [ "$INSTALL_OK" -eq 1 ]; then
+    # Set LED count for this hardware configuration
+    sed -i 's/"led_count": 60/"led_count": 21/' /boot/firmware/raceflag/config.json
     echo ""
     echo "=== Installation complete: $(date) ==="
+    echo "Rebooting to activate SD card protection (overlayroot)..."
+    reboot
 else
     echo ""
     echo "=== ERROR: Installation failed after $MAX_ATTEMPTS attempts: $(date) ==="
