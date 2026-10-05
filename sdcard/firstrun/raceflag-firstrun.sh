@@ -37,6 +37,9 @@ if [ "$CONNECTED" -eq 0 ]; then
     exit 1
 fi
 
+# Disable onboard audio (required for rpi_ws281x on GPIO 18)
+sed -i 's/dtparam=audio=on/dtparam=audio=off/' /boot/firmware/config.txt
+
 # Clean apt state for a fresh start
 apt-get clean
 rm -rf /var/lib/apt/lists/*
