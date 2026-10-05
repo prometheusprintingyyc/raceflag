@@ -10,6 +10,7 @@ All notable changes to RaceFlag are documented here.
 - Custom SD card image build pipeline (`sdcard/firstrun/`): GitHub Actions workflow builds a Raspberry Pi OS Lite arm64 `.img.xz` with a baked-in firstrun service that auto-installs RaceFlag on first boot — no SSH required for new unit production or customer SD card replacement
 - Firstrun installer script (`raceflag-firstrun.sh`) stops apt-daily race conditions, disables WiFi power management, waits for network, then runs `install.sh` with up to 3 retry attempts; logs to `/boot/firmware/raceflag-install.log` (readable from any PC)
 - Firstrun script now sets `dtparam=audio=off` in `config.txt` before running the installer (required for rpi_ws281x on GPIO 18)
+- Firstrun script sets `led_count` to 21 and reboots automatically after a successful install to activate overlayroot SD card protection — no manual steps required
 
 ---
 
