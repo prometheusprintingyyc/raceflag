@@ -80,8 +80,14 @@ jobs:
           path: ${{ env.OUTPUT }}
           retention-days: 7
 
+      - name: Prepare Imager manifest launcher
+        if: github.ref_type == 'tag'
+        run: cp sdcard/os_list.json raceflag.rpi-imager-manifest
+
       - name: Attach to GitHub Release (tag runs)
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ env.OUTPUT }}
+          files: |
+            ${{ env.OUTPUT }}
+            raceflag.rpi-imager-manifest
