@@ -61,7 +61,9 @@ jobs:
         run: |
           echo "Compressing (this takes a few minutes)..."
           if [ "${{ github.ref_type }}" = "tag" ]; then
-            OUTPUT="raceflag-sdcard-${{ github.ref_name }}.img.xz"
+            # Fixed filename so os_list.json URL is always stable:
+            # https://github.com/.../releases/latest/download/raceflag-sdcard.img.xz
+            OUTPUT="raceflag-sdcard.img.xz"
           else
             OUTPUT="raceflag-sdcard-dev.img.xz"
           fi
