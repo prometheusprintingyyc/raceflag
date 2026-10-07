@@ -13,6 +13,7 @@ All notable changes to RaceFlag are documented here.
 - Firstrun script sets `led_count` to 21 and reboots automatically after a successful install to activate overlayroot SD card protection — no manual steps required
 - `sdcard/os_list.json` catalog lets Raspberry Pi Imager show the RaceFlag image with full WiFi/hostname/SSH customization — launch Imager with `--repo https://raw.githubusercontent.com/prometheusprintingyyc/raceflag/main/sdcard/os_list.json`
 - Release SD card image now uses a fixed filename (`raceflag-sdcard.img.xz`) so the catalog URL is always stable via `/releases/latest/download/`
+- SD card image build pinned to Raspberry Pi OS Lite Bookworm (2025-05-13) — Pi OS switched to Trixie (Debian 13) in September 2025 which is untested with RaceFlag
 
 ---
 

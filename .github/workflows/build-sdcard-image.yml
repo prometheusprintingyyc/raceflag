@@ -18,9 +18,11 @@ jobs:
 
       - name: Download Raspberry Pi OS Lite (arm64)
         run: |
-          echo "Downloading Raspberry Pi OS Lite (arm64)..."
+          echo "Downloading Raspberry Pi OS Lite Bookworm (arm64)..."
+          # Pinned to last Bookworm (Debian 12) release — Trixie (Debian 13) became
+          # the default in Sept 2025 and is untested with RaceFlag's install.sh.
           wget -q --show-progress \
-            "https://downloads.raspberrypi.com/raspios_lite_arm64_latest" \
+            "https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2025-05-13/2025-05-13-raspios-bookworm-arm64-lite.img.xz" \
             -O raspios_lite_arm64.img.xz
           echo "Extracting..."
           xz -d raspios_lite_arm64.img.xz

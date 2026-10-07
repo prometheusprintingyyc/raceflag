@@ -5,7 +5,7 @@
       "description": "Auto-installs RaceFlag on first boot. Enter your WiFi credentials when prompted.",
       "url": "https://github.com/prometheusprintingyyc/raceflag/releases/latest/download/raceflag-sdcard.img.xz",
       "init_format": "cloudinit-rpi",
-      "release_date": "2026-10-07"
+      "release_date": "2025-05-13"
     }
   ]
 }
