@@ -71,7 +71,7 @@ jobs:
             OUTPUT="raceflag-sdcard-dev.img.xz"
           fi
           xz -T0 -3 raspios_lite_armhf.img
-          mv raspios_lite_arm64.img.xz "$OUTPUT"
+          mv raspios_lite_armhf.img.xz "$OUTPUT"
           echo "OUTPUT=$OUTPUT" >> $GITHUB_ENV
           ls -lh "$OUTPUT"
 
