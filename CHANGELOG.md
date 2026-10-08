@@ -15,6 +15,9 @@ All notable changes to RaceFlag are documented here.
 - Release SD card image now uses a fixed filename (`raceflag-sdcard.img.xz`) so the catalog URL is always stable via `/releases/latest/download/`
 - SD card image build pinned to Raspberry Pi OS Lite Bookworm armhf (2025-05-13) — 32-bit required for Pi Zero 1W (ARMv6); Pi OS switched to Trixie (Debian 13) in September 2025 which is untested with RaceFlag
 
+### Fixed
+- `os_list.json` catalog now uses `init_format: "systemd"` instead of `"cloudinit-rpi"` — Pi OS Bookworm armhf (2025-05-13) does not apply cloud-init `user-data`/`network-config` files written by Imager; the `systemd` format writes a `firstrun.sh` script processed by `raspberrypi-sys-mods` which reliably applies WiFi credentials and hostname on first boot
+
 ---
 
 ## [0.2.28] - 2026-08-30
