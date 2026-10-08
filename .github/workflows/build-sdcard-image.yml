@@ -20,10 +20,10 @@ jobs:
         run: |
           echo "Downloading Raspberry Pi OS Lite Bookworm (armhf / 32-bit)..."
           # armhf (32-bit) required for Pi Zero 1W (ARMv6).
-          # Pinned to last Bookworm (Debian 12) release — Trixie (Debian 13) became
+          # Pinned to latest Bookworm (Debian 12) release — Trixie (Debian 13) became
           # the default in Sept 2025 and is untested with RaceFlag's install.sh.
           wget -q --show-progress \
-            "https://downloads.raspberrypi.com/raspios_lite_armhf/images/raspios_lite_armhf-2025-05-13/2025-05-13-raspios-bookworm-armhf-lite.img.xz" \
+            "https://downloads.raspberrypi.com/raspios_lite_armhf/images/raspios_lite_armhf-2026-10-06/2026-10-06-raspios-bookworm-armhf-lite.img.xz" \
             -O raspios_lite_armhf.img.xz
           echo "Extracting..."
           xz -d raspios_lite_armhf.img.xz
