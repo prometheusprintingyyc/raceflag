@@ -11,6 +11,10 @@ echo "=== RaceFlag First Boot Installer ==="
 echo "Started: $(date)"
 echo "Hostname: $(hostname)"
 
+# Prevent debconf/dpkg-preconfigure from trying to open a TTY (we have none)
+export DEBIAN_FRONTEND=noninteractive
+export DEBCONF_NONINTERACTIVE_SEEN=true
+
 # Prevent apt-daily from racing with the installer
 systemctl stop apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
 systemctl stop apt-daily.service apt-daily-upgrade.service 2>/dev/null || true

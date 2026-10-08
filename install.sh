@@ -8,6 +8,10 @@ REPO_URL="https://github.com/prometheusprintingyyc/raceflag"
 
 echo "=== RaceFlag Installer ==="
 
+# Prevent debconf/dpkg-preconfigure from trying to open a TTY
+export DEBIAN_FRONTEND=noninteractive
+export DEBCONF_NONINTERACTIVE_SEEN=true
+
 # 1. System packages
 echo "Installing system dependencies..."
 apt-get update -qq
