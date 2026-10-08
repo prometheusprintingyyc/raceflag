@@ -63,6 +63,7 @@ for attempt in $(seq 1 $MAX_ATTEMPTS); do
 
     echo "Attempt $attempt failed"
     rm -f /tmp/raceflag-install.sh
+    apt-get install -f -y 2>/dev/null || true
     apt-get clean
     rm -rf /var/lib/apt/lists/*
     rm -f /var/lib/apt/extended_states

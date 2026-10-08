@@ -17,6 +17,7 @@ All notable changes to RaceFlag are documented here.
 
 ### Fixed
 - `os_list.json` catalog now uses `init_format: "systemd"` instead of `"cloudinit-rpi"` — Pi OS Bookworm armhf (2025-05-13) does not apply cloud-init `user-data`/`network-config` files written by Imager; the `systemd` format writes a `firstrun.sh` script processed by `raspberrypi-sys-mods` which reliably applies WiFi credentials and hostname on first boot
+- Firstrun retry cleanup now runs `apt-get install -f -y` between attempts to recover from a broken apt state caused by a partially downloaded package
 
 ---
 
