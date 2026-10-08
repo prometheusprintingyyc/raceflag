@@ -20,6 +20,7 @@ All notable changes to RaceFlag are documented here.
 - Firstrun retry cleanup now runs `apt-get install -f -y` between attempts to recover from a broken apt state caused by a partially downloaded package
 - `raceflag-firstrun.sh` and `install.sh` now set `DEBIAN_FRONTEND=noninteractive` and `DEBCONF_NONINTERACTIVE_SEEN=true` before any apt calls — prevents `debconf`/`dpkg-preconfigure` from trying to open a TTY (which does not exist when running as a systemd service), which was causing package temp files to be corrupted and dpkg to report "not a Debian format archive"
 - `install.sh` now directs apt to download packages to RAM (`/tmp/apt-cache`) instead of the SD card cache (`/var/cache/apt/archives`) — prevents data corruption on Pi Zero 1W where SD card I/O during large batch downloads was producing corrupt `.deb` files
+- `install.sh` pip calls now use `--no-cache-dir` — the pip wheel cache is never reused on a one-time install so writing it to the SD card is pure unnecessary wear
 
 ---
 

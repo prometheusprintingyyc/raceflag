@@ -25,7 +25,8 @@ apt-get install -y -qq -o Dir::Cache::archives="/tmp/apt-cache" \
 apt-get install -y -qq -o Dir::Cache::archives="/tmp/apt-cache" python3-dev gcc
 pip3 install rpi_ws281x \
   --extra-index-url https://www.piwheels.org/simple/ \
-  --break-system-packages
+  --break-system-packages \
+  --no-cache-dir
 
 # 3. Unmask hostapd (masked by default on Raspberry Pi OS)
 systemctl unmask hostapd
@@ -50,7 +51,8 @@ fi
 # piwheels provides pre-compiled ARMv6/ARMv7 wheels (e.g. pydantic-core) that aren't on PyPI
 pip3 install -r "$INSTALL_DIR/requirements.txt" \
   --extra-index-url https://www.piwheels.org/simple/ \
-  --break-system-packages
+  --break-system-packages \
+  --no-cache-dir
 
 # 6. Set up /boot/firmware/raceflag/ as persistent storage for config and version.
 #    This directory lives on the FAT32 boot partition, which remains writable even
