@@ -8,9 +8,13 @@ All notable changes to RaceFlag are documented here.
 
 ### Changed
 - SD card image is now **fully baked**: the GitHub Actions build runs `install.sh` inside an ARM chroot (QEMU emulation) and bakes the complete RaceFlag installation into the image — no installation happens on the Pi itself; the unit boots directly into RaceFlag in ~60 seconds instead of waiting 5–10 minutes for a first-boot installer
-- Removed `sdcard/firstrun/` (firstrun installer service) — no longer needed now that the install runs in CI
+- Removed `sdcard/firstrun/` full installer service — replaced with a minimal `raceflag-firstboot.service` that only configures overlayroot (see below)
 - Workflow now runs `e2fsck -D -f -y` on the rootfs partition after the chroot install to repair any directory checksum issues before repacking the image
 - `os_list.json` description updated to reflect that the image is ready-to-run, not an installer
+- `install.sh` now accepts `RACEFLAG_SKIP_OVERLAYROOT=1` to skip overlayroot activation during CI builds (the `overlayroot` package and its initramfs hooks are still baked in; only the conf file is deferred to firstboot)
+
+### Added
+- `raceflag-firstboot.service`: minimal one-shot service that runs on **Boot 2** (after Pi Imager's `firstrun.sh` has applied WiFi credentials and rebooted). Writes `/etc/overlayroot.local.conf` and reboots into overlayroot-protected Boot 3. No `update-initramfs` needed — the overlayroot initramfs hooks are already present from the baked install. Boot 2 completes in seconds. Progress is logged to `/boot/firmware/raceflag/firstboot.log`
 
 ---
 

@@ -1,0 +1,12 @@
+[Unit]
+Description=RaceFlag First Boot Setup
+After=local-fs.target
+ConditionPathExists=!/etc/overlayroot.local.conf
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/raceflag-firstboot.sh
+
+[Install]
+WantedBy=multi-user.target

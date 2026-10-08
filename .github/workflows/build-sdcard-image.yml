@@ -101,7 +101,11 @@ FAKESYSTEMCTL
       - name: Install RaceFlag (chroot)
         run: |
           sudo cp install.sh /mnt/rootfs/tmp/install.sh
-          sudo chroot /mnt/rootfs bash /tmp/install.sh
+          # RACEFLAG_SKIP_OVERLAYROOT=1: overlayroot package is still installed (so its
+          # initramfs hooks are baked in by dpkg), but /etc/overlayroot.local.conf is NOT
+          # written here. raceflag-firstboot.service writes it on Boot 2 (after Pi Imager's
+          # firstrun.sh has persisted WiFi credentials to the real filesystem).
+          sudo chroot /mnt/rootfs env RACEFLAG_SKIP_OVERLAYROOT=1 bash /tmp/install.sh
 
       - name: Apply hardware defaults
         run: |
@@ -112,6 +116,19 @@ FAKESYSTEMCTL
           sudo cat /mnt/rootfs/boot/firmware/raceflag/config.json
           echo "=== Installed version ==="
           sudo cat /mnt/rootfs/boot/firmware/raceflag/version.txt
+
+      - name: Install firstboot service
+        run: |
+          sudo cp sdcard/firstrun/raceflag-firstboot.sh \
+            /mnt/rootfs/usr/local/bin/raceflag-firstboot.sh
+          sudo chmod +x /mnt/rootfs/usr/local/bin/raceflag-firstboot.sh
+          sudo cp sdcard/firstrun/raceflag-firstboot.service \
+            /mnt/rootfs/etc/systemd/system/raceflag-firstboot.service
+          # Enable by creating the wanted symlink directly (systemd not running in chroot)
+          sudo ln -sf /etc/systemd/system/raceflag-firstboot.service \
+            /mnt/rootfs/etc/systemd/system/multi-user.target.wants/raceflag-firstboot.service
+          echo "=== Firstboot service enabled ==="
+          ls -la /mnt/rootfs/etc/systemd/system/multi-user.target.wants/ | grep raceflag
 
       - name: Clean up chroot artefacts
         if: always()

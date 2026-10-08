@@ -103,7 +103,11 @@ EOF
 # 9. Configure overlayroot to protect the root filesystem from SD card corruption.
 #    Root becomes read-only with a tmpfs overlay; writes are lost on reboot unless
 #    they target /boot/firmware/raceflag/ or go through overlayroot-chroot (used by OTA).
-if [ ! -f /etc/overlayroot.local.conf ]; then
+#    Skipped when RACEFLAG_SKIP_OVERLAYROOT=1 (CI baked-image builds): the overlayroot
+#    package is still installed (and its initramfs hooks baked in by dpkg), but
+#    raceflag-firstboot.service handles activation on Boot 2 after Pi Imager's
+#    firstrun.sh has already persisted WiFi credentials to the real filesystem.
+if [ "${RACEFLAG_SKIP_OVERLAYROOT:-0}" != "1" ] && [ ! -f /etc/overlayroot.local.conf ]; then
   echo 'overlayroot="tmpfs"' > /etc/overlayroot.local.conf
   update-initramfs -u
   echo "overlayroot configured — will activate on next reboot"

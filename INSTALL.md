@@ -174,6 +174,13 @@ sudo systemctl stop raceflag
 sudo systemctl start raceflag
 sudo systemctl restart raceflag
 
+# Check current WiFi country code
+iw reg get
+grep country_code /boot/firmware/config.txt
+
+# Set WiFi country code (replace CA with your code, e.g. US, GB)
+sudo raspi-config nonint do_wifi_country CA
+
 ```
 
 ---
