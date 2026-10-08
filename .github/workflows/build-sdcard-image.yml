@@ -67,29 +67,9 @@ jobs:
           printf '#!/bin/sh\nexit 101\n' | sudo tee /mnt/rootfs/usr/sbin/policy-rc.d > /dev/null
           sudo chmod +x /mnt/rootfs/usr/sbin/policy-rc.d
 
-          # Fake systemctl: systemd does not run in a chroot.
-          # 'enable'  → creates the wanted symlink so the service starts on real boot.
-          # 'unmask'  → removes the mask symlink (hostapd is masked by default on Pi OS).
-          # Everything else (daemon-reload, restart, stop …) is a silent no-op.
-          sudo tee /mnt/rootfs/usr/local/bin/systemctl > /dev/null <<'FAKESYSTEMCTL'
-#!/bin/bash
-case "$1" in
-  enable)
-    UNIT="${2%.service}.service"
-    for dir in /etc/systemd/system /lib/systemd/system; do
-      if [ -f "$dir/$UNIT" ]; then
-        mkdir -p /etc/systemd/system/multi-user.target.wants
-        ln -sf "$dir/$UNIT" "/etc/systemd/system/multi-user.target.wants/$UNIT"
-        break
-      fi
-    done
-    ;;
-  unmask)
-    rm -f "/etc/systemd/system/${2%.service}.service"
-    ;;
-esac
-exit 0
-FAKESYSTEMCTL
+          # Fake systemctl: systemd does not run in a chroot. Script lives in
+          # sdcard/chroot/ to avoid embedding 0-indented bash in a YAML block scalar.
+          sudo cp sdcard/chroot/fake-systemctl.sh /mnt/rootfs/usr/local/bin/systemctl
           sudo chmod +x /mnt/rootfs/usr/local/bin/systemctl
 
       - name: Configure boot partition
