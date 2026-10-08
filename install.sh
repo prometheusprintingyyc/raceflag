@@ -15,10 +15,14 @@ export DEBCONF_NONINTERACTIVE_SEEN=true
 # 1. System packages
 echo "Installing system dependencies..."
 apt-get update -qq
-apt-get install -y -qq git python3-pip python3-venv hostapd dnsmasq overlayroot
+# Download packages to RAM instead of the SD card cache to avoid SD card
+# read/write corruption on Pi Zero 1W during large batch installs.
+mkdir -p /tmp/apt-cache/partial
+apt-get install -y -qq -o Dir::Cache::archives="/tmp/apt-cache" \
+  git python3-pip python3-venv hostapd dnsmasq overlayroot
 
 # 2. rpi_ws281x needs build tools and the library
-apt-get install -y -qq python3-dev gcc
+apt-get install -y -qq -o Dir::Cache::archives="/tmp/apt-cache" python3-dev gcc
 pip3 install rpi_ws281x \
   --extra-index-url https://www.piwheels.org/simple/ \
   --break-system-packages

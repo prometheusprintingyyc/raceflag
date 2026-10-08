@@ -19,6 +19,7 @@ All notable changes to RaceFlag are documented here.
 - `os_list.json` catalog now uses `init_format: "systemd"` instead of `"cloudinit-rpi"` — Pi OS Bookworm armhf (2025-05-13) does not apply cloud-init `user-data`/`network-config` files written by Imager; the `systemd` format writes a `firstrun.sh` script processed by `raspberrypi-sys-mods` which reliably applies WiFi credentials and hostname on first boot
 - Firstrun retry cleanup now runs `apt-get install -f -y` between attempts to recover from a broken apt state caused by a partially downloaded package
 - `raceflag-firstrun.sh` and `install.sh` now set `DEBIAN_FRONTEND=noninteractive` and `DEBCONF_NONINTERACTIVE_SEEN=true` before any apt calls — prevents `debconf`/`dpkg-preconfigure` from trying to open a TTY (which does not exist when running as a systemd service), which was causing package temp files to be corrupted and dpkg to report "not a Debian format archive"
+- `install.sh` now directs apt to download packages to RAM (`/tmp/apt-cache`) instead of the SD card cache (`/var/cache/apt/archives`) — prevents data corruption on Pi Zero 1W where SD card I/O during large batch downloads was producing corrupt `.deb` files
 
 ---
 
