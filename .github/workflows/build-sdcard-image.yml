@@ -23,7 +23,7 @@ jobs:
           # Pinned to latest Bookworm (Debian 12) release — Trixie (Debian 13) became
           # the default in Sept 2025 and is untested with RaceFlag's install.sh.
           wget -q --show-progress \
-            "https://downloads.raspberrypi.com/raspios_lite_armhf/images/raspios_lite_armhf-2026-10-06/2026-10-06-raspios-bookworm-armhf-lite.img.xz" \
+            "https://downloads.raspberrypi.com/raspios_oldstable_lite_armhf/images/raspios_oldstable_lite_armhf-2026-10-06/2026-10-06-raspios-bookworm-armhf-lite.img.xz" \
             -O raspios_lite_armhf.img.xz
           echo "Extracting..."
           xz -d raspios_lite_armhf.img.xz
