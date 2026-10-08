@@ -2,7 +2,7 @@
   "os_list": [
     {
       "name": "RaceFlag",
-      "description": "Auto-installs RaceFlag on first boot. Enter your WiFi credentials when prompted.",
+      "description": "Ready-to-run RaceFlag image. Enter your WiFi credentials and hostname when prompted.",
       "url": "https://github.com/prometheusprintingyyc/raceflag/releases/latest/download/raceflag-sdcard.img.xz",
       "init_format": "systemd",
       "release_date": "2026-10-06"

@@ -6,22 +6,11 @@ All notable changes to RaceFlag are documented here.
 
 ## [Unreleased]
 
-### Added
-- Custom SD card image build pipeline (`sdcard/firstrun/`): GitHub Actions workflow builds a Raspberry Pi OS Lite arm64 `.img.xz` with a baked-in firstrun service that auto-installs RaceFlag on first boot — no SSH required for new unit production or customer SD card replacement
-- Firstrun installer script (`raceflag-firstrun.sh`) stops apt-daily race conditions, disables WiFi power management, waits for network, then runs `install.sh` with up to 3 retry attempts; logs to `/boot/firmware/raceflag-install.log` (readable from any PC)
-- Firstrun script now sets `dtparam=audio=off` in `config.txt` before running the installer (required for rpi_ws281x on GPIO 18)
-- Firstrun script sets `led_count` to 21 and reboots automatically after a successful install to activate overlayroot SD card protection — no manual steps required
-- `sdcard/os_list.json` catalog lets Raspberry Pi Imager show the RaceFlag image with full WiFi/hostname/SSH customization — launch Imager with `--repo https://raw.githubusercontent.com/prometheusprintingyyc/raceflag/main/sdcard/os_list.json`
-- Release SD card image now uses a fixed filename (`raceflag-sdcard.img.xz`) so the catalog URL is always stable via `/releases/latest/download/`
-- SD card image build pinned to Raspberry Pi OS Lite Bookworm armhf (2025-05-13) — 32-bit required for Pi Zero 1W (ARMv6); Pi OS switched to Trixie (Debian 13) in September 2025 which is untested with RaceFlag
-
-### Fixed
-- `os_list.json` catalog now uses `init_format: "systemd"` instead of `"cloudinit-rpi"` — Pi OS Bookworm armhf (2025-05-13) does not apply cloud-init `user-data`/`network-config` files written by Imager; the `systemd` format writes a `firstrun.sh` script processed by `raspberrypi-sys-mods` which reliably applies WiFi credentials and hostname on first boot
-- Firstrun retry cleanup now runs `apt-get install -f -y` between attempts to recover from a broken apt state caused by a partially downloaded package
-- `raceflag-firstrun.sh` and `install.sh` now set `DEBIAN_FRONTEND=noninteractive` and `DEBCONF_NONINTERACTIVE_SEEN=true` before any apt calls — prevents `debconf`/`dpkg-preconfigure` from trying to open a TTY (which does not exist when running as a systemd service), which was causing package temp files to be corrupted and dpkg to report "not a Debian format archive"
-- `install.sh` now directs apt to download packages to RAM (`/tmp/apt-cache`) instead of the SD card cache (`/var/cache/apt/archives`) — prevents data corruption on Pi Zero 1W where SD card I/O during large batch downloads was producing corrupt `.deb` files
-- `install.sh` pip calls now use `--no-cache-dir` — the pip wheel cache is never reused on a one-time install so writing it to the SD card is pure unnecessary wear
-- SD card image base updated from Pi OS Bookworm armhf 2025-05-13 to 2026-10-06 — fresher base means fewer package upgrades during firstrun, reducing the apt batch size that was causing download corruption on Pi Zero 1W
+### Changed
+- SD card image is now **fully baked**: the GitHub Actions build runs `install.sh` inside an ARM chroot (QEMU emulation) and bakes the complete RaceFlag installation into the image — no installation happens on the Pi itself; the unit boots directly into RaceFlag in ~60 seconds instead of waiting 5–10 minutes for a first-boot installer
+- Removed `sdcard/firstrun/` (firstrun installer service) — no longer needed now that the install runs in CI
+- Workflow now runs `e2fsck -D -f -y` on the rootfs partition after the chroot install to repair any directory checksum issues before repacking the image
+- `os_list.json` description updated to reflect that the image is ready-to-run, not an installer
 
 ---
 

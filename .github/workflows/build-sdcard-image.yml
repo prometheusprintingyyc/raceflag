@@ -20,51 +20,131 @@ jobs:
         run: |
           echo "Downloading Raspberry Pi OS Lite Bookworm (armhf / 32-bit)..."
           # armhf (32-bit) required for Pi Zero 1W (ARMv6).
-          # Pinned to latest Bookworm (Debian 12) release — Trixie (Debian 13) became
-          # the default in Sept 2025 and is untested with RaceFlag's install.sh.
+          # Bookworm (Debian 12) pinned — Trixie (Debian 13) became the default in
+          # Sept 2025 and is untested with RaceFlag. Bookworm images moved to the
+          # raspios_oldstable_lite_armhf archive after the Trixie switch.
           wget -q --show-progress \
             "https://downloads.raspberrypi.com/raspios_oldstable_lite_armhf/images/raspios_oldstable_lite_armhf-2026-10-06/2026-10-06-raspios-bookworm-armhf-lite.img.xz" \
             -O raspios_lite_armhf.img.xz
-          echo "Extracting..."
           xz -d raspios_lite_armhf.img.xz
           ls -lh raspios_lite_armhf.img
 
-      - name: Mount image partitions
+      - name: Set up QEMU for ARM emulation
         run: |
-          sudo mkdir -p /mnt/boot /mnt/rootfs
+          sudo apt-get install -y qemu-user-static binfmt-support
+          # Verify the ARM binfmt handler is registered
+          ls /proc/sys/fs/binfmt_misc/qemu-arm && echo "ARM emulation ready"
+
+      - name: Mount image
+        run: |
+          sudo mkdir -p /mnt/rootfs
           LOOP=$(sudo losetup -f --show -P raspios_lite_armhf.img)
           echo "LOOP=$LOOP" >> $GITHUB_ENV
-          sudo mount ${LOOP}p1 /mnt/boot
-          sudo mount ${LOOP}p2 /mnt/rootfs
+          sudo mount "${LOOP}p2" /mnt/rootfs
+          # Mount boot partition inside the rootfs so chroot sees /boot/firmware
+          sudo mkdir -p /mnt/rootfs/boot/firmware
+          sudo mount "${LOOP}p1" /mnt/rootfs/boot/firmware
+          echo "Root partition free space:"
+          df -h /mnt/rootfs
           echo "Boot partition:"
-          ls /mnt/boot/ | head -10
-          echo "Root systemd services:"
-          ls /mnt/rootfs/etc/systemd/system/ | head -5
+          ls /mnt/rootfs/boot/firmware/ | head -10
 
-      - name: Inject firstrun service
+      - name: Prepare chroot environment
         run: |
-          sudo cp sdcard/firstrun/raceflag-firstrun.sh /mnt/rootfs/usr/local/bin/
-          sudo chmod +x /mnt/rootfs/usr/local/bin/raceflag-firstrun.sh
-          sudo cp sdcard/firstrun/raceflag-firstrun.service /mnt/rootfs/etc/systemd/system/
-          sudo ln -sf \
-            /etc/systemd/system/raceflag-firstrun.service \
-            /mnt/rootfs/etc/systemd/system/multi-user.target.wants/raceflag-firstrun.service
-          echo "Injected files:"
-          ls -la /mnt/rootfs/usr/local/bin/raceflag-firstrun.sh
-          ls -la /mnt/rootfs/etc/systemd/system/raceflag-firstrun.service
-          ls -la /mnt/rootfs/etc/systemd/system/multi-user.target.wants/raceflag-firstrun.service
+          # ARM emulation binary — kernel uses this to run armhf ELFs on x86_64
+          sudo cp /usr/bin/qemu-arm-static /mnt/rootfs/usr/bin/
 
-      - name: Unmount image
+          # DNS so apt/pip/git can reach the internet from inside the chroot
+          sudo cp /etc/resolv.conf /mnt/rootfs/etc/resolv.conf
+
+          # Virtual filesystems required by apt and update-initramfs
+          sudo mount --bind /dev     /mnt/rootfs/dev
+          sudo mount --bind /dev/pts /mnt/rootfs/dev/pts
+          sudo mount --bind /proc    /mnt/rootfs/proc
+          sudo mount --bind /sys     /mnt/rootfs/sys
+
+          # Prevent dpkg/apt from trying to start services during package install
+          printf '#!/bin/sh\nexit 101\n' | sudo tee /mnt/rootfs/usr/sbin/policy-rc.d > /dev/null
+          sudo chmod +x /mnt/rootfs/usr/sbin/policy-rc.d
+
+          # Fake systemctl: systemd does not run in a chroot.
+          # 'enable'  → creates the wanted symlink so the service starts on real boot.
+          # 'unmask'  → removes the mask symlink (hostapd is masked by default on Pi OS).
+          # Everything else (daemon-reload, restart, stop …) is a silent no-op.
+          sudo tee /mnt/rootfs/usr/local/bin/systemctl > /dev/null <<'FAKESYSTEMCTL'
+#!/bin/bash
+case "$1" in
+  enable)
+    UNIT="${2%.service}.service"
+    for dir in /etc/systemd/system /lib/systemd/system; do
+      if [ -f "$dir/$UNIT" ]; then
+        mkdir -p /etc/systemd/system/multi-user.target.wants
+        ln -sf "$dir/$UNIT" "/etc/systemd/system/multi-user.target.wants/$UNIT"
+        break
+      fi
+    done
+    ;;
+  unmask)
+    rm -f "/etc/systemd/system/${2%.service}.service"
+    ;;
+esac
+exit 0
+FAKESYSTEMCTL
+          sudo chmod +x /mnt/rootfs/usr/local/bin/systemctl
+
+      - name: Configure boot partition
+        run: |
+          # Disable onboard audio — GPIO 18 DMA channel is required by rpi_ws281x
+          sudo sed -i 's/dtparam=audio=on/dtparam=audio=off/g' \
+            /mnt/rootfs/boot/firmware/config.txt
+
+      - name: Install RaceFlag (chroot)
+        run: |
+          sudo cp install.sh /mnt/rootfs/tmp/install.sh
+          sudo chroot /mnt/rootfs bash /tmp/install.sh
+
+      - name: Apply hardware defaults
+        run: |
+          # RaceFlag hardware uses 21 LEDs; install.sh defaults to 60 for manual installs
+          sudo sed -i 's/"led_count": 60/"led_count": 21/' \
+            /mnt/rootfs/boot/firmware/raceflag/config.json
+          echo "=== Final config ==="
+          sudo cat /mnt/rootfs/boot/firmware/raceflag/config.json
+          echo "=== Installed version ==="
+          sudo cat /mnt/rootfs/boot/firmware/raceflag/version.txt
+
+      - name: Clean up chroot artefacts
         if: always()
         run: |
-          sudo umount /mnt/boot /mnt/rootfs 2>/dev/null || true
-          sudo losetup -d $LOOP 2>/dev/null || true
+          sudo rm -f /mnt/rootfs/usr/bin/qemu-arm-static
+          sudo rm -f /mnt/rootfs/usr/local/bin/systemctl
+          sudo rm -f /mnt/rootfs/usr/sbin/policy-rc.d
+          sudo rm -f /mnt/rootfs/tmp/install.sh
+          # Shrink final image: remove apt caches baked in by the install
+          sudo rm -rf /mnt/rootfs/tmp/apt-cache
+          sudo rm -rf /mnt/rootfs/var/cache/apt/archives/*.deb
+          sudo rm -rf /mnt/rootfs/var/lib/apt/lists/*
+          # Clear DNS config — NetworkManager repopulates on real boot
+          printf '' | sudo tee /mnt/rootfs/etc/resolv.conf > /dev/null
+
+      - name: Unmount and repair filesystem
+        if: always()
+        run: |
+          # Unmount bind mounts first
+          for mp in dev/pts dev proc sys; do
+            sudo umount /mnt/rootfs/$mp 2>/dev/null || true
+          done
+          sudo umount /mnt/rootfs/boot/firmware 2>/dev/null || true
+          sudo umount /mnt/rootfs 2>/dev/null || true
+          # Repair any directory checksum issues from the intensive install writes
+          sudo e2fsck -D -f -y "${LOOP}p2" || true
+          sudo losetup -d "$LOOP" 2>/dev/null || true
 
       - name: Compress image
         run: |
-          echo "Compressing (this takes a few minutes)..."
+          echo "Compressing (this takes several minutes)..."
           if [ "${{ github.ref_type }}" = "tag" ]; then
-            # Fixed filename so os_list.json URL is always stable:
+            # Fixed filename so the os_list.json URL is always stable:
             # https://github.com/.../releases/latest/download/raceflag-sdcard.img.xz
             OUTPUT="raceflag-sdcard.img.xz"
           else
@@ -83,7 +163,7 @@ jobs:
           path: ${{ env.OUTPUT }}
           retention-days: 7
 
-      - name: Prepare Imager manifest launcher
+      - name: Prepare Imager manifest
         if: github.ref_type == 'tag'
         run: cp sdcard/os_list.json raceflag.rpi-imager-manifest
 
