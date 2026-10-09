@@ -81,11 +81,13 @@ jobs:
       - name: Install RaceFlag (chroot)
         run: |
           sudo cp install.sh /mnt/rootfs/tmp/install.sh
-          # RACEFLAG_SKIP_OVERLAYROOT=1: overlayroot package is still installed (so its
-          # initramfs hooks are baked in by dpkg), but /etc/overlayroot.local.conf is NOT
-          # written here. raceflag-firstboot.service writes it on Boot 2 (after Pi Imager's
-          # firstrun.sh has persisted WiFi credentials to the real filesystem).
-          sudo chroot /mnt/rootfs env RACEFLAG_SKIP_OVERLAYROOT=1 bash /tmp/install.sh
+          # QEMU_CPU=arm1176: force QEMU to emulate the Pi Zero 1W's ARMv6 CPU so
+          # uname -m reports armv6l inside the chroot. Without this, QEMU defaults to
+          # ARMv7 and pip downloads armv7l wheels from piwheels — those wheels contain
+          # ARMv7 instructions that cause SIGILL on Pi Zero 1W at runtime.
+          # RACEFLAG_SKIP_OVERLAYROOT=1: overlayroot package is still installed (and its
+          # initramfs hooks baked in by dpkg), but activation is deferred to firstboot.
+          sudo chroot /mnt/rootfs env QEMU_CPU=arm1176 RACEFLAG_SKIP_OVERLAYROOT=1 bash /tmp/install.sh
 
       - name: Apply hardware defaults
         run: |

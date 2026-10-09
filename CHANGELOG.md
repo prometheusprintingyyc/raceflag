@@ -12,6 +12,7 @@ All notable changes to RaceFlag are documented here.
 - Workflow now runs `e2fsck -D -f -y` on the rootfs partition after the chroot install to repair any directory checksum issues before repacking the image
 - `os_list.json` description updated to reflect that the image is ready-to-run, not an installer
 - `install.sh` now accepts `RACEFLAG_SKIP_OVERLAYROOT=1` to skip overlayroot activation during CI builds (the `overlayroot` package and its initramfs hooks are still baked in; only the conf file is deferred to firstboot)
+- CI chroot now sets `QEMU_CPU=arm1176` so QEMU emulates the Pi Zero 1W's ARMv6 CPU — without this, QEMU defaults to ARMv7 and pip downloads armv7l wheels from piwheels that cause SIGILL on Pi Zero 1W at runtime
 
 ### Added
 - `raceflag-firstboot.service`: minimal one-shot service that runs on **Boot 2** (after Pi Imager's `firstrun.sh` has applied WiFi credentials and rebooted). Writes `/etc/overlayroot.local.conf` and reboots into overlayroot-protected Boot 3. No `update-initramfs` needed — the overlayroot initramfs hooks are already present from the baked install. Boot 2 completes in seconds. Progress is logged to `/boot/firmware/raceflag/firstboot.log`
