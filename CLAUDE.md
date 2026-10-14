@@ -11,3 +11,13 @@ in sync through the shared specs repo at ../raceflag_specs.
   from the ESP32 code.
 - Never modify the ESP32 repo.
 - Commit spec changes in raceflag_specs as their own commit, with a message naming the feature.
+
+## Beta branch
+
+- New features are committed to the `beta` branch, never directly to `main`. Spec,
+  conformance, and documentation-only changes may go on `main`.
+- A feature on `beta` is marked beta in the specs: 🧪 in the Pi column of PARITY.md, plus a
+  `**Status:** beta on Pi` line (new feature) or a `> **Beta (Pi):**` callout (change to an
+  existing feature). See "Beta features" in ../raceflag_specs/README.md.
+- Promoting beta → main includes, in the same piece of work, flipping 🧪 → ✅ and removing
+  the beta markers from the spec.
