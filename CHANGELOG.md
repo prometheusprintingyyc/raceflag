@@ -16,6 +16,8 @@ All notable changes to RaceFlag are documented here.
 
 ### Added
 - `raceflag-firstboot.service`: minimal one-shot service that runs on **Boot 2** (after Pi Imager's `firstrun.sh` has applied WiFi credentials and rebooted). Writes `/etc/overlayroot.local.conf` and reboots into overlayroot-protected Boot 3. No `update-initramfs` needed — the overlayroot initramfs hooks are already present from the baked install. Boot 2 completes in seconds. Progress is logged to `/boot/firmware/raceflag/firstboot.log`
+- `tests/test_conformance.py`: cross-platform conformance test runner — discovers cases from `../raceflag_specs/conformance/`, feeds `.jsonStream` inputs through `F1Listener._handle_feed` with race-start promotion logic, and asserts the flag-decision sequence matches each case's `expected.json`. Skipped gracefully when `raceflag_specs` is not present.
+- `CLAUDE.md`: shared specs rules — conformance-case authoring conventions, open-question tracking, and how to update `raceflag_specs` when Pi behaviour changes
 
 ---
 
