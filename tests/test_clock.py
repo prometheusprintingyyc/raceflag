@@ -1,4 +1,7 @@
 import json
+import logging
+import subprocess
+from types import SimpleNamespace
 from datetime import datetime, timezone
 
 import pytest
@@ -99,3 +102,30 @@ def test_sync_uses_module_setter_by_default(mocker):
     setter = mocker.patch("raceflag.clock._set_system_clock")
     clock.sync("UTC", int((NOW_S + 3600) * 1000), Config(), None, now=lambda: NOW_S)
     setter.assert_called_once()
+
+
+def test_non_string_timezone_falls_back_to_utc():
+    now = datetime(2026, 1, 15, 18, 30, tzinfo=timezone.utc)
+    assert clock.local_minutes(5, now) == 18 * 60 + 30
+    with pytest.raises(ValueError):
+        clock.sync(5, 1_791_996_000_000, Config(), None)
+
+
+def test_set_system_clock_logs_nonzero_exit(monkeypatch, caplog):
+    monkeypatch.setattr(
+        clock.subprocess, "run",
+        lambda *a, **k: SimpleNamespace(returncode=1, stderr=b"date: cannot set date  "),
+    )
+    with caplog.at_level(logging.WARNING, logger="raceflag.clock"):
+        clock._set_system_clock(NOW_S)
+    assert "Setting the system clock failed (exit 1): date: cannot set date" in caplog.text
+
+
+@pytest.mark.parametrize("exc", [FileNotFoundError("date"), subprocess.TimeoutExpired("date", 5)])
+def test_set_system_clock_logs_exceptions(monkeypatch, caplog, exc):
+    def boom(*a, **k):
+        raise exc
+    monkeypatch.setattr(clock.subprocess, "run", boom)
+    with caplog.at_level(logging.WARNING, logger="raceflag.clock"):
+        clock._set_system_clock(NOW_S)
+    assert "Setting the system clock failed" in caplog.text

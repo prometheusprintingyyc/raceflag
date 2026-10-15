@@ -30,13 +30,19 @@ def decide_output(mode: str, session_live: bool, effect_active: bool,
         return "dark"
     if session_live or effect_active:
         return "normal"
-    if preview_active:
+    if preview_active and mode == "lamp":
         return "lamp_preview"
     if mode == "on":
         return "normal"
     if mode == "auto":
         return "normal" if scheduled_on else "dark"
     return "lamp"
+
+
+def session_live(is_active: bool, replay_mode: bool, track_status: str) -> bool:
+    """A session or replay is running. A finished/break status wins over is_active,
+    which the feed re-sets on every message (e.g. Heartbeat) after a session ends."""
+    return replay_mode or (is_active and track_status not in ("finished", "break"))
 
 
 def parse_hhmm(value) -> int:

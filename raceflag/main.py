@@ -17,7 +17,7 @@ from raceflag.replay_manager import ReplayManager
 from raceflag.wifi_manager import WiFiManager
 from raceflag.ota import OTAUpdater
 from raceflag.button_manager import ButtonManager
-from raceflag.led_modes import lamp_from_config, schedule_from_config
+from raceflag.led_modes import lamp_from_config, schedule_from_config, session_live
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -179,7 +179,8 @@ async def main() -> None:
         strip=strip,
         effects_path=EFFECTS_PATH,
         delay_seconds=config.delay_seconds,
-        is_session_live=lambda: state.session.is_active or state.replay_mode,
+        is_session_live=lambda: session_live(
+            state.session.is_active, state.replay_mode, state.track_status),
     )
     # Mode always boots as "on"; schedule, lamp and timezone come from config.json.
     # Invalid stored values fall back to defaults so a bad file can't stop the unit booting.

@@ -27,7 +27,7 @@ def _zone(tz_name: str) -> tzinfo | None:
         return None
     try:
         return ZoneInfo(tz_name)
-    except (ZoneInfoNotFoundError, ValueError, OSError):
+    except (ZoneInfoNotFoundError, ValueError, OSError, TypeError):
         return None
 
 
@@ -39,10 +39,17 @@ def local_minutes(tz_name: str, now: datetime | None = None) -> int:
 
 
 def _set_system_clock(epoch_s: float) -> None:
-    subprocess.run(
-        ["date", "-u", "-s", f"@{int(epoch_s)}"],
-        check=False, capture_output=True, timeout=5,
-    )
+    try:
+        result = subprocess.run(
+            ["date", "-u", "-s", f"@{int(epoch_s)}"],
+            check=False, capture_output=True, timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired) as e:
+        logger.warning("Setting the system clock failed: %s", e)
+        return
+    if result.returncode != 0:
+        stderr = result.stderr.decode(errors="replace").strip() if result.stderr else ""
+        logger.warning("Setting the system clock failed (exit %s): %s", result.returncode, stderr)
 
 
 def sync(

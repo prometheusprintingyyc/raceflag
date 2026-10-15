@@ -3,7 +3,7 @@ import pytest
 from raceflag.led_modes import (
     DEFAULT_LAMP, DEFAULT_SCHEDULE, MODES,
     decide_output, in_window, is_hex_color, lamp_from_config,
-    parse_hhmm, scale_rgb, schedule_from_config,
+    parse_hhmm, scale_rgb, schedule_from_config, session_live,
 )
 
 
@@ -25,7 +25,8 @@ def test_modes():
     ("lamp", False, True, True, False, "normal"),
     ("lamp", False, False, True, True, "lamp_preview"),
     ("lamp", True, False, True, True, "normal"),      # session beats preview
-    ("on", False, False, True, True, "lamp_preview"),
+    ("on", False, False, True, True, "normal"),       # preview only in Lamp mode
+    ("auto", False, False, False, True, "dark"),
 ])
 def test_decide_output(mode, session, effect, sched, preview, expected):
     assert decide_output(mode, session, effect, sched, preview) == expected
@@ -100,3 +101,15 @@ def test_lamp_from_config_valid_normalises_case():
 ])
 def test_lamp_from_config_falls_back_per_field(color, brightness, expected):
     assert lamp_from_config(color, brightness) == expected
+
+
+@pytest.mark.parametrize("active,replay,status,expected", [
+    (False, False, "unknown", False),
+    (True, False, "track_clear", True),
+    (True, False, "finished", False),
+    (True, False, "break", False),
+    (False, True, "finished", True),
+    (True, False, "unknown", True),
+])
+def test_session_live(active, replay, status, expected):
+    assert session_live(active, replay, status) is expected

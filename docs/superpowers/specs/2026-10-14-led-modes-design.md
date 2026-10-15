@@ -39,7 +39,7 @@ UI mockup: https://claude.ai/artifact/U6S9D8Eft1134wSgmmTMRe
 - **Test effects** show in On, Auto and Lamp — including Auto's off window, because an
   active effect counts as "something to show". In Off they stay dark, as they do today
   with the LED toggle off.
-- **"Session live"** = `state.session.is_active or state.replay_mode`.
+- **"Session live"** = `state.replay_mode or (state.session.is_active and state.track_status not in ("finished", "break"))` — the feed re-sets `is_active` on every message after a session ends, so the finished/break status decides.
 - **Schedule window** is half-open `[on, off)` in local time. `off < on` crosses midnight.
   `on == off` is rejected by the API and the UI.
 - **Lamp brightness** 0–100 % scales the RGB values; the existing hardware cap
@@ -124,7 +124,8 @@ when changed, and calls `set_clock(epoch_s)` when `abs(time.time() - epoch_s) > 
 - **New methods:** `set_schedule(on, off)`, `set_timezone(name)`, `set_lamp(hex, b)`,
   `start_preview(hex, b)` (refreshes the 60 s expiry), `end_preview()`.
 - **Constructor** gains `is_session_live: Callable[[], bool]`, wired in `main.py` to
-  `lambda: state.session.is_active or state.replay_mode`.
+  `lambda: session_live(state.session.is_active, state.replay_mode, state.track_status)`
+  (see "Session live" above).
 - **`_run()`:** hotspot first (unchanged). Then compute
   `decide_output(...)` once per tick and branch:
   `"dark"` → fill black; `"lamp"` / `"lamp_preview"` → fill `scale_rgb(...)`;
