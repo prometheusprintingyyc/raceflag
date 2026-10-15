@@ -129,3 +129,57 @@ def test_set_system_clock_logs_exceptions(monkeypatch, caplog, exc):
     with caplog.at_level(logging.WARNING, logger="raceflag.clock"):
         clock._set_system_clock(NOW_S)
     assert "Setting the system clock failed" in caplog.text
+
+
+# --- Browsers that hide their timezone name ------------------------------------
+# NOW_S is 2026-10-14, when America/Edmonton is on MDT (UTC-6).
+
+def test_sync_empty_timezone_keeps_saved_one_and_still_sets_clock():
+    cfg = Config(timezone="America/Edmonton")
+    calls = []
+    result = clock.sync("", int((NOW_S + 3600) * 1000), cfg, None,
+                        set_clock=calls.append, now=lambda: NOW_S)
+    assert result == {"timezone": "America/Edmonton", "clock_adjusted": True}
+    assert cfg.timezone == "America/Edmonton"
+    assert calls == [pytest.approx(NOW_S + 3600)]
+
+
+def test_sync_fixed_offset_keeps_named_zone_with_same_offset(tmp_path):
+    cfg = Config(timezone="America/Edmonton")
+    path = tmp_path / "config.json"
+    result = clock.sync("Etc/GMT+6", int(NOW_S * 1000), cfg, path,
+                        set_clock=lambda s: None, now=lambda: NOW_S)
+    assert result["timezone"] == "America/Edmonton"
+    assert cfg.timezone == "America/Edmonton"
+    assert not path.exists()
+
+
+def test_sync_fixed_offset_replaces_named_zone_with_different_offset():
+    cfg = Config(timezone="America/Edmonton")
+    clock.sync("Etc/GMT+5", int(NOW_S * 1000), cfg, None,
+               set_clock=lambda s: None, now=lambda: NOW_S)
+    assert cfg.timezone == "Etc/GMT+5"
+
+
+def test_sync_fixed_offset_saved_when_nothing_stored():
+    cfg = Config()
+    clock.sync("Etc/GMT+6", int(NOW_S * 1000), cfg, None,
+               set_clock=lambda s: None, now=lambda: NOW_S)
+    assert cfg.timezone == "Etc/GMT+6"
+    assert clock.local_minutes("Etc/GMT+6", datetime(2026, 1, 15, 18, 0, tzinfo=timezone.utc)) == 12 * 60
+
+
+def test_sync_named_zone_replaces_fixed_offset():
+    cfg = Config(timezone="Etc/GMT+6")
+    clock.sync("America/Edmonton", int(NOW_S * 1000), cfg, None,
+               set_clock=lambda s: None, now=lambda: NOW_S)
+    assert cfg.timezone == "America/Edmonton"
+
+
+@pytest.mark.parametrize("stored,expected", [
+    ("America/Edmonton", "America/Edmonton"),
+    ("", "UTC"),
+    ("Mars/Olympus_Mons", "UTC"),
+])
+def test_effective_timezone(stored, expected):
+    assert clock.effective_timezone(stored) == expected

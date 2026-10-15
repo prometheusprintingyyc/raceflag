@@ -338,6 +338,27 @@ def test_time_sync_rejects_implausible_epoch(client, config, mocker):
     setter.assert_not_called()
 
 
+def test_time_sync_accepts_empty_timezone(client, config, mocker):
+    mocker.patch("raceflag.clock._set_system_clock")
+    config.timezone = "America/Edmonton"
+    resp = client.post("/api/time/sync", json={"timezone": "", "epoch_ms": int(time.time() * 1000)})
+    assert resp.status_code == 200
+    assert resp.json()["timezone"] == "America/Edmonton"
+    assert config.timezone == "America/Edmonton"
+
+
+def test_get_time_reports_box_local_time(client, config, mocker):
+    config.timezone = "America/Edmonton"
+    mocker.patch("raceflag.clock.local_minutes", return_value=11 * 60 + 9)
+    resp = client.get("/api/time")
+    assert resp.status_code == 200
+    assert resp.json() == {"timezone": "America/Edmonton", "local_time": "11:09"}
+
+
+def test_get_time_without_timezone_reports_utc(client):
+    assert client.get("/api/time").json()["timezone"] == "UTC"
+
+
 def test_get_config_includes_led_mode_settings(client):
     data = client.get("/api/config").json()
     for key in ("schedule_on", "schedule_off", "lamp_color", "lamp_brightness", "timezone"):

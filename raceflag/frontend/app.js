@@ -681,10 +681,42 @@ function _renderScheduleDraft() {
   document.getElementById('btn-sched-save').disabled = !valid || same;
 }
 
+function _browserTimezone() {
+  // Some browsers hide the zone name (privacy settings) or report UTC while the clock
+  // isn't on UTC. Fall back to the current whole-hour offset as a fixed Etc/GMT zone.
+  let tz = '';
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
+  const off = new Date().getTimezoneOffset();  // minutes behind UTC, e.g. 360 for UTC-6
+  if (tz && !(tz === 'UTC' && off !== 0)) return tz;
+  if (off === 0) return 'UTC';
+  if (off % 60 === 0) return `Etc/GMT${off > 0 ? '+' : '-'}${Math.abs(off / 60)}`;
+  return '';  // half-hour offsets have no Etc/GMT zone: the box keeps its saved timezone
+}
+
+function _tzLabel(tz) {
+  // Etc/GMT signs are inverted: Etc/GMT+6 is UTC-6.
+  const m = /^Etc\/GMT([+-])(\d+)$/.exec(tz);
+  if (m) return `UTC${m[1] === '+' ? '−' : '+'}${m[2]}`;
+  return tz.replace(/_/g, ' ');
+}
+
+async function _showBoxTime() {
+  const el = document.getElementById('sched-boxtime');
+  el.hidden = true;
+  try {
+    const resp = await fetch('/api/time');
+    if (!resp.ok) return;
+    const t = await resp.json();
+    el.textContent = `Box time: ${_fmtTime(t.local_time)} (${_tzLabel(t.timezone)})`;
+    el.hidden = false;
+  } catch (e) {}
+}
+
 function _openSchedule() {
   document.getElementById('sched-on').value = _ledCfg.schedule_on;
   document.getElementById('sched-off').value = _ledCfg.schedule_off;
   _renderScheduleDraft();
+  _showBoxTime();
   document.getElementById('schedule-overlay').classList.add('open');
 }
 
@@ -832,10 +864,7 @@ loadNavVersion();
 fetch('/api/time/sync', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-    epoch_ms: Date.now(),
-  }),
+  body: JSON.stringify({ timezone: _browserTimezone(), epoch_ms: Date.now() }),
 }).catch(() => {});
 (async () => {
   try {

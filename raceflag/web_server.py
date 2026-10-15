@@ -129,6 +129,14 @@ def create_app(
         led.set_timezone(config.timezone)
         return result
 
+    @app.get("/api/time")
+    async def get_time():
+        minutes = clock.local_minutes(config.timezone)
+        return {
+            "timezone": clock.effective_timezone(config.timezone),
+            "local_time": f"{minutes // 60:02d}:{minutes % 60:02d}",
+        }
+
     @app.post("/api/test-effect")
     async def test_effect(req: TestEffectRequest):
         if req.flag_state not in VALID_FLAG_STATES:

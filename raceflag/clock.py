@@ -31,6 +31,28 @@ def _zone(tz_name: str) -> tzinfo | None:
         return None
 
 
+def effective_timezone(tz_name: str) -> str:
+    """The timezone local time is actually computed in: tz_name if valid, else "UTC"."""
+    return tz_name if _zone(tz_name) is not None else "UTC"
+
+
+def _is_fixed_offset(tz_name: str) -> bool:
+    """UTC or an Etc/GMT±N zone — what a browser that hides its zone name can send."""
+    return tz_name in ("UTC", "Etc/UTC") or tz_name.startswith("Etc/")
+
+
+def _keep_saved_zone(saved: str, incoming: str, now: datetime) -> bool:
+    """A fixed offset doesn't replace a named zone that currently has the same offset.
+
+    Browsers that hide their zone name send a fixed offset (e.g. Etc/GMT+6); a named
+    zone saved from another device (e.g. America/Edmonton) is better: it follows DST.
+    """
+    saved_zone = _zone(saved)
+    if saved_zone is None or _is_fixed_offset(saved) or not _is_fixed_offset(incoming):
+        return False
+    return now.astimezone(saved_zone).utcoffset() == now.astimezone(_zone(incoming)).utcoffset()
+
+
 def local_minutes(tz_name: str, now: datetime | None = None) -> int:
     """Minutes since local midnight in tz_name. UTC when tz_name is empty or unknown."""
     now = now or datetime.now(timezone.utc)
@@ -62,14 +84,16 @@ def sync(
 ) -> dict:
     """Store the browser's timezone and correct the clock if it is more than 60 s off.
 
+    An empty tz_name means the browser couldn't tell; the saved timezone is kept.
     Raises ValueError for an unknown timezone or an implausibly old epoch.
     """
-    if _zone(tz_name) is None:
+    if tz_name and _zone(tz_name) is None:
         raise ValueError(f"Unknown timezone: {tz_name!r}")
     if epoch_ms < MIN_EPOCH_MS:
         raise ValueError("epoch_ms is before 2025-01-01; the browser clock looks wrong")
 
-    if tz_name != cfg.timezone:
+    if (tz_name and tz_name != cfg.timezone
+            and not _keep_saved_zone(cfg.timezone, tz_name, datetime.fromtimestamp(now(), timezone.utc))):
         cfg.timezone = tz_name
         if cfg_path:
             save_config(cfg, cfg_path)
@@ -80,4 +104,4 @@ def sync(
     if adjusted:
         logger.info("System clock off by %.0f s — setting from browser", now() - epoch_s)
         (set_clock or _set_system_clock)(epoch_s)
-    return {"timezone": tz_name, "clock_adjusted": adjusted}
+    return {"timezone": cfg.timezone, "clock_adjusted": adjusted}
