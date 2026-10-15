@@ -548,6 +548,7 @@ function _syncLedModeFromState(data) {
 
 function _openModePopup(mode) {
   if (mode === 'lamp') _openLamp();
+  else if (mode === 'auto') _openSchedule();
 }
 
 document.querySelectorAll('#led-mode-pill .mode-seg').forEach(btn => {
@@ -656,6 +657,64 @@ document.getElementById('btn-lamp-save').addEventListener('click', async () => {
     });
     if (resp.ok) _applyLedConfig(await resp.json());
   } catch (e) {}
+});
+
+// ── Schedule popup ─────────────────────────────────────────────────────────
+const HHMM_RE = /^\d{2}:\d{2}$/;
+
+function _renderScheduleDraft() {
+  const on = document.getElementById('sched-on').value;
+  const off = document.getElementById('sched-off').value;
+  const valid = HHMM_RE.test(on) && HHMM_RE.test(off);
+  const same = valid && on === off;
+  const err = document.getElementById('sched-error');
+  err.textContent = "On and off times can't be the same.";
+  err.hidden = !same;
+  const span = document.getElementById('sched-span');
+  span.hidden = !valid || same;
+  if (valid && !same) {
+    const mins = (_hhmmToMin(off) - _hhmmToMin(on) + 1440) % 1440;
+    const h = Math.floor(mins / 60), m = mins % 60;
+    span.textContent = `Lit for ${h} h${m ? ` ${m} min` : ''} a day` +
+      (_hhmmToMin(off) < _hhmmToMin(on) ? ', crossing midnight' : '') + '.';
+  }
+  document.getElementById('btn-sched-save').disabled = !valid || same;
+}
+
+function _openSchedule() {
+  document.getElementById('sched-on').value = _ledCfg.schedule_on;
+  document.getElementById('sched-off').value = _ledCfg.schedule_off;
+  _renderScheduleDraft();
+  document.getElementById('schedule-overlay').classList.add('open');
+}
+
+function _closeSchedule() {
+  document.getElementById('schedule-overlay').classList.remove('open');
+}
+
+document.getElementById('sched-on').addEventListener('input', _renderScheduleDraft);
+document.getElementById('sched-off').addEventListener('input', _renderScheduleDraft);
+document.getElementById('btn-sched-cancel').addEventListener('click', _closeSchedule);
+document.getElementById('schedule-overlay').addEventListener('click', function (e) {
+  if (e.target === this) _closeSchedule();
+});
+document.getElementById('btn-sched-save').addEventListener('click', async () => {
+  const on = document.getElementById('sched-on').value;
+  const off = document.getElementById('sched-off').value;
+  try {
+    const resp = await fetch('/api/config/schedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ on, off }),
+    });
+    if (!resp.ok) throw new Error(`schedule save failed: ${resp.status}`);
+    _applyLedConfig(await resp.json());
+    _closeSchedule();
+  } catch (e) {
+    const err = document.getElementById('sched-error');
+    err.textContent = "Couldn't save the schedule. Try again.";
+    err.hidden = false;
+  }
 });
 
 // ── Shutdown ────────────────────────────────────────────────────────────────

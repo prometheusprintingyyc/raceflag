@@ -298,6 +298,31 @@
     </div>
   </div>
 
+  <div class="overlay" id="schedule-overlay">
+    <div class="confirm-dialog mode-dialog" role="dialog" aria-modal="true" aria-labelledby="schedule-title">
+      <div class="mode-dialog-head">
+        <div class="confirm-title" id="schedule-title">Schedule</div>
+        <div class="confirm-body">Same times every day. Live sessions light the box even during off hours.</div>
+      </div>
+      <div class="dialog-field">
+        <div class="sched-row">
+          <label for="sched-on">On at</label>
+          <input type="time" id="sched-on" value="08:00">
+        </div>
+        <div class="sched-row">
+          <label for="sched-off">Off at</label>
+          <input type="time" id="sched-off" value="23:00">
+        </div>
+        <span class="sched-error" id="sched-error" hidden>On and off times can't be the same.</span>
+        <span class="sched-span" id="sched-span"></span>
+      </div>
+      <div class="confirm-actions">
+        <button type="button" class="btn-confirm-cancel" id="btn-sched-cancel">Cancel</button>
+        <button type="button" class="btn-confirm-stop" id="btn-sched-save">Save</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/app.js"></script>
 </body>
 </html>
