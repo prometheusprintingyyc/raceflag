@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from raceflag import clock
 from raceflag.config import Config, save as save_config
 from raceflag.led_controller import LEDController
+from raceflag.led_modes import MODES, is_hex_color
 from raceflag.state import AppState
 
 VALID_FLAG_STATES = {
@@ -61,8 +62,13 @@ class DemoModeRequest(BaseModel):
     enabled: bool
 
 
-class LEDEnabledRequest(BaseModel):
-    enabled: bool
+class LEDModeRequest(BaseModel):
+    mode: str
+
+
+class LampRequest(BaseModel):
+    color: str
+    brightness: int = Field(ge=0, le=100)
 
 
 class LoadSessionRequest(BaseModel):
@@ -112,9 +118,11 @@ def create_app(
     @app.post("/api/time/sync")
     async def time_sync(req: TimeSyncRequest):
         try:
-            return clock.sync(req.timezone, req.epoch_ms, config, config_path)
+            result = clock.sync(req.timezone, req.epoch_ms, config, config_path)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc))
+        led.set_timezone(config.timezone)
+        return result
 
     @app.post("/api/test-effect")
     async def test_effect(req: TestEffectRequest):
@@ -142,11 +150,40 @@ def create_app(
         state.set_demo_mode(req.enabled)
         return {"demo_mode": req.enabled}
 
-    @app.post("/api/led/enabled")
-    async def set_led_enabled(req: LEDEnabledRequest):
-        state.set_led_enabled(req.enabled)
-        led.set_led_enabled(req.enabled)
-        return {"led_enabled": req.enabled}
+    @app.post("/api/led/mode")
+    async def set_led_mode(req: LEDModeRequest):
+        if req.mode not in MODES:
+            raise HTTPException(status_code=422, detail=f"mode must be one of {list(MODES)}")
+        led.end_preview()
+        led.set_mode(req.mode)
+        state.set_led_mode(req.mode)
+        return {"led_mode": req.mode}
+
+    def _lamp_color(req: LampRequest) -> str:
+        if not is_hex_color(req.color):
+            raise HTTPException(status_code=422, detail="color must be #RRGGBB")
+        return req.color.upper()
+
+    @app.post("/api/led/lamp/preview")
+    async def start_lamp_preview(req: LampRequest):
+        led.start_preview(_lamp_color(req), req.brightness)
+        return {"preview": True}
+
+    @app.delete("/api/led/lamp/preview")
+    async def end_lamp_preview():
+        led.end_preview()
+        return {"preview": False}
+
+    @app.post("/api/config/lamp")
+    async def set_lamp(req: LampRequest):
+        color = _lamp_color(req)
+        config.lamp_color = color
+        config.lamp_brightness = req.brightness
+        if config_path:
+            save_config(config, config_path)
+        led.set_lamp(color, req.brightness)
+        led.end_preview()
+        return {"lamp_color": color, "lamp_brightness": req.brightness}
 
     @app.post("/api/test-idle")
     async def test_idle():

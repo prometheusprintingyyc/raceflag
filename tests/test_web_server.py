@@ -173,25 +173,97 @@ async def test_fetch_logs_returns_fallback_when_journalctl_missing(mocker):
     assert result == _LOGS_UNAVAILABLE
 
 
-def test_set_led_enabled_returns_200(client):
-    resp = client.post("/api/led/enabled", json={"enabled": False})
+# ---------------------------------------------------------------------------
+# LED mode and lamp (feature 014)
+# ---------------------------------------------------------------------------
+
+def test_set_led_mode_returns_mode(client):
+    resp = client.post("/api/led/mode", json={"mode": "lamp"})
     assert resp.status_code == 200
-    assert resp.json()["led_enabled"] is False
+    assert resp.json() == {"led_mode": "lamp"}
 
 
-def test_set_led_enabled_updates_app_state(client, app_state):
-    client.post("/api/led/enabled", json={"enabled": False})
-    assert app_state.led_enabled is False
+def test_set_led_mode_updates_state_and_controller(client, app_state, led):
+    client.post("/api/led/mode", json={"mode": "auto"})
+    assert app_state.led_mode == "auto"
+    assert led._mode == "auto"
 
 
-def test_set_led_enabled_updates_led_controller(client, led):
-    client.post("/api/led/enabled", json={"enabled": False})
-    assert led._led_enabled is False
+def test_set_led_mode_rejects_unknown(client, led):
+    resp = client.post("/api/led/mode", json={"mode": "disco"})
+    assert resp.status_code == 422
+    assert led._mode == "on"
 
 
-def test_get_state_includes_led_enabled(client):
-    resp = client.get("/api/state")
-    assert "led_enabled" in resp.json()
+def test_set_led_mode_ends_preview(client, led):
+    led.start_preview("#00FF00", 100)
+    client.post("/api/led/mode", json={"mode": "on"})
+    assert led._preview is None
+
+
+def test_led_enabled_route_removed(client):
+    resp = client.post("/api/led/enabled", json={"enabled": False})
+    assert resp.status_code in (404, 405)
+
+
+def test_get_state_includes_led_mode(client):
+    data = client.get("/api/state").json()
+    assert data["led_mode"] == "on"
+    assert "led_enabled" not in data
+
+
+def test_lamp_preview_starts_preview(client, led):
+    resp = client.post("/api/led/lamp/preview", json={"color": "#00ff00", "brightness": 40})
+    assert resp.status_code == 200
+    assert resp.json() == {"preview": True}
+    assert led._preview == ("#00FF00", 40)
+
+
+@pytest.mark.parametrize("body", [
+    {"color": "green", "brightness": 40},
+    {"color": "#00FF00", "brightness": 101},
+    {"color": "#00FF00", "brightness": -1},
+])
+def test_lamp_preview_rejects_bad_input(client, led, body):
+    resp = client.post("/api/led/lamp/preview", json=body)
+    assert resp.status_code == 422
+    assert led._preview is None
+
+
+def test_delete_lamp_preview_ends_preview(client, led):
+    led.start_preview("#00FF00", 100)
+    resp = client.delete("/api/led/lamp/preview")
+    assert resp.status_code == 200
+    assert resp.json() == {"preview": False}
+    assert led._preview is None
+
+
+def test_save_lamp_persists_and_applies(tmp_path, app_state, config, led):
+    path = tmp_path / "config.json"
+    c = TestClient(create_app(state=app_state, config=config, led=led, config_path=path))
+    led.start_preview("#00FF00", 100)
+    resp = c.post("/api/config/lamp", json={"color": "#ffd700", "brightness": 80})
+    assert resp.status_code == 200
+    assert resp.json() == {"lamp_color": "#FFD700", "lamp_brightness": 80}
+    assert (config.lamp_color, config.lamp_brightness) == ("#FFD700", 80)
+    saved = json.loads(path.read_text())
+    assert (saved["lamp_color"], saved["lamp_brightness"]) == ("#FFD700", 80)
+    assert led._lamp == ("#FFD700", 80)
+    assert led._preview is None
+
+
+def test_save_lamp_rejects_bad_colour(client, config, led):
+    resp = client.post("/api/config/lamp", json={"color": "#FFF", "brightness": 80})
+    assert resp.status_code == 422
+    assert config.lamp_color == "#FFFFFF"
+    assert led._lamp == ("#FFFFFF", 100)
+
+
+def test_time_sync_updates_led_timezone(client, led, mocker):
+    mocker.patch("raceflag.clock._set_system_clock")
+    client.post("/api/time/sync",
+                json={"timezone": "America/Edmonton", "epoch_ms": int(time.time() * 1000)})
+    assert led._timezone == "America/Edmonton"
 
 
 # ---------------------------------------------------------------------------

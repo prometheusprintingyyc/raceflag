@@ -142,7 +142,7 @@ class AppState:
     track_status: str = "unknown"
     display_track_status: str = "unknown"
     demo_mode: bool = False
-    led_enabled: bool = True
+    led_mode: str = "on"
     feed_connected: bool = False
     replay_mode: bool = False
     replay_status: str = "idle"
@@ -169,9 +169,9 @@ class AppState:
         with self._lock:
             self.demo_mode = enabled
 
-    def set_led_enabled(self, enabled: bool) -> None:
+    def set_led_mode(self, mode: str) -> None:
         with self._lock:
-            self.led_enabled = enabled
+            self.led_mode = mode
 
     def set_feed_connected(self, connected: bool) -> None:
         with self._lock:
@@ -276,7 +276,7 @@ class AppState:
                 "track_status": self.display_track_status,
                 "flag_color": FLAG_COLORS.get(self.display_track_status, FLAG_COLORS["unknown"]),
                 "demo_mode": self.demo_mode,
-                "led_enabled": self.led_enabled,
+                "led_mode": self.led_mode,
                 "feed_connected": self.feed_connected,
                 "local_ip": _get_local_ip(),
                 "replay_mode": self.replay_mode,

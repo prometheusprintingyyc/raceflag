@@ -88,22 +88,20 @@ def test_flag_colors_covers_all_states():
         assert state in FLAG_COLORS
 
 
-def test_led_enabled_defaults_to_true():
+def test_led_mode_defaults_to_on():
+    assert AppState().led_mode == "on"
+
+
+def test_set_led_mode_updates_state():
     s = AppState()
-    assert s.led_enabled is True
+    s.set_led_mode("lamp")
+    assert s.led_mode == "lamp"
 
 
-def test_set_led_enabled_updates_state():
-    s = AppState()
-    s.set_led_enabled(False)
-    assert s.led_enabled is False
-
-
-def test_to_dict_includes_led_enabled():
-    s = AppState()
-    d = s.to_dict()
-    assert "led_enabled" in d
-    assert d["led_enabled"] is True
+def test_to_dict_includes_led_mode_not_led_enabled():
+    d = AppState().to_dict()
+    assert d["led_mode"] == "on"
+    assert "led_enabled" not in d
 
 
 def test_replay_fields_default():
