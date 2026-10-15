@@ -53,3 +53,23 @@ def test_load_raises_on_malformed_json(tmp_path):
     p.write_text("not json {{{{")
     with pytest.raises(ValueError, match="Malformed config file"):
         config.load(p)
+
+
+def test_led_mode_settings_have_defaults(tmp_path):
+    cfg = config.load(tmp_path / "config.json")
+    assert cfg.schedule_on == "08:00"
+    assert cfg.schedule_off == "23:00"
+    assert cfg.lamp_color == "#FFFFFF"
+    assert cfg.lamp_brightness == 100
+    assert cfg.timezone == ""
+
+
+def test_old_config_without_led_mode_keys_loads_defaults(tmp_path):
+    p = tmp_path / "config.json"
+    p.write_text(json.dumps({"led_count": 21, "delay_seconds": 5.0, "wifi_ssid": "Net"}))
+    cfg = config.load(p)
+    assert cfg.delay_seconds == 5.0
+    assert cfg.wifi_ssid == "Net"
+    assert cfg.schedule_on == "08:00"
+    assert cfg.lamp_brightness == 100
+    assert cfg.timezone == ""

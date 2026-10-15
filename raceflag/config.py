@@ -13,6 +13,11 @@ class Config:
     delay_seconds: float = 0.0
     wifi_ssid: str = ""
     wifi_password: str = ""
+    schedule_on: str = "08:00"
+    schedule_off: str = "23:00"
+    lamp_color: str = "#FFFFFF"
+    lamp_brightness: int = 100
+    timezone: str = ""
 
 
 def load(path: Path = DEFAULT_PATH) -> Config:
