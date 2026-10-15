@@ -6,9 +6,14 @@ import queue
 import threading
 import time
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import Callable, Protocol, runtime_checkable
+
+from raceflag.clock import local_minutes
+from raceflag.led_modes import MODES, decide_output, in_window, scale_rgb
 
 logger = logging.getLogger(__name__)
+
+PREVIEW_TIMEOUT_S = 60.0  # a lamp preview with no update for this long ends on its own
 
 
 @runtime_checkable
@@ -47,7 +52,8 @@ class MockStrip:
 class LEDController:
     _CONTINUOUS_ANIMATIONS = frozenset({"red_flag", "yellow_flag", "safety_car", "virtual_sc"})
 
-    def __init__(self, strip: LEDStrip, effects_path: Path, delay_seconds: float = 0.0):
+    def __init__(self, strip: LEDStrip, effects_path: Path, delay_seconds: float = 0.0,
+                 is_session_live: Callable[[], bool] | None = None):
         self._strip = strip
         self._effects_path = Path(effects_path)
         self._delay_seconds = delay_seconds
@@ -60,7 +66,16 @@ class LEDController:
         self._timed_effect: str = ""
         self._timed_effect_expiry: float = 0.0
         self._active_animation: str = ""  # continuous animation, no auto-expiry
-        self._led_enabled: bool = True
+        # LED modes (feature 014). Mode is runtime-only and always starts as "on".
+        self._is_session_live: Callable[[], bool] = is_session_live or (lambda: False)
+        self._mode: str = "on"
+        self._schedule: tuple[int, int] = (8 * 60, 23 * 60)
+        self._timezone: str = ""
+        self._lamp: tuple[str, int] = ("#FFFFFF", 100)
+        self._preview: tuple[str, int] | None = None
+        self._preview_expiry: float = 0.0
+        self._local_minutes: int = 0
+        self._local_minutes_at: float = float("-inf")
 
     def start(self) -> None:
         self._stop_event.clear()
@@ -119,9 +134,27 @@ class LEDController:
             self._active_animation = ""
             self._idle_active = True
 
-    def set_led_enabled(self, enabled: bool) -> None:
-        self._led_enabled = enabled
+    def set_mode(self, mode: str) -> None:
+        if mode not in MODES:
+            raise ValueError(f"mode must be one of {MODES}")
+        self._mode = mode
 
+    def set_schedule(self, on_min: int, off_min: int) -> None:
+        self._schedule = (on_min, off_min)
+
+    def set_timezone(self, tz_name: str) -> None:
+        self._timezone = tz_name
+        self._local_minutes_at = float("-inf")  # recompute on the next tick
+
+    def set_lamp(self, hex_color: str, brightness: int) -> None:
+        self._lamp = (hex_color, brightness)
+
+    def start_preview(self, hex_color: str, brightness: int) -> None:
+        self._preview = (hex_color, brightness)
+        self._preview_expiry = time.monotonic() + PREVIEW_TIMEOUT_S
+
+    def end_preview(self) -> None:
+        self._preview = None
     def set_idle(self, active: bool) -> None:
         if active:
             self._flush_queue()
@@ -328,46 +361,82 @@ class LEDController:
                     self._active_animation = flag_state
                 else:
                     self._active_animation = ""
-                    if self._led_enabled:
+                    if self._mode != "off":
                         self._apply_effect(flag_state)
             else:
                 logger.debug("LED holding: %s  waited=%.1fs remaining=%.1fs", flag_state, waited, self._delay_seconds - waited)
                 self._queue.put((flag_state, arrival))
 
+    def _current_local_minutes(self) -> int:
+        # The schedule has minute resolution; recomputing once a second is plenty.
+        now = time.monotonic()
+        if now - self._local_minutes_at >= 1.0:
+            self._local_minutes = local_minutes(self._timezone)
+            self._local_minutes_at = now
+        return self._local_minutes
+
+    def _decide_output(self) -> str:
+        now = time.monotonic()
+        if self._preview is not None and now >= self._preview_expiry:
+            self._preview = None
+        if self._timed_effect and now >= self._timed_effect_expiry:
+            self._timed_effect = ""
+            self._idle_active = True
+        scheduled_on = True
+        if self._mode == "auto":
+            scheduled_on = in_window(self._current_local_minutes(), *self._schedule)
+        return decide_output(
+            mode=self._mode,
+            session_live=self._is_session_live(),
+            effect_active=bool(self._timed_effect or self._active_animation),
+            scheduled_on=scheduled_on,
+            preview_active=self._preview is not None,
+        )
+
+    def _fill(self, r: int, g: int, b: int) -> None:
+        self._strip.fill(r, g, b)
+        self._strip.show()
+
+    def _render_flag_or_idle(self) -> None:
+        """Existing flag / timed-effect / idle-chase rendering ("normal" output)."""
+        if self._timed_effect:
+            if self._timed_effect == "race_start":
+                self._step_race_start_animation()
+            elif self._timed_effect == "checkered":
+                self._step_checkered_animation()
+            else:
+                self._step_track_clear_animation()
+        elif self._active_animation:
+            if self._active_animation == "red_flag":
+                self._step_red_flag_animation()
+            elif self._active_animation == "yellow_flag":
+                self._step_yellow_flag_animation()
+            elif self._active_animation == "safety_car":
+                self._step_safety_car_animation()
+            elif self._active_animation == "virtual_sc":
+                self._step_virtual_sc_animation()
+        elif self._idle_active:
+            self._step_idle_animation()
+
+    def _tick(self) -> None:
+        """Render one frame."""
+        self._maybe_reload_effects()
+        self._drain_queue()
+        if self._active_animation == "hotspot":
+            self._step_hotspot_animation()
+            return
+        output = self._decide_output()
+        if output == "dark":
+            self._fill(0, 0, 0)
+        elif output == "lamp_preview":
+            # The preview may end on another thread between decide and here.
+            self._fill(*scale_rgb(*(self._preview or self._lamp)))
+        elif output == "lamp":
+            self._fill(*scale_rgb(*self._lamp))
+        else:
+            self._render_flag_or_idle()
+
     def _run(self) -> None:
         while not self._stop_event.is_set():
-            self._maybe_reload_effects()
-            self._drain_queue()
-            if self._active_animation == "hotspot":
-                self._step_hotspot_animation()
-                time.sleep(0.05)
-                continue
-            if not self._led_enabled:
-                self._strip.fill(0, 0, 0)
-                self._strip.show()
-                time.sleep(0.05)
-                continue
-            now = time.monotonic()
-            if self._timed_effect:
-                if now >= self._timed_effect_expiry:
-                    self._timed_effect = ""
-                    self._idle_active = True
-                else:
-                    if self._timed_effect == "race_start":
-                        self._step_race_start_animation()
-                    elif self._timed_effect == "checkered":
-                        self._step_checkered_animation()
-                    else:
-                        self._step_track_clear_animation()
-            elif self._active_animation:
-                if self._active_animation == "red_flag":
-                    self._step_red_flag_animation()
-                elif self._active_animation == "yellow_flag":
-                    self._step_yellow_flag_animation()
-                elif self._active_animation == "safety_car":
-                    self._step_safety_car_animation()
-                elif self._active_animation == "virtual_sc":
-                    self._step_virtual_sc_animation()
-            elif self._idle_active:
-                self._step_idle_animation()
+            self._tick()
             time.sleep(0.05)

@@ -234,7 +234,7 @@ def test_trigger_timed_flushes_stale_queue_events(controller):
     controller._effects = controller._load_effects()
     controller.trigger("yellow_flag")
     controller.trigger_timed("track_clear", 30.0)
-    # Queue should be empty — stale yellow_flag discarded
+    # Queue should be empty â€” stale yellow_flag discarded
     assert controller._queue.empty()
     # Draining should NOT cancel the timed effect
     controller._drain_queue()
@@ -363,58 +363,262 @@ def test_run_dispatches_race_start_animation(controller):
     controller.start()
     time.sleep(0.1)
     controller.stop()
-    # At least one frame was rendered — pixels should be green or off
+    # At least one frame was rendered â€” pixels should be green or off
     assert all(b == 0 and r == 0 for r, g, b in controller._strip.pixels)
 
 
-def test_led_enabled_defaults_to_true(controller):
-    assert controller._led_enabled is True
+# ---------------------------------------------------------------------------
+# LED modes (feature 014)
+# ---------------------------------------------------------------------------
+
+def _all(ctrl, rgb):
+    return all(p == rgb for p in ctrl._strip.pixels)
 
 
-def test_set_led_enabled_false_blanks_strip(controller):
-    """set_led_enabled(False) sets the flag; the _run() loop blanks the strip."""
-    controller.set_led_enabled(False)
-    assert controller._led_enabled is False
+@pytest.fixture
+def fixed_minutes(monkeypatch):
+    """Pin local time. Set fixed_minutes["value"]; calls are recorded in ["calls"]."""
+    holder = {"value": 600, "calls": []}
+
+    def fake(tz_name, now=None):
+        holder["calls"].append(tz_name)
+        return holder["value"]
+
+    monkeypatch.setattr("raceflag.led_controller.local_minutes", fake)
+    return holder
 
 
-def test_set_led_enabled_true_does_not_blank_strip(controller):
-    controller._strip.set_pixel(0, 255, 0, 0)
-    controller.set_led_enabled(True)
-    assert controller._strip.pixels[0] == (255, 0, 0)
+def test_mode_defaults_to_on(controller):
+    assert controller._mode == "on"
 
 
-def test_run_blanks_strip_when_led_disabled(controller):
+def test_set_mode_rejects_unknown(controller):
+    with pytest.raises(ValueError):
+        controller.set_mode("disco")
+
+
+def test_constructor_accepts_is_session_live(effects_file):
+    ctrl = LEDController(strip=MockStrip(10), effects_path=effects_file,
+                         is_session_live=lambda: True)
+    assert ctrl._is_session_live() is True
+
+
+def test_run_blanks_strip_in_off_mode(controller):
     controller._effects = controller._load_effects()
-    controller.set_led_enabled(False)
+    controller._strip.fill(255, 0, 0)
+    controller.set_mode("off")
     controller.start()
     time.sleep(0.15)
     controller.stop()
-    assert all(p == (0, 0, 0) for p in controller._strip.pixels)
+    assert _all(controller, (0, 0, 0))
 
 
-def test_run_hotspot_animation_runs_when_led_disabled(controller):
-    from unittest.mock import patch
-    controller._effects = controller._load_effects()
-    controller.set_led_enabled(False)
+def test_off_mode_dark_even_with_live_session_and_flag(controller):
+    controller._is_session_live = lambda: True
+    controller._active_animation = "yellow_flag"
+    controller._strip.fill(255, 0, 0)
+    controller.set_mode("off")
+    controller._tick()
+    assert _all(controller, (0, 0, 0))
+
+
+def test_hotspot_overrides_off_mode(controller, mocker):
+    controller.set_mode("off")
     controller.set_hotspot_mode(True)
-    with patch.object(controller, '_step_hotspot_animation') as mock_anim:
-        controller.start()
-        time.sleep(0.15)
-        controller.stop()
-    assert mock_anim.call_count > 0
+    anim = mocker.patch.object(controller, "_step_hotspot_animation")
+    controller._tick()
+    anim.assert_called_once()
 
 
-def test_drain_queue_skips_apply_effect_when_led_disabled(controller):
+def test_drain_queue_skips_apply_effect_in_off_mode(controller):
     controller._effects = controller._load_effects()
-    controller.set_led_enabled(False)
+    controller.set_mode("off")
     controller.trigger("track_clear")
     controller._drain_queue()
-    assert all(p == (0, 0, 0) for p in controller._strip.pixels)
+    assert _all(controller, (0, 0, 0))
 
 
-def test_drain_queue_tracks_continuous_animation_when_led_disabled(controller):
-    controller._effects = controller._load_effects()
-    controller.set_led_enabled(False)
+def test_drain_queue_tracks_continuous_animation_in_off_mode(controller):
+    controller.set_mode("off")
     controller.trigger("yellow_flag")
     controller._drain_queue()
     assert controller._active_animation == "yellow_flag"
+
+
+def test_switching_off_to_lamp_mid_session_shows_current_flag(controller, mocker):
+    controller._is_session_live = lambda: True
+    controller.set_mode("off")
+    controller.trigger("yellow_flag")
+    controller._tick()
+    assert _all(controller, (0, 0, 0))
+    controller.set_mode("lamp")
+    anim = mocker.patch.object(controller, "_step_yellow_flag_animation")
+    controller._tick()
+    anim.assert_called_once()
+
+
+def test_on_mode_shows_idle_chase_without_session(controller, mocker):
+    anim = mocker.patch.object(controller, "_step_idle_animation")
+    controller._tick()
+    anim.assert_called_once()
+
+
+def test_lamp_mode_fills_scaled_colour(controller):
+    controller.set_lamp("#FFD700", 50)
+    controller.set_mode("lamp")
+    controller._tick()
+    assert _all(controller, (128, 108, 0))
+
+
+def test_lamp_mode_live_session_shows_chase(controller, mocker):
+    controller._is_session_live = lambda: True
+    controller.set_mode("lamp")
+    anim = mocker.patch.object(controller, "_step_idle_animation")
+    controller._tick()
+    anim.assert_called_once()
+
+
+def test_lamp_mode_plays_test_effect_then_returns_to_lamp(controller, mocker):
+    controller.set_lamp("#FF0000", 100)
+    controller.set_mode("lamp")
+    controller.trigger_timed("checkered", 30.0)
+    anim = mocker.patch.object(controller, "_step_checkered_animation")
+    controller._tick()
+    anim.assert_called_once()
+    controller._timed_effect_expiry = time.monotonic() - 1
+    controller._tick()
+    assert controller._timed_effect == ""
+    assert _all(controller, (255, 0, 0))
+
+
+def test_preview_overrides_lamp_colour(controller):
+    controller.set_lamp("#FF0000", 100)
+    controller.set_mode("lamp")
+    controller.start_preview("#00FF00", 100)
+    controller._tick()
+    assert _all(controller, (0, 255, 0))
+
+
+def test_preview_hidden_during_live_session(controller, mocker):
+    controller._is_session_live = lambda: True
+    controller.set_mode("lamp")
+    controller.start_preview("#00FF00", 100)
+    anim = mocker.patch.object(controller, "_step_idle_animation")
+    controller._tick()
+    anim.assert_called_once()
+
+
+def test_preview_dark_in_off_mode(controller):
+    controller.set_mode("off")
+    controller.start_preview("#00FF00", 100)
+    controller._tick()
+    assert _all(controller, (0, 0, 0))
+
+
+def test_start_preview_sets_60s_expiry(controller):
+    controller.start_preview("#00FF00", 100)
+    assert controller._preview == ("#00FF00", 100)
+    assert controller._preview_expiry == pytest.approx(time.monotonic() + 60.0, abs=1.0)
+
+
+def test_start_preview_refreshes_expiry(controller):
+    controller.start_preview("#00FF00", 100)
+    controller._preview_expiry = time.monotonic() + 5
+    controller.start_preview("#0000FF", 50)
+    assert controller._preview == ("#0000FF", 50)
+    assert controller._preview_expiry > time.monotonic() + 59
+
+
+def test_preview_expires_back_to_lamp(controller):
+    controller.set_lamp("#FF0000", 100)
+    controller.set_mode("lamp")
+    controller.start_preview("#00FF00", 100)
+    controller._preview_expiry = time.monotonic() - 1
+    controller._tick()
+    assert controller._preview is None
+    assert _all(controller, (255, 0, 0))
+
+
+def test_end_preview_restores_lamp(controller):
+    controller.set_lamp("#FF0000", 100)
+    controller.set_mode("lamp")
+    controller.start_preview("#00FF00", 100)
+    controller.end_preview()
+    controller._tick()
+    assert _all(controller, (255, 0, 0))
+
+
+def test_auto_inside_window_shows_chase(controller, fixed_minutes, mocker):
+    controller.set_schedule(480, 1380)
+    controller.set_mode("auto")
+    anim = mocker.patch.object(controller, "_step_idle_animation")
+    controller._tick()
+    anim.assert_called_once()
+
+
+def test_auto_outside_window_is_dark(controller, fixed_minutes):
+    fixed_minutes["value"] = 1400
+    controller.set_schedule(480, 1380)
+    controller.set_mode("auto")
+    controller._strip.fill(255, 0, 0)
+    controller._tick()
+    assert _all(controller, (0, 0, 0))
+
+
+def test_auto_outside_window_live_session_shows_chase(controller, fixed_minutes, mocker):
+    fixed_minutes["value"] = 1400
+    controller._is_session_live = lambda: True
+    controller.set_schedule(480, 1380)
+    controller.set_mode("auto")
+    anim = mocker.patch.object(controller, "_step_idle_animation")
+    controller._tick()
+    anim.assert_called_once()
+
+
+def test_auto_outside_window_shows_test_effect(controller, fixed_minutes, mocker):
+    fixed_minutes["value"] = 1400
+    controller.set_schedule(480, 1380)
+    controller.set_mode("auto")
+    controller.force_trigger("yellow_flag")
+    anim = mocker.patch.object(controller, "_step_yellow_flag_animation")
+    controller._tick()
+    anim.assert_called_once()
+
+
+def test_auto_session_end_in_off_window_plays_checkered_then_dark(controller, fixed_minutes, mocker):
+    live = {"v": True}
+    controller._is_session_live = lambda: live["v"]
+    fixed_minutes["value"] = 1400
+    controller.set_schedule(480, 1380)
+    controller.set_mode("auto")
+    controller.trigger_timed("checkered", 30.0)
+    live["v"] = False
+    controller.set_idle(True)  # what main.py does when the session finishes
+    anim = mocker.patch.object(controller, "_step_checkered_animation")
+    controller._tick()
+    anim.assert_called_once()
+    controller._timed_effect_expiry = time.monotonic() - 1
+    controller._strip.fill(255, 255, 255)
+    controller._tick()
+    assert _all(controller, (0, 0, 0))
+
+
+def test_local_minutes_cached_for_one_second(controller, fixed_minutes):
+    controller.set_mode("auto")
+    controller._tick()
+    controller._tick()
+    assert len(fixed_minutes["calls"]) == 1
+
+
+def test_set_timezone_forces_recompute(controller, fixed_minutes):
+    controller.set_mode("auto")
+    controller._tick()
+    controller.set_timezone("America/Edmonton")
+    controller._tick()
+    assert fixed_minutes["calls"] == ["", "America/Edmonton"]
+
+
+def test_local_minutes_not_computed_outside_auto(controller, fixed_minutes):
+    controller.set_mode("lamp")
+    controller._tick()
+    assert fixed_minutes["calls"] == []
