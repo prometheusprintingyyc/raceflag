@@ -74,6 +74,7 @@ class LEDController:
         self._lamp: tuple[str, int] = ("#FFFFFF", 100)
         self._preview: tuple[str, int] | None = None
         self._preview_expiry: float = 0.0
+        self._preview_lock = threading.Lock()  # guards _preview/_preview_expiry across threads
         self._local_minutes: int = 0
         self._local_minutes_at: float = float("-inf")
 
@@ -150,11 +151,14 @@ class LEDController:
         self._lamp = (hex_color, brightness)
 
     def start_preview(self, hex_color: str, brightness: int) -> None:
-        self._preview = (hex_color, brightness)
-        self._preview_expiry = time.monotonic() + PREVIEW_TIMEOUT_S
+        with self._preview_lock:
+            self._preview = (hex_color, brightness)
+            self._preview_expiry = time.monotonic() + PREVIEW_TIMEOUT_S
 
     def end_preview(self) -> None:
-        self._preview = None
+        with self._preview_lock:
+            self._preview = None
+
     def set_idle(self, active: bool) -> None:
         if active:
             self._flush_queue()
@@ -187,8 +191,8 @@ class LEDController:
             self._flush_queue_before(flush_before)
         else:
             self._flush_queue()
-        self._timed_effect = flag_state
         self._timed_effect_expiry = time.monotonic() + duration
+        self._timed_effect = flag_state
         self._idle_active = False
         self._active_animation = ""
 
@@ -377,8 +381,9 @@ class LEDController:
 
     def _decide_output(self) -> str:
         now = time.monotonic()
-        if self._preview is not None and now >= self._preview_expiry:
-            self._preview = None
+        with self._preview_lock:
+            if self._preview is not None and now >= self._preview_expiry:
+                self._preview = None
         if self._timed_effect and now >= self._timed_effect_expiry:
             self._timed_effect = ""
             self._idle_active = True

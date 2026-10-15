@@ -234,7 +234,7 @@ def test_trigger_timed_flushes_stale_queue_events(controller):
     controller._effects = controller._load_effects()
     controller.trigger("yellow_flag")
     controller.trigger_timed("track_clear", 30.0)
-    # Queue should be empty â€” stale yellow_flag discarded
+    # Queue should be empty — stale yellow_flag discarded
     assert controller._queue.empty()
     # Draining should NOT cancel the timed effect
     controller._drain_queue()
@@ -363,7 +363,7 @@ def test_run_dispatches_race_start_animation(controller):
     controller.start()
     time.sleep(0.1)
     controller.stop()
-    # At least one frame was rendered â€” pixels should be green or off
+    # At least one frame was rendered — pixels should be green or off
     assert all(b == 0 and r == 0 for r, g, b in controller._strip.pixels)
 
 
@@ -622,3 +622,20 @@ def test_local_minutes_not_computed_outside_auto(controller, fixed_minutes):
     controller.set_mode("lamp")
     controller._tick()
     assert fixed_minutes["calls"] == []
+
+
+def test_fresh_preview_survives_expiry_of_previous(controller):
+    controller.set_lamp("#FF0000", 100)
+    controller.set_mode("lamp")
+    controller.start_preview("#00FF00", 100)
+    controller._preview_expiry = time.monotonic() - 1
+    controller.start_preview("#0000FF", 100)
+    controller._tick()
+    assert _all(controller, (0, 0, 255))
+
+
+def test_test_effect_dark_in_off_mode(controller):
+    controller.set_mode("off")
+    controller.trigger_timed("checkered", 30.0)
+    controller._tick()
+    assert _all(controller, (0, 0, 0))
