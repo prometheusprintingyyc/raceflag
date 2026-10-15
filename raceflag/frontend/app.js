@@ -707,7 +707,7 @@ async function _showBoxTime() {
     const resp = await fetch('/api/time');
     if (!resp.ok) return;
     const t = await resp.json();
-    el.textContent = `Box time: ${_fmtTime(t.local_time)} (${_tzLabel(t.timezone)})`;
+    el.textContent = `Current time: ${_fmtTime(t.local_time)} (${_tzLabel(t.timezone)})`;
     el.hidden = false;
   } catch (e) {}
 }
