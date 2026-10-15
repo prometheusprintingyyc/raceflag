@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 
+from raceflag import clock
 from raceflag.config import Config, save as save_config
 from raceflag.led_controller import LEDController
 from raceflag.state import AppState
@@ -73,6 +74,11 @@ class ReplayOffsetRequest(BaseModel):
     seconds: float = Field(ge=-30.0, le=30.0)
 
 
+class TimeSyncRequest(BaseModel):
+    timezone: str
+    epoch_ms: int
+
+
 def create_app(
     state: AppState,
     config: Config,
@@ -102,6 +108,13 @@ def create_app(
         if config_path:
             save_config(config, config_path)
         return {"delay_seconds": req.seconds}
+
+    @app.post("/api/time/sync")
+    async def time_sync(req: TimeSyncRequest):
+        try:
+            return clock.sync(req.timezone, req.epoch_ms, config, config_path)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
 
     @app.post("/api/test-effect")
     async def test_effect(req: TestEffectRequest):

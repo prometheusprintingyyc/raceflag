@@ -600,6 +600,16 @@ document.getElementById('btn-replay-stop').addEventListener('click', async () =>
 
 fetchState();
 loadNavVersion();
+// Keep the box's clock and timezone in step with this device (feature 014).
+// Failures are ignored: the Pi falls back to NTP and UTC.
+fetch('/api/time/sync', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    epoch_ms: Date.now(),
+  }),
+}).catch(() => {});
 (async () => {
   try {
     const resp = await fetch('/api/config');

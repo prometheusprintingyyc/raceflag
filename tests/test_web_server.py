@@ -1,3 +1,5 @@
+import json
+import time
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 from fastapi.testclient import TestClient
@@ -190,6 +192,56 @@ def test_set_led_enabled_updates_led_controller(client, led):
 def test_get_state_includes_led_enabled(client):
     resp = client.get("/api/state")
     assert "led_enabled" in resp.json()
+
+
+# ---------------------------------------------------------------------------
+# Time sync (feature 014)
+# ---------------------------------------------------------------------------
+
+def test_time_sync_saves_timezone(tmp_path, app_state, config, led, mocker):
+    setter = mocker.patch("raceflag.clock._set_system_clock")
+    path = tmp_path / "config.json"
+    c = TestClient(create_app(state=app_state, config=config, led=led, config_path=path))
+    resp = c.post("/api/time/sync",
+                  json={"timezone": "America/Edmonton", "epoch_ms": int(time.time() * 1000)})
+    assert resp.status_code == 200
+    assert resp.json() == {"timezone": "America/Edmonton", "clock_adjusted": False}
+    assert config.timezone == "America/Edmonton"
+    assert json.loads(path.read_text())["timezone"] == "America/Edmonton"
+    setter.assert_not_called()
+
+
+def test_time_sync_sets_clock_when_far_off(client, mocker):
+    setter = mocker.patch("raceflag.clock._set_system_clock")
+    resp = client.post("/api/time/sync",
+                       json={"timezone": "UTC", "epoch_ms": int((time.time() + 3600) * 1000)})
+    assert resp.status_code == 200
+    assert resp.json()["clock_adjusted"] is True
+    setter.assert_called_once()
+
+
+def test_time_sync_rejects_unknown_timezone(client, config, mocker):
+    setter = mocker.patch("raceflag.clock._set_system_clock")
+    resp = client.post("/api/time/sync",
+                       json={"timezone": "Mars/Olympus_Mons", "epoch_ms": int(time.time() * 1000)})
+    assert resp.status_code == 422
+    assert config.timezone == ""
+    setter.assert_not_called()
+
+
+def test_time_sync_rejects_implausible_epoch(client, config, mocker):
+    setter = mocker.patch("raceflag.clock._set_system_clock")
+    resp = client.post("/api/time/sync",
+                       json={"timezone": "America/Edmonton", "epoch_ms": 1_000_000_000_000})
+    assert resp.status_code == 422
+    assert config.timezone == ""
+    setter.assert_not_called()
+
+
+def test_get_config_includes_led_mode_settings(client):
+    data = client.get("/api/config").json()
+    for key in ("schedule_on", "schedule_off", "lamp_color", "lamp_brightness", "timezone"):
+        assert key in data
 
 
 # ---------------------------------------------------------------------------
