@@ -13,12 +13,14 @@ All notable changes to RaceFlag are documented here.
 - `os_list.json` description updated to reflect that the image is ready-to-run, not an installer
 - `install.sh` now accepts `RACEFLAG_SKIP_OVERLAYROOT=1` to skip overlayroot activation during CI builds (the `overlayroot` package and its initramfs hooks are still baked in; only the conf file is deferred to firstboot)
 - CI chroot now sets `QEMU_CPU=arm1176` so QEMU emulates the Pi Zero 1W's ARMv6 CPU — without this, QEMU defaults to ARMv7 and pip downloads armv7l wheels from piwheels that cause SIGILL on Pi Zero 1W at runtime
+- The LED Strip on/off toggle is replaced by the LED Mode selector; Off behaves as the old toggle did. `POST /api/led/enabled` is removed and `GET /api/state` reports `led_mode` instead of `led_enabled`
 
 ### Added
 - `raceflag-firstboot.service`: minimal one-shot service that runs on **Boot 2** (after Pi Imager's `firstrun.sh` has applied WiFi credentials and rebooted). Writes `/etc/overlayroot.local.conf` and reboots into overlayroot-protected Boot 3. No `update-initramfs` needed — the overlayroot initramfs hooks are already present from the baked install. Boot 2 completes in seconds. Progress is logged to `/boot/firmware/raceflag/firstboot.log`
 - `tests/test_conformance.py`: cross-platform conformance test runner — discovers cases from `../raceflag_specs/conformance/`, feeds `.jsonStream` inputs through `F1Listener._handle_feed` with race-start promotion logic, and asserts the flag-decision sequence matches each case's `expected.json`. Skipped gracefully when `raceflag_specs` is not present.
 - `CLAUDE.md`: shared specs rules — conformance-case authoring conventions, open-question tracking, and how to update `raceflag_specs` when Pi behaviour changes
 - LED modes (beta), phase 1 — settings and time sync: five new `config.json` keys (`schedule_on`, `schedule_off`, `lamp_color`, `lamp_brightness`, `timezone`), with defaults so existing config files keep working; the web UI sends the browser's timezone and time to the new `POST /api/time/sync` on every page load, and the Pi saves the timezone and corrects its clock if it is more than 60 s off. The system timezone is never changed.
+- LED modes (beta), phase 2 — **LED Mode** selector in Settings (On · Auto · Lamp · Off) with a **Lamp** popup: Red, Yellow, Green and White swatches plus a custom colour picker, a 0–100 % brightness slider, and a live preview on the strip while the popup is open (Cancel restores the saved colour; an abandoned preview ends after 60 s). Live sessions and replays show flags and the chase in Lamp mode, then return to the lamp colour. The mode always starts as On at boot. New routes: `POST /api/led/mode`, `POST`/`DELETE /api/led/lamp/preview`, `POST /api/config/lamp`
 
 ---
 

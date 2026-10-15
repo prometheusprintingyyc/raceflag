@@ -199,14 +199,22 @@
           <span class="seg-label seg-on">ON</span>
         </label>
       </div>
-      <div class="settings-row">
-        <span class="settings-label">LED Strip</span>
-        <label class="seg-toggle" id="btn-led-toggle">
-          <input type="checkbox" id="led-toggle-input">
-          <div class="seg-highlight"></div>
-          <span class="seg-label seg-off">OFF</span>
-          <span class="seg-label seg-on">ON</span>
-        </label>
+      <div class="settings-row led-mode-row">
+        <div class="led-mode-head">
+          <span class="settings-label">LED Mode</span>
+          <span class="led-mode-hint" id="led-mode-hint"></span>
+        </div>
+        <div class="led-mode-controls">
+          <div class="mode-pill" id="led-mode-pill" role="group" aria-label="LED mode">
+            <button type="button" class="mode-seg" data-mode="on" aria-pressed="true">On</button>
+            <button type="button" class="mode-seg" data-mode="auto" aria-pressed="false">Auto</button>
+            <button type="button" class="mode-seg" data-mode="lamp" aria-pressed="false">Lamp</button>
+            <button type="button" class="mode-seg" data-mode="off" aria-pressed="false">Off</button>
+          </div>
+          <button type="button" class="btn-mode-gear" id="btn-mode-gear" aria-label="Edit lamp colour" hidden>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path></svg>
+          </button>
+        </div>
       </div>
       <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:8px">
         <span class="settings-label">Test Effects</span>
@@ -249,6 +257,43 @@
       <div class="confirm-actions">
         <button class="btn-confirm-cancel" id="btn-shutdown-cancel">Cancel</button>
         <button class="btn-confirm-stop" id="btn-shutdown-confirm">Shut Down</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="lamp-overlay">
+    <div class="confirm-dialog mode-dialog" role="dialog" aria-modal="true" aria-labelledby="lamp-title">
+      <div class="mode-dialog-head">
+        <div class="confirm-title" id="lamp-title">Lamp</div>
+        <div class="confirm-body">Pick a colour and brightness. The LEDs change as you adjust.</div>
+      </div>
+      <div class="live-notice" id="lamp-live-notice" hidden>Live session – preview paused</div>
+      <div class="dialog-field">
+        <div class="dialog-field-head">
+          <span class="dialog-field-label">COLOUR</span>
+          <span class="dialog-field-value" id="lamp-colour-name">White</span>
+        </div>
+        <div class="swatch-grid" id="lamp-swatches">
+          <button type="button" class="swatch" data-hex="#FF0000" style="background:#FF0000" aria-label="Red" aria-pressed="false"></button>
+          <button type="button" class="swatch" data-hex="#FFD700" style="background:#FFD700" aria-label="Yellow" aria-pressed="false"></button>
+          <button type="button" class="swatch" data-hex="#00FF00" style="background:#00FF00" aria-label="Green" aria-pressed="false"></button>
+          <button type="button" class="swatch" data-hex="#FFFFFF" style="background:#FFFFFF" aria-label="White" aria-pressed="false"></button>
+          <label class="swatch swatch-custom" id="lamp-custom" aria-label="Custom colour">
+            <span class="swatch-custom-dot" id="lamp-custom-dot"></span>
+            <input type="color" id="lamp-custom-input" value="#ffffff">
+          </label>
+        </div>
+      </div>
+      <div class="dialog-field">
+        <div class="dialog-field-head">
+          <label class="dialog-field-label" for="lamp-bright">BRIGHTNESS</label>
+          <span class="dialog-field-value" id="lamp-bright-value">100%</span>
+        </div>
+        <input type="range" class="lamp-bright" id="lamp-bright" min="0" max="100" step="1" value="100">
+      </div>
+      <div class="confirm-actions">
+        <button type="button" class="btn-confirm-cancel" id="btn-lamp-cancel">Cancel</button>
+        <button type="button" class="btn-confirm-stop" id="btn-lamp-save">Save</button>
       </div>
     </div>
   </div>

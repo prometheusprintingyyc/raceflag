@@ -152,7 +152,7 @@ function updateUI(data) {
   document.getElementById('rain').style.color = w.rain ? '#4fc3f7' : '#aaa';
 
   _setDemoMode(!!data.demo_mode);
-  _setLedEnabled(!!data.led_enabled);
+  _syncLedModeFromState(data);
 
   const feedEl = document.getElementById('feed-status');
   if (feedEl) {
@@ -362,6 +362,7 @@ async function loadSettings() {
       btn.disabled = true;
     }
     const cfg = await configResp.json();
+    _applyLedConfig(cfg);
     const slider = document.getElementById('delay-slider');
     slider.value = cfg.delay_seconds ?? 0;
     document.getElementById('delay-value').textContent = slider.value;
@@ -467,11 +468,6 @@ function _setDemoMode(enabled) {
   }
 }
 
-function _setLedEnabled(enabled) {
-  const input = document.getElementById('led-toggle-input');
-  if (input) input.checked = enabled;
-}
-
 document.getElementById('demo-mode-input').addEventListener('change', async (e) => {
   await fetch('/api/config/demo-mode', {
     method: 'POST',
@@ -481,13 +477,185 @@ document.getElementById('demo-mode-input').addEventListener('change', async (e) 
   await fetchState();
 });
 
-document.getElementById('led-toggle-input').addEventListener('change', async (e) => {
-  await fetch('/api/led/enabled', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ enabled: e.target.checked }),
+// ── LED mode, lamp & schedule (feature 014) ────────────────────────────────
+const LAMP_PRESETS = [
+  { name: 'Red', hex: '#FF0000' },
+  { name: 'Yellow', hex: '#FFD700' },
+  { name: 'Green', hex: '#00FF00' },
+  { name: 'White', hex: '#FFFFFF' },
+];
+const PREVIEW_THROTTLE_MS = 150;
+const PREVIEW_KEEPALIVE_MS = 20000;  // the Pi drops a preview after 60 s without updates
+
+let _ledMode = 'on';
+let _sessionLive = false;
+let _ledCfg = { schedule_on: '08:00', schedule_off: '23:00', lamp_color: '#FFFFFF', lamp_brightness: 100 };
+let _lampDraft = null;  // { color, brightness } while the Lamp popup is open
+let _previewTimer = null;
+let _previewKeepalive = null;
+let _previewLastSent = 0;
+
+function _hhmmToMin(v) {
+  const [h, m] = String(v).split(':').map(Number);
+  return h * 60 + m;
+}
+
+function _fmtTime(v) {
+  const m = _hhmmToMin(v);
+  return new Date(2000, 0, 1, Math.floor(m / 60), m % 60)
+    .toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+function _lampName(hex) {
+  const up = String(hex).toUpperCase();
+  const p = LAMP_PRESETS.find(x => x.hex === up);
+  return p ? p.name : up;
+}
+
+function _renderLedMode() {
+  document.querySelectorAll('#led-mode-pill .mode-seg').forEach(btn => {
+    const sel = btn.dataset.mode === _ledMode;
+    btn.classList.toggle('selected', sel);
+    btn.setAttribute('aria-pressed', sel ? 'true' : 'false');
   });
-  await fetchState();
+  const hints = {
+    on: 'Chase animation, always on',
+    auto: `On ${_fmtTime(_ledCfg.schedule_on)}, off ${_fmtTime(_ledCfg.schedule_off)}`,
+    lamp: `${_lampName(_ledCfg.lamp_color)} · ${_ledCfg.lamp_brightness}%`,
+    off: 'Dark, even during live sessions',
+  };
+  document.getElementById('led-mode-hint').textContent = hints[_ledMode] || '';
+  const gear = document.getElementById('btn-mode-gear');
+  gear.hidden = !(_ledMode === 'auto' || _ledMode === 'lamp');
+  gear.setAttribute('aria-label', _ledMode === 'auto' ? 'Edit schedule' : 'Edit lamp colour');
+}
+
+function _applyLedConfig(cfg) {
+  for (const key of ['schedule_on', 'schedule_off', 'lamp_color', 'lamp_brightness']) {
+    if (cfg[key] !== undefined) _ledCfg[key] = cfg[key];
+  }
+  _renderLedMode();
+}
+
+function _syncLedModeFromState(data) {
+  if (data.led_mode && data.led_mode !== _ledMode) {
+    _ledMode = data.led_mode;
+    _renderLedMode();
+  }
+  _sessionLive = !!((data.session && data.session.is_active) || data.replay_mode);
+  document.getElementById('lamp-live-notice').hidden = !_sessionLive;
+}
+
+function _openModePopup(mode) {
+  if (mode === 'lamp') _openLamp();
+}
+
+document.querySelectorAll('#led-mode-pill .mode-seg').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const mode = btn.dataset.mode;
+    _ledMode = mode;
+    _renderLedMode();
+    try {
+      await fetch('/api/led/mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      });
+    } catch (e) {}
+    _openModePopup(mode);
+  });
+});
+
+document.getElementById('btn-mode-gear').addEventListener('click', () => _openModePopup(_ledMode));
+
+// ── Lamp popup ─────────────────────────────────────────────────────────────
+function _renderLampDraft() {
+  const d = _lampDraft;
+  if (!d) return;
+  document.getElementById('lamp-colour-name').textContent = _lampName(d.color);
+  document.querySelectorAll('#lamp-swatches .swatch[data-hex]').forEach(sw => {
+    sw.setAttribute('aria-pressed', sw.dataset.hex === d.color ? 'true' : 'false');
+  });
+  const isPreset = LAMP_PRESETS.some(p => p.hex === d.color);
+  document.getElementById('lamp-custom').classList.toggle('selected', !isPreset);
+  document.getElementById('lamp-custom-dot').style.background = d.color;
+  document.getElementById('lamp-custom-input').value = d.color.toLowerCase();
+  document.getElementById('lamp-bright').value = d.brightness;
+  document.getElementById('lamp-bright-value').textContent = `${d.brightness}%`;
+}
+
+function _sendPreview(immediate) {
+  // Trailing throttle: at most one request per PREVIEW_THROTTLE_MS, always the latest draft.
+  if (!_lampDraft) return;
+  const wait = immediate ? 0 : Math.max(0, PREVIEW_THROTTLE_MS - (Date.now() - _previewLastSent));
+  clearTimeout(_previewTimer);
+  _previewTimer = setTimeout(() => {
+    if (!_lampDraft) return;
+    _previewLastSent = Date.now();
+    fetch('/api/led/lamp/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ color: _lampDraft.color, brightness: _lampDraft.brightness }),
+    }).catch(() => {});
+  }, wait);
+}
+
+function _updateLampDraft(changes) {
+  Object.assign(_lampDraft, changes);
+  _renderLampDraft();
+  _sendPreview(false);
+}
+
+function _openLamp() {
+  _lampDraft = {
+    color: String(_ledCfg.lamp_color).toUpperCase(),
+    brightness: Number(_ledCfg.lamp_brightness),
+  };
+  _renderLampDraft();
+  document.getElementById('lamp-live-notice').hidden = !_sessionLive;
+  document.getElementById('lamp-overlay').classList.add('open');
+  _sendPreview(true);
+  clearInterval(_previewKeepalive);
+  _previewKeepalive = setInterval(() => _sendPreview(true), PREVIEW_KEEPALIVE_MS);
+}
+
+function _closeLamp() {
+  _lampDraft = null;
+  clearTimeout(_previewTimer);
+  clearInterval(_previewKeepalive);
+  document.getElementById('lamp-overlay').classList.remove('open');
+}
+
+function _cancelLamp() {
+  _closeLamp();
+  fetch('/api/led/lamp/preview', { method: 'DELETE' }).catch(() => {});
+}
+
+document.querySelectorAll('#lamp-swatches .swatch[data-hex]').forEach(sw => {
+  sw.addEventListener('click', () => _updateLampDraft({ color: sw.dataset.hex }));
+});
+document.getElementById('lamp-custom-input').addEventListener('input', e => {
+  _updateLampDraft({ color: e.target.value.toUpperCase() });
+});
+document.getElementById('lamp-bright').addEventListener('input', e => {
+  _updateLampDraft({ brightness: Number(e.target.value) });
+});
+document.getElementById('btn-lamp-cancel').addEventListener('click', _cancelLamp);
+document.getElementById('lamp-overlay').addEventListener('click', function (e) {
+  if (e.target === this) _cancelLamp();
+});
+document.getElementById('btn-lamp-save').addEventListener('click', async () => {
+  const draft = _lampDraft;
+  if (!draft) return;
+  _closeLamp();
+  try {
+    const resp = await fetch('/api/config/lamp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ color: draft.color, brightness: draft.brightness }),
+    });
+    if (resp.ok) _applyLedConfig(await resp.json());
+  } catch (e) {}
 });
 
 // ── Shutdown ────────────────────────────────────────────────────────────────
@@ -615,11 +783,13 @@ fetch('/api/time/sync', {
     const resp = await fetch('/api/config');
     if (!resp.ok) return;
     const cfg = await resp.json();
+    _applyLedConfig(cfg);
     _savedDelay = cfg.delay_seconds ?? 0;
     const slider = document.getElementById('delay-slider');
     slider.value = _savedDelay;
     document.getElementById('delay-value').textContent = slider.value;
   } catch (e) {}
 })();
+_renderLedMode();
 setInterval(fetchState, POLL_MS);
 setInterval(_tickClock, 1000);
