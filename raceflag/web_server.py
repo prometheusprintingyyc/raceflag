@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from raceflag import clock
 from raceflag.config import Config, save as save_config
 from raceflag.led_controller import LEDController
-from raceflag.led_modes import MODES, is_hex_color
+from raceflag.led_modes import MODES, is_hex_color, parse_hhmm
 from raceflag.state import AppState
 
 VALID_FLAG_STATES = {
@@ -69,6 +69,11 @@ class LEDModeRequest(BaseModel):
 class LampRequest(BaseModel):
     color: str
     brightness: int = Field(ge=0, le=100)
+
+
+class ScheduleRequest(BaseModel):
+    on: str
+    off: str
 
 
 class LoadSessionRequest(BaseModel):
@@ -184,6 +189,21 @@ def create_app(
         led.set_lamp(color, req.brightness)
         led.end_preview()
         return {"lamp_color": color, "lamp_brightness": req.brightness}
+
+    @app.post("/api/config/schedule")
+    async def set_schedule(req: ScheduleRequest):
+        try:
+            on_min, off_min = parse_hhmm(req.on), parse_hhmm(req.off)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        if on_min == off_min:
+            raise HTTPException(status_code=422, detail="On and off times must be different")
+        config.schedule_on = req.on
+        config.schedule_off = req.off
+        if config_path:
+            save_config(config, config_path)
+        led.set_schedule(on_min, off_min)
+        return {"schedule_on": req.on, "schedule_off": req.off}
 
     @app.post("/api/test-idle")
     async def test_idle():

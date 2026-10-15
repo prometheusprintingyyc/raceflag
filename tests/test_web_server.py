@@ -266,6 +266,34 @@ def test_time_sync_updates_led_timezone(client, led, mocker):
     assert led._timezone == "America/Edmonton"
 
 
+def test_set_schedule_persists_and_applies(tmp_path, app_state, config, led):
+    path = tmp_path / "config.json"
+    c = TestClient(create_app(state=app_state, config=config, led=led, config_path=path))
+    resp = c.post("/api/config/schedule", json={"on": "18:00", "off": "01:00"})
+    assert resp.status_code == 200
+    assert resp.json() == {"schedule_on": "18:00", "schedule_off": "01:00"}
+    assert (config.schedule_on, config.schedule_off) == ("18:00", "01:00")
+    saved = json.loads(path.read_text())
+    assert (saved["schedule_on"], saved["schedule_off"]) == ("18:00", "01:00")
+    assert led._schedule == (1080, 60)
+
+
+def test_set_schedule_rejects_equal_times(client, config, led):
+    resp = client.post("/api/config/schedule", json={"on": "09:00", "off": "09:00"})
+    assert resp.status_code == 422
+    assert (config.schedule_on, config.schedule_off) == ("08:00", "23:00")
+    assert led._schedule == (480, 1380)
+
+
+@pytest.mark.parametrize("on,off", [
+    ("8:00", "23:00"), ("24:00", "23:00"), ("08:60", "23:00"), ("", "23:00"), ("08:00:00", "23:00"),
+])
+def test_set_schedule_rejects_bad_format(client, config, on, off):
+    resp = client.post("/api/config/schedule", json={"on": on, "off": off})
+    assert resp.status_code == 422
+    assert config.schedule_on == "08:00"
+
+
 # ---------------------------------------------------------------------------
 # Time sync (feature 014)
 # ---------------------------------------------------------------------------
