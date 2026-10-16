@@ -103,6 +103,7 @@ def create_app(
     replay_manager=None,
     listener=None,
     on_replay_event=None,
+    flag_router=None,
 ) -> FastAPI:
     app = FastAPI(title="RaceFlag")
 

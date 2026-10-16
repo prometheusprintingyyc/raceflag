@@ -10,14 +10,12 @@ import pytest
 from pathlib import Path
 
 from raceflag.f1_listener import F1Listener
+from raceflag.flag_router import FlagRouter
 from raceflag.replay_manager import _parse_jsonstream_line
 from raceflag.state import AppState
 
 SPECS_DIR = Path(__file__).parent.parent.parent / "raceflag_specs"
 CONFORMANCE_DIR = SPECS_DIR / "conformance"
-
-_RACE_SESSION_TYPES = {"race", "sprint"}
-_IDLE_STATUSES = {"unknown", "break", "finished"}
 
 
 def _discover_cases():
@@ -49,26 +47,13 @@ def _load_case(case_dir: Path):
 
 
 def _run_case(events):
-    """Feed events through F1Listener with race-start promotion; return list of flag decisions."""
+    """Feed events through F1Listener and FlagRouter.resolve; return the flag decisions."""
     decisions = []
     state = AppState()
-    race_started = False
+    router = FlagRouter(state=state, led=None, config=None)
 
     def on_flag_change(status):
-        nonlocal race_started
-        if status in _IDLE_STATUSES:
-            race_started = False
-
-        effective = status
-        if (
-            status == "track_clear"
-            and not race_started
-            and state.session.is_active
-            and state.session.session_type.lower() in _RACE_SESSION_TYPES
-        ):
-            race_started = True
-            effective = "race_start"
-
+        _display, effective = router.resolve(status)
         decisions.append(effective)
 
     listener = F1Listener(state=state, on_track_status_change=on_flag_change)

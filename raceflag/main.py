@@ -3,7 +3,6 @@ import asyncio
 import logging
 import os
 import shutil
-import time
 from pathlib import Path
 
 import uvicorn
@@ -11,6 +10,7 @@ import uvicorn
 from raceflag.config import load as load_config, save as save_config, Config, fix_led_count
 from raceflag.state import AppState
 from raceflag.f1_listener import F1Listener
+from raceflag.flag_router import FlagRouter
 from raceflag.api_client import JolpicaClient
 from raceflag.web_server import create_app
 from raceflag.replay_manager import ReplayManager
@@ -205,60 +205,9 @@ async def main() -> None:
 
     jolpica = JolpicaClient()
 
-    _IDLE_STATUSES = {"unknown", "break", "finished"}
-    _LED_IDLE_STATUSES = {"unknown", "break", "finished"}
-    _TIMED_EFFECTS = {"track_clear": 30.0, "race_start": 30.0, "checkered": 30.0}
-    _RACE_SESSION_TYPES = {"race", "sprint"}
-    _race_started = False
+    flag_router = FlagRouter(state=state, led=led, config=config)
 
-    def on_flag_change(status: str) -> None:
-        nonlocal _race_started
-        delay = 0.0 if state.replay_mode else config.delay_seconds
-        logger.info("Flag change received: %s  delay=%.1fs", status, delay)
-
-        # Reset when a session ends so the next race triggers the animation again
-        if status in _IDLE_STATUSES:
-            _race_started = False
-
-        # Promote the first track_clear in a Race/Sprint session to race_start.
-        # Use `is_active or replay_mode` because in replay the re-fire of the last
-        # pre-race TrackStatus happens before SessionStatus "Started" is processed,
-        # so is_active is still False at the moment the promotion needs to fire.
-        effective = status
-        if (status == "track_clear"
-                and not _race_started
-                and (state.session.is_active or state.replay_mode)
-                and state.session.session_type.lower() in _RACE_SESSION_TYPES):
-            _race_started = True
-            effective = "race_start"
-
-        if effective not in _IDLE_STATUSES and effective not in _TIMED_EFFECTS and (state.session.is_active or state.replay_mode):
-            if state.replay_mode:
-                led.force_trigger(effective)
-            else:
-                led.trigger(effective)
-
-        if delay <= 0:
-            state.set_display_track_status(status)
-            if status in _LED_IDLE_STATUSES:
-                led.set_idle(True)
-            elif effective in _TIMED_EFFECTS:
-                led.trigger_timed(effective, _TIMED_EFFECTS[effective])
-        else:
-            async def _delayed_ui(s: str = status, e: str = effective, d: float = delay) -> None:
-                # Record when this status was received so trigger_timed only flushes
-                # items that predate it — items queued during the delay window (e.g. a
-                # yellow flag that arrived while waiting to fire track_clear) are preserved.
-                scheduled_at = time.monotonic()
-                await asyncio.sleep(d)
-                state.set_display_track_status(s)
-                if s in _LED_IDLE_STATUSES:
-                    led.set_idle(True)
-                elif e in _TIMED_EFFECTS:
-                    led.trigger_timed(e, _TIMED_EFFECTS[e], flush_before=scheduled_at)
-            asyncio.ensure_future(_delayed_ui())
-
-    listener = F1Listener(state=state, on_track_status_change=on_flag_change)
+    listener = F1Listener(state=state, on_track_status_change=flag_router.on_flag_change)
     replay = ReplayManager(on_feed=listener.process_replay_event)
 
     current_version = VERSION_FILE.read_text().strip() if VERSION_FILE.exists() else ""
@@ -272,7 +221,8 @@ async def main() -> None:
         version=current_version,
         replay_manager=replay,
         listener=listener,
-        on_replay_event=on_flag_change,
+        on_replay_event=flag_router.on_flag_change,
+        flag_router=flag_router,
     )
 
     server_config = uvicorn.Config(app, host="0.0.0.0", port=8080, log_level="warning")
