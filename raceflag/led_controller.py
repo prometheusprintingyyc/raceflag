@@ -75,6 +75,7 @@ class LEDController:
         self._schedule: tuple[int, int] = (8 * 60, 23 * 60)
         self._timezone: str = ""
         self._lamp: tuple[str, int] = ("#FFFFFF", 100)
+        self._lamp_use_schedule: bool = False
         self._preview: tuple[str, int] | None = None
         self._preview_expiry: float = 0.0
         self._preview_lock = threading.Lock()  # guards _preview/_preview_expiry across threads
@@ -151,6 +152,9 @@ class LEDController:
 
     def set_lamp(self, hex_color: str, brightness: int) -> None:
         self._lamp = (hex_color, brightness)
+
+    def set_lamp_use_schedule(self, enabled: bool) -> None:
+        self._lamp_use_schedule = enabled
 
     def start_preview(self, hex_color: str, brightness: int) -> None:
         with self._preview_lock:
@@ -401,7 +405,7 @@ class LEDController:
             self._timed_effect = ""
             self._idle_active = True
         scheduled_on = True
-        if self._mode == "auto":
+        if self._mode == "auto" or (self._mode == "lamp" and self._lamp_use_schedule):
             scheduled_on = in_window(self._current_local_minutes(), *self._schedule)
         return decide_output(
             mode=self._mode,

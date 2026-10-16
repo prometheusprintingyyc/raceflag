@@ -189,6 +189,7 @@ async def main() -> None:
     # Invalid stored values fall back to defaults so a bad file can't stop the unit booting.
     led.set_schedule(*schedule_from_config(config.schedule_on, config.schedule_off))
     led.set_lamp(*lamp_from_config(config.lamp_color, config.lamp_brightness))
+    led.set_lamp_use_schedule(config.lamp_use_schedule is True)
     led.set_timezone(config.timezone)
     led.start()
 

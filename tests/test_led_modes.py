@@ -27,6 +27,11 @@ def test_modes():
     ("lamp", True, False, True, True, "normal"),      # session beats preview
     ("on", False, False, True, True, "normal"),       # preview only in Lamp mode
     ("auto", False, False, False, True, "dark"),
+    # Lamp with "Use schedule": the caller passes scheduled_on=False outside the window
+    ("lamp", False, False, False, False, "dark"),
+    ("lamp", True, False, False, False, "normal"),    # session lights the off window
+    ("lamp", False, True, False, False, "normal"),    # timed effect plays out
+    ("lamp", False, False, False, True, "lamp_preview"),  # preview shows at night
 ])
 def test_decide_output(mode, session, effect, sched, preview, expected):
     assert decide_output(mode, session, effect, sched, preview) == expected

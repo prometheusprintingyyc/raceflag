@@ -61,6 +61,7 @@ def test_led_mode_settings_have_defaults(tmp_path):
     assert cfg.schedule_off == "23:00"
     assert cfg.lamp_color == "#FFFFFF"
     assert cfg.lamp_brightness == 100
+    assert cfg.lamp_use_schedule is False
     assert cfg.timezone == ""
 
 

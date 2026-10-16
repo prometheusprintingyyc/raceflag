@@ -25,6 +25,8 @@ def decide_output(mode: str, session_live: bool, effect_active: bool,
 
     "normal" = existing flag / timed-effect / idle-chase logic, "lamp_preview" = draft lamp
     colour, "lamp" = saved lamp colour, "dark" = all off. Hotspot is handled by the caller.
+    scheduled_on is False only outside the schedule window in Auto, or in Lamp with
+    "Use schedule" ticked.
     """
     if mode == "off":
         return "dark"
@@ -36,7 +38,7 @@ def decide_output(mode: str, session_live: bool, effect_active: bool,
         return "normal"
     if mode == "auto":
         return "normal" if scheduled_on else "dark"
-    return "lamp"
+    return "lamp" if scheduled_on else "dark"
 
 
 def session_live(is_active: bool, replay_mode: bool, track_status: str) -> bool:

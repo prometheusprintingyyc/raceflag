@@ -489,7 +489,10 @@ const PREVIEW_KEEPALIVE_MS = 20000;  // the Pi drops a preview after 60 s withou
 
 let _ledMode = 'on';
 let _sessionLive = false;
-let _ledCfg = { schedule_on: '08:00', schedule_off: '23:00', lamp_color: '#FFFFFF', lamp_brightness: 100 };
+let _ledCfg = {
+  schedule_on: '08:00', schedule_off: '23:00',
+  lamp_color: '#FFFFFF', lamp_brightness: 100, lamp_use_schedule: false,
+};
 let _lampDraft = null;  // { color, brightness } while the Lamp popup is open
 let _previewTimer = null;
 let _previewKeepalive = null;
@@ -521,7 +524,9 @@ function _renderLedMode() {
   const hints = {
     on: 'Chase animation, always on',
     auto: `On ${_fmtTime(_ledCfg.schedule_on)}, off ${_fmtTime(_ledCfg.schedule_off)}`,
-    lamp: `${_lampName(_ledCfg.lamp_color)} · ${_ledCfg.lamp_brightness}%`,
+    lamp: `${_lampName(_ledCfg.lamp_color)} · ${_ledCfg.lamp_brightness}%` +
+      (_ledCfg.lamp_use_schedule
+        ? ` · ${_fmtTime(_ledCfg.schedule_on)}–${_fmtTime(_ledCfg.schedule_off)}` : ''),
     off: 'Dark, even during live sessions',
   };
   document.getElementById('led-mode-hint').textContent = hints[_ledMode] || '';
@@ -531,7 +536,7 @@ function _renderLedMode() {
 }
 
 function _applyLedConfig(cfg) {
-  for (const key of ['schedule_on', 'schedule_off', 'lamp_color', 'lamp_brightness']) {
+  for (const key of ['schedule_on', 'schedule_off', 'lamp_color', 'lamp_brightness', 'lamp_use_schedule']) {
     if (cfg[key] !== undefined) _ledCfg[key] = cfg[key];
   }
   _renderLedMode();
@@ -607,12 +612,26 @@ function _updateLampDraft(changes) {
   _sendPreview(false);
 }
 
+function _renderLampSchedule() {
+  const use = document.getElementById('lamp-use-sched').checked;
+  const on = document.getElementById('lamp-sched-on').value;
+  const off = document.getElementById('lamp-sched-off').value;
+  const valid = HHMM_RE.test(on) && HHMM_RE.test(off);
+  document.getElementById('lamp-sched-times').hidden = !use;
+  document.getElementById('lamp-sched-error').hidden = !(use && valid && on === off);
+  document.getElementById('btn-lamp-save').disabled = use && (!valid || on === off);
+}
+
 function _openLamp() {
   _lampDraft = {
     color: String(_ledCfg.lamp_color).toUpperCase(),
     brightness: Number(_ledCfg.lamp_brightness),
   };
   _renderLampDraft();
+  document.getElementById('lamp-use-sched').checked = !!_ledCfg.lamp_use_schedule;
+  document.getElementById('lamp-sched-on').value = _ledCfg.schedule_on;
+  document.getElementById('lamp-sched-off').value = _ledCfg.schedule_off;
+  _renderLampSchedule();
   document.getElementById('lamp-live-notice').hidden = !_sessionLive;
   document.getElementById('lamp-overlay').classList.add('open');
   _sendPreview(true);
@@ -641,6 +660,9 @@ document.getElementById('lamp-custom-input').addEventListener('input', e => {
 document.getElementById('lamp-bright').addEventListener('input', e => {
   _updateLampDraft({ brightness: Number(e.target.value) });
 });
+for (const id of ['lamp-use-sched', 'lamp-sched-on', 'lamp-sched-off']) {
+  document.getElementById(id).addEventListener('input', _renderLampSchedule);
+}
 document.getElementById('btn-lamp-cancel').addEventListener('click', _cancelLamp);
 document.getElementById('lamp-overlay').addEventListener('click', function (e) {
   if (e.target === this) _cancelLamp();
@@ -648,12 +670,24 @@ document.getElementById('lamp-overlay').addEventListener('click', function (e) {
 document.getElementById('btn-lamp-save').addEventListener('click', async () => {
   const draft = _lampDraft;
   if (!draft) return;
+  const useSchedule = document.getElementById('lamp-use-sched').checked;
+  const on = document.getElementById('lamp-sched-on').value;
+  const off = document.getElementById('lamp-sched-off').value;
   _closeLamp();
   try {
+    // The schedule is shared with Auto mode; save it first so the lamp never runs on stale times.
+    if (useSchedule && (on !== _ledCfg.schedule_on || off !== _ledCfg.schedule_off)) {
+      const sresp = await fetch('/api/config/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ on, off }),
+      });
+      if (sresp.ok) _applyLedConfig(await sresp.json());
+    }
     const resp = await fetch('/api/config/lamp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ color: draft.color, brightness: draft.brightness }),
+      body: JSON.stringify({ color: draft.color, brightness: draft.brightness, use_schedule: useSchedule }),
     });
     if (resp.ok) _applyLedConfig(await resp.json());
   } catch (e) {}

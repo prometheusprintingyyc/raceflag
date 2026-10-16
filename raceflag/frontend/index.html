@@ -291,6 +291,24 @@
         </div>
         <input type="range" class="lamp-bright" id="lamp-bright" min="0" max="100" step="1" value="100">
       </div>
+      <div class="dialog-field">
+        <label class="lamp-sched-toggle">
+          <input type="checkbox" id="lamp-use-sched">
+          <span>Use schedule</span>
+        </label>
+        <div class="lamp-sched-times" id="lamp-sched-times" hidden>
+          <div class="sched-row">
+            <label for="lamp-sched-on">On at</label>
+            <input type="time" id="lamp-sched-on" value="08:00">
+          </div>
+          <div class="sched-row">
+            <label for="lamp-sched-off">Off at</label>
+            <input type="time" id="lamp-sched-off" value="23:00">
+          </div>
+          <span class="sched-error" id="lamp-sched-error" hidden>On and off times can't be the same.</span>
+          <span class="sched-span">Same times as Auto mode. Live sessions light the box even during off hours.</span>
+        </div>
+      </div>
       <div class="confirm-actions">
         <button type="button" class="btn-confirm-cancel" id="btn-lamp-cancel">Cancel</button>
         <button type="button" class="btn-confirm-stop" id="btn-lamp-save">Save</button>

@@ -602,6 +602,34 @@ def test_auto_outside_window_is_dark(controller, fixed_minutes):
     assert _all(controller, (0, 0, 0))
 
 
+def test_lamp_with_schedule_outside_window_is_dark(controller, fixed_minutes):
+    fixed_minutes["value"] = 1400
+    controller.set_schedule(480, 1380)
+    controller.set_lamp("#FFD700", 100)
+    controller.set_lamp_use_schedule(True)
+    controller.set_mode("lamp")
+    controller._tick()
+    assert _all(controller, (0, 0, 0))
+
+
+def test_lamp_with_schedule_inside_window_shows_lamp(controller, fixed_minutes):
+    controller.set_schedule(480, 1380)
+    controller.set_lamp("#FFD700", 100)
+    controller.set_lamp_use_schedule(True)
+    controller.set_mode("lamp")
+    controller._tick()
+    assert _all(controller, (255, 215, 0))
+
+
+def test_lamp_without_schedule_ignores_window(controller, fixed_minutes):
+    fixed_minutes["value"] = 1400
+    controller.set_schedule(480, 1380)
+    controller.set_lamp("#FFD700", 100)
+    controller.set_mode("lamp")
+    controller._tick()
+    assert _all(controller, (255, 215, 0))
+
+
 def test_auto_outside_window_live_session_shows_chase(controller, fixed_minutes, mocker):
     fixed_minutes["value"] = 1400
     controller._is_session_live = lambda: True

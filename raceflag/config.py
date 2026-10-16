@@ -17,6 +17,7 @@ class Config:
     schedule_off: str = "23:00"
     lamp_color: str = "#FFFFFF"
     lamp_brightness: int = 100
+    lamp_use_schedule: bool = False
     timezone: str = ""
 
 

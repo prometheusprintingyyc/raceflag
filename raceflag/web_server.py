@@ -2,6 +2,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import asdict
 from pathlib import Path
+from typing import Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse, Response
@@ -69,6 +70,7 @@ class LEDModeRequest(BaseModel):
 class LampRequest(BaseModel):
     color: str
     brightness: int = Field(ge=0, le=100)
+    use_schedule: Optional[bool] = None  # /api/config/lamp only; omitted = keep the saved value
 
 
 class ScheduleRequest(BaseModel):
@@ -192,11 +194,18 @@ def create_app(
         color = _lamp_color(req)
         config.lamp_color = color
         config.lamp_brightness = req.brightness
+        if req.use_schedule is not None:
+            config.lamp_use_schedule = req.use_schedule
         if config_path:
             save_config(config, config_path)
         led.set_lamp(color, req.brightness)
+        led.set_lamp_use_schedule(config.lamp_use_schedule)
         led.end_preview()
-        return {"lamp_color": color, "lamp_brightness": req.brightness}
+        return {
+            "lamp_color": color,
+            "lamp_brightness": req.brightness,
+            "lamp_use_schedule": config.lamp_use_schedule,
+        }
 
     @app.post("/api/config/schedule")
     async def set_schedule(req: ScheduleRequest):

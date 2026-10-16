@@ -252,12 +252,31 @@ def test_save_lamp_persists_and_applies(tmp_path, app_state, config, led):
     led.start_preview("#00FF00", 100)
     resp = c.post("/api/config/lamp", json={"color": "#ffd700", "brightness": 80})
     assert resp.status_code == 200
-    assert resp.json() == {"lamp_color": "#FFD700", "lamp_brightness": 80}
+    assert resp.json() == {"lamp_color": "#FFD700", "lamp_brightness": 80, "lamp_use_schedule": False}
     assert (config.lamp_color, config.lamp_brightness) == ("#FFD700", 80)
     saved = json.loads(path.read_text())
     assert (saved["lamp_color"], saved["lamp_brightness"]) == ("#FFD700", 80)
     assert led._lamp == ("#FFD700", 80)
     assert led._preview is None
+
+
+def test_save_lamp_use_schedule_persists_and_applies(tmp_path, app_state, config, led):
+    path = tmp_path / "config.json"
+    c = TestClient(create_app(state=app_state, config=config, led=led, config_path=path))
+    resp = c.post("/api/config/lamp", json={"color": "#FFD700", "brightness": 80, "use_schedule": True})
+    assert resp.status_code == 200
+    assert resp.json()["lamp_use_schedule"] is True
+    assert config.lamp_use_schedule is True
+    assert json.loads(path.read_text())["lamp_use_schedule"] is True
+    assert led._lamp_use_schedule is True
+
+
+def test_save_lamp_without_use_schedule_keeps_saved_value(client, config, led):
+    config.lamp_use_schedule = True
+    led.set_lamp_use_schedule(True)
+    resp = client.post("/api/config/lamp", json={"color": "#FFD700", "brightness": 80})
+    assert resp.json()["lamp_use_schedule"] is True
+    assert led._lamp_use_schedule is True
 
 
 def test_save_lamp_rejects_bad_colour(client, config, led):
@@ -369,7 +388,7 @@ def test_get_time_without_timezone_reports_utc(client):
 
 def test_get_config_includes_led_mode_settings(client):
     data = client.get("/api/config").json()
-    for key in ("schedule_on", "schedule_off", "lamp_color", "lamp_brightness", "timezone"):
+    for key in ("schedule_on", "schedule_off", "lamp_color", "lamp_brightness", "lamp_use_schedule", "timezone"):
         assert key in data
 
 
