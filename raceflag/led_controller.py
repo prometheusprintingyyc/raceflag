@@ -172,6 +172,13 @@ class LEDController:
             # when the timed effect expires.
         self._idle_active = active
 
+    def force_idle(self) -> None:
+        """Return to idle immediately, cutting any timed effect short. Used by the Idle test button."""
+        self._flush_queue()
+        self._timed_effect = ""
+        self._active_animation = ""
+        self._idle_active = True
+
     def trigger(self, flag_state: str) -> None:
         self._queue.put((flag_state, time.monotonic()))
 
@@ -318,7 +325,7 @@ class LEDController:
         self._strip.show()
 
     def _step_idle_animation(self) -> None:
-        """Chase effect: red on segments 1+2 (shared period), white on segment 3."""
+        """Chase effect: red on segments 1+2 (shared period), white on segment 3 (to the strip's end)."""
         t = time.monotonic()
         # Segments 1+2 share a cycle period so they loop in sync regardless of length.
         # Segment 3 runs independently at its own rate.
@@ -326,16 +333,20 @@ class LEDController:
         SEG3_PERIOD   = 1.0
         tail = 2
 
+        last = self._strip.num_pixels() - 1
         _IDLE_SEGMENTS = [
             (0,  10, 255,   0,   0, SHARED_PERIOD),
             (11, 16, 255,   0,   0, SHARED_PERIOD),
-            (17, 20, 255, 255, 255, SEG3_PERIOD),
+            (17, last, 255, 255, 255, SEG3_PERIOD),
         ]
 
         for i in range(self._strip.num_pixels()):
             self._strip.set_pixel(i, 0, 0, 0)
 
         for start, end, r, g, b, period in _IDLE_SEGMENTS:
+            end = min(end, last)
+            if end < start:
+                continue  # strip too short for this segment
             length = end - start + 1
             head = int((t % period) / period * length)
             for j in range(tail + 1):

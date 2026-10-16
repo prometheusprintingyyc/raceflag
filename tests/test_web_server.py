@@ -92,6 +92,14 @@ def test_get_led_state_returns_pixels_for_mock_strip(client):
     assert data["pixels"][0] == [0, 0, 0]
 
 
+def test_test_idle_cancels_running_checkered(client, led):
+    led.trigger_timed("checkered", 30.0)
+    resp = client.post("/api/test-idle")
+    assert resp.status_code == 200
+    assert led._timed_effect == ""
+    assert led._idle_active is True
+
+
 def test_set_demo_mode_on(client, app_state):
     resp = client.post("/api/config/demo-mode", json={"enabled": True})
     assert resp.status_code == 200

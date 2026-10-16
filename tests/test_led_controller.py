@@ -142,6 +142,16 @@ def test_idle_animation_runs_and_shows(controller):
     assert all(b == 0 for r, g, b in controller._strip.pixels[:11])
 
 
+def test_idle_chase_last_segment_reaches_end_of_longer_strip(effects_file, mocker):
+    controller = LEDController(strip=MockStrip(30), effects_path=effects_file, delay_seconds=0.0)
+    lit = set()
+    for step in range(100):
+        mocker.patch("raceflag.led_controller.time.monotonic", return_value=step / 100)
+        controller._step_idle_animation()
+        lit |= {i for i, p in enumerate(controller._strip.pixels) if p == (255, 255, 255)}
+    assert lit == set(range(17, 30))
+
+
 def test_trigger_timed_sets_timed_effect(controller):
     controller.trigger_timed("track_clear", 30.0)
     assert controller._timed_effect == "track_clear"
@@ -211,10 +221,26 @@ def test_set_idle_clears_active_animation(controller):
     assert controller._active_animation == ""
 
 
-def test_set_idle_clears_timed_effect(controller):
-    controller.trigger_timed("track_clear", 30.0)
+def test_set_idle_lets_timed_effect_finish(controller):
+    # A session ending right after the chequered flag must not cut the effect short.
+    controller.trigger_timed("checkered", 30.0)
     controller.set_idle(True)
+    assert controller._timed_effect == "checkered"
+
+
+def test_force_idle_clears_timed_effect(controller):
+    controller.trigger_timed("checkered", 30.0)
+    controller.force_idle()
     assert controller._timed_effect == ""
+    assert controller._idle_active is True
+
+
+def test_force_idle_clears_animation_and_queue(controller):
+    controller._active_animation = "red_flag"
+    controller.trigger("yellow_flag")
+    controller.force_idle()
+    assert controller._active_animation == ""
+    assert controller._queue.empty()
 
 
 def test_set_idle_true_flushes_queue(controller):

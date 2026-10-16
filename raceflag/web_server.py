@@ -215,7 +215,7 @@ def create_app(
 
     @app.post("/api/test-idle")
     async def test_idle():
-        led.set_idle(True)
+        led.force_idle()
         return {"triggered": "idle"}
 
     @app.post("/api/test-race-start")
