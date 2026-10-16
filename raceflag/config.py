@@ -21,6 +21,19 @@ class Config:
     timezone: str = ""
 
 
+# install.sh used to write led_count 60, left over from before the 21-LED layout.
+# Every RaceFlag box has 21 LEDs, so that value is always wrong.
+_OLD_INSTALLER_LED_COUNT = 60
+
+
+def fix_led_count(cfg: Config) -> bool:
+    """Replace the old installer's led_count with 21. Returns True if it changed."""
+    if cfg.led_count != _OLD_INSTALLER_LED_COUNT:
+        return False
+    cfg.led_count = Config.led_count
+    return True
+
+
 def load(path: Path = DEFAULT_PATH) -> Config:
     if not path.exists():
         return Config()

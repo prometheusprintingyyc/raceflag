@@ -65,6 +65,19 @@ def test_led_mode_settings_have_defaults(tmp_path):
     assert cfg.timezone == ""
 
 
+def test_fix_led_count_replaces_old_installer_default():
+    cfg = config.Config(led_count=60)
+    assert config.fix_led_count(cfg) is True
+    assert cfg.led_count == 21
+
+
+@pytest.mark.parametrize("count", [21, 10, 59, 61])
+def test_fix_led_count_leaves_other_counts(count):
+    cfg = config.Config(led_count=count)
+    assert config.fix_led_count(cfg) is False
+    assert cfg.led_count == count
+
+
 def test_old_config_without_led_mode_keys_loads_defaults(tmp_path):
     p = tmp_path / "config.json"
     p.write_text(json.dumps({"led_count": 21, "delay_seconds": 5.0, "wifi_ssid": "Net"}))

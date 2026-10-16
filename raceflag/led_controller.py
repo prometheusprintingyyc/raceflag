@@ -329,7 +329,7 @@ class LEDController:
         self._strip.show()
 
     def _step_idle_animation(self) -> None:
-        """Chase effect: red on segments 1+2 (shared period), white on segment 3 (to the strip's end)."""
+        """Chase effect: red on segments 1+2 (shared period), white on segment 3."""
         t = time.monotonic()
         # Segments 1+2 share a cycle period so they loop in sync regardless of length.
         # Segment 3 runs independently at its own rate.
@@ -337,20 +337,16 @@ class LEDController:
         SEG3_PERIOD   = 1.0
         tail = 2
 
-        last = self._strip.num_pixels() - 1
         _IDLE_SEGMENTS = [
             (0,  10, 255,   0,   0, SHARED_PERIOD),
             (11, 16, 255,   0,   0, SHARED_PERIOD),
-            (17, last, 255, 255, 255, SEG3_PERIOD),
+            (17, 20, 255, 255, 255, SEG3_PERIOD),
         ]
 
         for i in range(self._strip.num_pixels()):
             self._strip.set_pixel(i, 0, 0, 0)
 
         for start, end, r, g, b, period in _IDLE_SEGMENTS:
-            end = min(end, last)
-            if end < start:
-                continue  # strip too short for this segment
             length = end - start + 1
             head = int((t % period) / period * length)
             for j in range(tail + 1):

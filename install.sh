@@ -69,7 +69,7 @@ CONFIG="$BOOT_DIR/config.json"
 if [ ! -f "$CONFIG" ]; then
   cat > "$CONFIG" <<EOF
 {
-  "led_count": 60,
+  "led_count": 21,
   "led_gpio_pin": 18,
   "led_brightness": 128,
   "delay_seconds": 0.0,

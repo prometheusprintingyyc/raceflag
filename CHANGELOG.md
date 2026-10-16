@@ -27,7 +27,7 @@ All notable changes to RaceFlag are documented here.
 ### Fixed
 - Demo Mode's LED strip panel now mirrors the real LEDs (beta). It used to work only without LED hardware and stayed black on a real unit; `GET /api/led-state` now reads the colours back from the LED driver
 - The Idle test button now returns to idle immediately (beta). It used to let a running chequered, track-clear or race-start effect play out its full 30 s first. A real session ending still lets the effect finish
-- The idle chase's white segment now runs to the end of the strip (beta), like the flag effects do, instead of stopping at pixel 20 on strips longer than 21 LEDs
+- `install.sh` wrote `"led_count": 60` to new units' `config.json`, left over from before the 21-LED layout, which made Demo Mode's strip panel far too long. It now writes 21, and at startup a saved `led_count` of exactly 60 is corrected to 21 (beta)
 
 ---
 

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import uvicorn
 
-from raceflag.config import load as load_config, save as save_config, Config
+from raceflag.config import load as load_config, save as save_config, Config, fix_led_count
 from raceflag.state import AppState
 from raceflag.f1_listener import F1Listener
 from raceflag.api_client import JolpicaClient
@@ -173,6 +173,12 @@ async def _refresh_standings_loop(client: JolpicaClient, state: AppState) -> Non
 async def main() -> None:
     _migrate_legacy_config()
     config = load_config(CONFIG_PATH)
+    if fix_led_count(config):
+        logger.info("led_count was the old installer's 60; corrected to %d", config.led_count)
+        try:
+            save_config(config, CONFIG_PATH)
+        except OSError as e:
+            logger.warning("Could not save corrected led_count: %s", e)
     state = AppState()
     state.set_demo_mode(DEMO_MODE)
 
