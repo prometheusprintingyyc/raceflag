@@ -400,9 +400,11 @@ async function loadSettings() {
     }
     const cfg = await configResp.json();
     _applyLedConfig(cfg);
-    const slider = document.getElementById('delay-slider');
-    slider.value = cfg.delay_seconds ?? 0;
-    document.getElementById('delay-value').textContent = slider.value;
+    if (!replayMode) {  // in replay the slider is the Sync Offset
+      const slider = document.getElementById('delay-slider');
+      slider.value = cfg.delay_seconds ?? 0;
+      document.getElementById('delay-value').textContent = slider.value;
+    }
   } catch (e) {}
 }
 

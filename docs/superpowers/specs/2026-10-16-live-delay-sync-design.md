@@ -85,9 +85,16 @@ On success:
 Pressing Sync again inside the window recalculates from the same lights-out (no special
 handling; not a designed use).
 
-Flags already waiting in the LED queue fire on the new delay: the queue compares against
-the current delay on every tick. (UI status updates already scheduled with the old delay
-are not rescheduled; at the start of a race there are normally none.)
+Flag changes the feed sent after lights-out are re-timed onto the new delay, LEDs and
+displayed status, as if the new delay had been set before the start: each takes effect at
+`received_at + new_delay`. FlagRouter logs every live (non-replay) flag change since the
+last live `race_start` (cleared by an idle status) and tracks every pending delayed task.
+Sync cancels all pending delayed tasks, sets the delay, shows `track_clear`, plays
+`race_start` with a full LED-queue flush, then for each logged change re-queues continuous
+flags with their original arrival time (`led.trigger_at`) and reschedules the display /
+timed-effect update for `max(0, received_at + new_delay − now)`. Since the press is at
+`lights_out_at + new_delay` and every logged change arrived after lights-out, none is
+overdue.
 
 ## API
 

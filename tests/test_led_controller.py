@@ -694,3 +694,8 @@ def test_test_effect_dark_in_off_mode(controller):
     controller.trigger_timed("checkered", 30.0)
     controller._tick()
     assert _all(controller, (0, 0, 0))
+
+
+def test_trigger_at_queues_with_given_arrival(controller):
+    controller.trigger_at("yellow_flag", 123.5)
+    assert controller._queue.get_nowait() == ("yellow_flag", 123.5)

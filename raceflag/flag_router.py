@@ -18,7 +18,11 @@ class FlagRouter:
         self._led = led
         self._config = config
         self._race_started = False
-        self._pending_race_start: asyncio.Future | None = None
+        # Every pending delayed display/timed-effect task, so Sync can cancel them all.
+        self._pending: set[asyncio.Future] = set()
+        # Live flag changes since the last live race_start: (status, effective, received_at).
+        # None until a live race_start; cleared by an idle status. Sync re-times these.
+        self._live_log: list[tuple[str, str, float]] | None = None
 
     def resolve(self, status: str) -> tuple[str, str]:
         """(status to display, effect to play) for a flag change; updates the race-start latch."""
@@ -38,14 +42,33 @@ class FlagRouter:
             return status, "race_start"
         return status, status
 
+    def _goes_to_led_queue(self, effective: str) -> bool:
+        state = self._state
+        return (effective not in IDLE_STATUSES and effective not in TIMED_EFFECTS
+                and (state.session.is_active or state.replay_mode))
+
+    def _schedule(self, status: str, effective: str, delay: float, received_at: float) -> None:
+        task = asyncio.ensure_future(self._delayed(status, effective, delay, received_at))
+        self._pending.add(task)
+        task.add_done_callback(self._pending.discard)
+
     def on_flag_change(self, status: str) -> None:
+        received_at = time.monotonic()
         state = self._state
         delay = 0.0 if state.replay_mode else self._config.delay_seconds
         logger.info("Flag change received: %s  delay=%.1fs", status, delay)
+        raw_status = status
         status, effective = self.resolve(status)
 
-        if (effective not in IDLE_STATUSES and effective not in TIMED_EFFECTS
-                and (state.session.is_active or state.replay_mode)):
+        if not state.replay_mode:
+            if raw_status == "race_start":
+                self._live_log = []
+            elif status in IDLE_STATUSES:
+                self._live_log = None
+            elif self._live_log is not None:
+                self._live_log.append((status, effective, received_at))
+
+        if self._goes_to_led_queue(effective):
             if state.replay_mode:
                 self._led.force_trigger(effective)
             else:
@@ -58,30 +81,33 @@ class FlagRouter:
             elif effective in TIMED_EFFECTS:
                 self._led.trigger_timed(effective, TIMED_EFFECTS[effective])
         else:
-            task = asyncio.ensure_future(self._delayed(status, effective, delay))
-            if effective == "race_start":
-                self._pending_race_start = task
+            self._schedule(status, effective, delay, received_at)
 
-    async def _delayed(self, status: str, effective: str, delay: float) -> None:
-        # Record when this status was received so trigger_timed only flushes items that
-        # predate it — items queued during the delay window (e.g. a yellow flag that
-        # arrived while waiting to fire track_clear) are preserved.
-        scheduled_at = time.monotonic()
+    async def _delayed(self, status: str, effective: str, delay: float, received_at: float) -> None:
+        # trigger_timed only flushes queue items that predate this status's arrival —
+        # items queued during the delay window (e.g. a yellow flag that arrived while
+        # waiting to fire track_clear) are preserved.
         await asyncio.sleep(delay)
         self._state.set_display_track_status(status)
         if status in IDLE_STATUSES:
             self._led.set_idle(True)
         elif effective in TIMED_EFFECTS:
-            self._led.trigger_timed(effective, TIMED_EFFECTS[effective], flush_before=scheduled_at)
+            self._led.trigger_timed(effective, TIMED_EFFECTS[effective], flush_before=received_at)
 
     def sync(self, delay: float) -> None:
-        """Live delay Sync (feature 016): apply the delay and play the race start now."""
-        if self._pending_race_start is not None:
-            self._pending_race_start.cancel()
-            self._pending_race_start = None
+        """Live delay Sync (feature 016): apply the delay, play the race start now, and
+        re-time every live flag change since lights-out onto the new delay."""
+        for task in list(self._pending):
+            task.cancel()
+        self._pending.clear()
         self._led.set_delay(delay)
         self._state.set_display_track_status("track_clear")
-        # Flush only what predates lights-out: flags that arrived after it (e.g. a
-        # lap-1 yellow) stay queued and fire on the new delay. None = full flush.
-        self._led.trigger_timed("race_start", TIMED_EFFECTS["race_start"],
-                                flush_before=self._state.lights_out_at)
+        # Full flush: every flag that arrived after lights-out is re-added below.
+        self._led.trigger_timed("race_start", TIMED_EFFECTS["race_start"], flush_before=None)
+        if not self._live_log:
+            return
+        now = time.monotonic()
+        for status, effective, received_at in self._live_log:
+            if self._goes_to_led_queue(effective):
+                self._led.trigger_at(effective, received_at)
+            self._schedule(status, effective, max(0.0, received_at + delay - now), received_at)

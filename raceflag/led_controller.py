@@ -186,6 +186,10 @@ class LEDController:
     def trigger(self, flag_state: str) -> None:
         self._queue.put((flag_state, time.monotonic()))
 
+    def trigger_at(self, flag_state: str, arrival: float) -> None:
+        """Like trigger, with an explicit arrival time. Used to re-time queued flags after a delay change."""
+        self._queue.put((flag_state, arrival))
+
     def force_trigger(self, flag_state: str) -> None:
         """Trigger immediately, bypassing the delay queue. Used by test buttons."""
         self._flush_queue()

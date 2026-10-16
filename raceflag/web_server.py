@@ -141,12 +141,13 @@ def create_app(
         except SyncError as exc:
             raise HTTPException(status_code=409, detail=str(exc))
         config.delay_seconds = delay
-        if config_path:
-            save_config(config, config_path)
+        # Apply first, so an SD write error still applies the delay and plays the start.
         if flag_router is not None:
             flag_router.sync(delay)
         else:
             led.set_delay(delay)
+        if config_path:
+            save_config(config, config_path)
         return {"delay_seconds": delay}
 
     @app.post("/api/time/sync")

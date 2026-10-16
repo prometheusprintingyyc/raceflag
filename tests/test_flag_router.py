@@ -69,7 +69,7 @@ async def test_sync_cancels_pending_race_start_and_plays_once():
     led.set_delay.assert_called_once_with(12.3)
     assert state.display_track_status == "track_clear"
     led.trigger_timed.assert_called_once_with(
-        "race_start", TIMED_EFFECTS["race_start"], flush_before=1000.0)
+        "race_start", TIMED_EFFECTS["race_start"], flush_before=None)
     await asyncio.sleep(0.12)
     led.trigger_timed.assert_called_once()  # the cancelled original never fires
 
@@ -81,7 +81,7 @@ def test_sync_without_pending_race_start_plays_once():
     led.trigger_timed.reset_mock()
     router.sync(0.0)
     led.trigger_timed.assert_called_once_with(
-        "race_start", TIMED_EFFECTS["race_start"], flush_before=1000.0)
+        "race_start", TIMED_EFFECTS["race_start"], flush_before=None)
 
 
 def test_sync_without_lights_out_flushes_whole_queue():
@@ -91,25 +91,129 @@ def test_sync_without_lights_out_flushes_whole_queue():
         "race_start", TIMED_EFFECTS["race_start"], flush_before=None)
 
 
-def test_sync_keeps_flags_that_arrived_after_lights_out(tmp_path):
-    # Real LEDController (thread not started): a lap-1 yellow queued after lights-out
-    # must survive Sync and fire on the new delay; a pre-lights-out item is flushed.
+def _real_router(tmp_path, delay):
+    """FlagRouter on a real LEDController (thread not started) in a live race."""
     state = AppState()
     state.set_session(SessionInfo(session_type="Race", is_active=True))
     led = LEDController(strip=MockStrip(10), effects_path=tmp_path / "missing.json",
-                        delay_seconds=30.0)
-    router = FlagRouter(state=state, led=led, config=SimpleNamespace(delay_seconds=30.0))
-    lights_out = time.monotonic() - 10.0
-    state.set_lights_out_at(lights_out)
-    led._queue.put(("safety_car", lights_out - 5.0))  # pre-race, predates lights-out
-    led.trigger("yellow_flag")                         # arrives after lights-out
+                        delay_seconds=delay)
+    router = FlagRouter(state=state, led=led, config=SimpleNamespace(delay_seconds=delay))
+    return router, state, led
+
+
+def _queued(led):
+    items = []
+    while not led._queue.empty():
+        items.append(led._queue.get_nowait())
+    return items
+
+
+def _record_display(state):
+    seen = []
+    original = state.set_display_track_status
+
+    def spy(status):
+        seen.append(status)
+        original(status)
+
+    state.set_display_track_status = spy
+    return seen
+
+
+def _other_tasks():
+    return [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+
+
+async def test_sync_keeps_flags_that_arrived_after_lights_out(tmp_path):
+    # A lap-1 yellow received after lights-out is re-added to the LED queue from the
+    # router's log; a pre-lights-out item is flushed.
+    router, state, led = _real_router(tmp_path, delay=30.0)
+    state.set_lights_out_at(time.monotonic())
+    router.on_flag_change("race_start")
+    led._queue.put(("safety_car", time.monotonic() - 50.0))  # stale, predates the start
+    router.on_flag_change("yellow_flag")
 
     router.sync(5.0)
 
-    queued = []
-    while not led._queue.empty():
-        queued.append(led._queue.get_nowait()[0])
-    assert queued == ["yellow_flag"]
+    assert [flag for flag, _ in _queued(led)] == ["yellow_flag"]
+    for task in _other_tasks():
+        task.cancel()
+
+
+async def test_sync_retimes_flag_that_already_fired_on_old_delay_zero(tmp_path):
+    # First use: delay 0. A lap-1 yellow has already fired and left the LED queue
+    # before Sync; it must come back on the new delay, LEDs and displayed status.
+    router, state, led = _real_router(tmp_path, delay=0.0)
+    state.set_lights_out_at(time.monotonic())
+    router.on_flag_change("race_start")
+    before = time.monotonic()
+    router.on_flag_change("yellow_flag")
+    after = time.monotonic()
+    led._drain_queue()  # delay 0: the yellow fires and leaves the queue
+    assert led._queue.empty()
+
+    router.sync(0.05)
+
+    queued = _queued(led)
+    assert [flag for flag, _ in queued] == ["yellow_flag"]
+    assert before <= queued[0][1] <= after  # original arrival time, not the Sync press
+    await asyncio.sleep(0.1)
+    assert state.display_track_status == "yellow_flag"
+
+
+async def test_sync_retimes_display_from_old_long_delay(tmp_path):
+    # Old delay 5 s: the yellow and the AllClear are waiting on 5 s display tasks.
+    # Sync re-times both onto 0.05 s and cancels the old tasks.
+    router, state, led = _real_router(tmp_path, delay=5.0)
+    state.set_lights_out_at(time.monotonic())
+    router.on_flag_change("race_start")
+    router.on_flag_change("yellow_flag")
+    router.on_flag_change("track_clear")
+    seen = _record_display(state)
+
+    router.sync(0.05)
+
+    assert [flag for flag, _ in _queued(led)] == ["yellow_flag"]
+    await asyncio.sleep(0.2)
+    assert seen == ["track_clear", "yellow_flag", "track_clear"]
+    assert state.display_track_status == "track_clear"
+    assert _other_tasks() == []  # the old 5 s tasks were cancelled
+
+
+async def test_idle_status_clears_the_sync_log(tmp_path):
+    router, state, led = _real_router(tmp_path, delay=0.0)
+    state.set_lights_out_at(time.monotonic())
+    router.on_flag_change("race_start")
+    router.on_flag_change("yellow_flag")
+    router.on_flag_change("finished")
+    seen = _record_display(state)
+
+    router.sync(0.05)
+
+    assert _queued(led) == []
+    assert led._timed_effect == "race_start"
+    await asyncio.sleep(0.1)
+    assert seen == ["track_clear"]  # only the race start; nothing re-timed
+    assert _other_tasks() == []
+
+
+async def test_replay_changes_are_never_logged_for_sync():
+    router, state, led = _router(replay=True)
+    router.on_flag_change("race_start")
+    router.on_flag_change("yellow_flag")
+    router.sync(0.05)
+    led.trigger_at.assert_not_called()
+    assert _other_tasks() == []
+    assert state.display_track_status == "track_clear"
+
+
+async def test_sync_cancels_every_pending_race_start():
+    router, _, led = _router(delay=0.05)
+    router.on_flag_change("race_start")
+    router.on_flag_change("race_start")  # second lights-out while the first is pending
+    router.sync(10.0)
+    await asyncio.sleep(0.12)
+    led.trigger_timed.assert_called_once()  # only Sync's race start plays
 
 
 async def test_second_sync_recalculates():

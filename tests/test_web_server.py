@@ -557,3 +557,17 @@ def test_sync_after_race_end_keeps_saved_delay(sync_env, app_state, config):
     assert resp.status_code == 409
     assert config.delay_seconds == 34.2
     assert json.loads(path.read_text())["delay_seconds"] == 34.2
+
+
+def test_sync_applies_before_saving(sync_env, app_state, monkeypatch):
+    # An SD write error must not stop the delay applying and the race start playing.
+    c, router, path = sync_env
+    app_state.set_lights_out_at(1000.0)
+
+    def failing_save(*args, **kwargs):
+        raise OSError("SD card write failed")
+
+    monkeypatch.setattr("raceflag.web_server.save_config", failing_save)
+    with pytest.raises(OSError):
+        c.post("/api/delay/sync")
+    router.sync.assert_called_once_with(34.2)
