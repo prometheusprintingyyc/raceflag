@@ -345,8 +345,19 @@ def test_get_pixel_state_returns_pixels_for_mock_strip(controller):
     assert pixels[0] == (255, 0, 0)
 
 
-def test_get_pixel_state_returns_none_for_real_strip(controller):
-    from raceflag.led_controller import LEDStrip
+def test_get_pixel_state_reads_back_from_strip_with_get_pixels(controller):
+    class FakeRealStrip:
+        def begin(self): pass
+        def set_pixel(self, n, r, g, b): pass
+        def show(self): pass
+        def num_pixels(self): return 2
+        def fill(self, r, g, b): pass
+        def get_pixels(self): return [(1, 2, 3), (4, 5, 6)]
+    controller._strip = FakeRealStrip()
+    assert controller.get_pixel_state() == [(1, 2, 3), (4, 5, 6)]
+
+
+def test_get_pixel_state_returns_none_for_strip_without_get_pixels(controller):
     class FakeRealStrip:
         def begin(self): pass
         def set_pixel(self, n, r, g, b): pass

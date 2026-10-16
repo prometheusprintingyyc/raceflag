@@ -91,6 +91,9 @@ def _make_strip(config):
             def set_pixel(self, n, r, g, b): self._strip.setPixelColor(n, self._Color(r, g, b))
             def show(self): self._strip.show()
             def num_pixels(self): return self._strip.numPixels()
+            def get_pixels(self):
+                colors = (self._strip.getPixelColor(i) for i in range(self._strip.numPixels()))
+                return [((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF) for c in colors]
             def fill(self, r, g, b):
                 for i in range(self._strip.numPixels()):
                     self._strip.setPixelColor(i, self._Color(r, g, b))

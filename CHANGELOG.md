@@ -23,6 +23,9 @@ All notable changes to RaceFlag are documented here.
 - LED modes (beta), phase 2 — **LED Mode** selector in Settings (On · Auto · Lamp · Off) with a **Lamp** popup: Red, Yellow, Green and White swatches plus a custom colour picker, a 0–100 % brightness slider, and a live preview on the strip while the popup is open (Cancel restores the saved colour; an abandoned preview ends after 60 s). Live sessions and replays show flags and the chase in Lamp mode, then return to the lamp colour. The mode always starts as On at boot. New routes: `POST /api/led/mode`, `POST`/`DELETE /api/led/lamp/preview`, `POST /api/config/lamp`. A finished session counts as over even while the timing feed keeps sending messages, so Lamp and Auto return to the lamp colour or dark after the chequered flag.
 - LED modes (beta), phase 3 — **Auto** mode with a **Schedule** popup: one on time and one off time, the same every day, in the box's local time (windows may cross midnight; equal times are rejected). Outside the window the box is dark, but live sessions and replays still light it; when a session ends, the chequered flag plays out and the box goes dark again. New route: `POST /api/config/schedule`
 
+### Fixed
+- Demo Mode's LED strip panel now mirrors the real LEDs (beta). It used to work only without LED hardware and stayed black on a real unit; `GET /api/led-state` now reads the colours back from the LED driver
+
 ---
 
 ## [0.2.28] - 2026-08-30

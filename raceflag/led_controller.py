@@ -48,6 +48,9 @@ class MockStrip:
         for i in range(self._count):
             self.set_pixel(i, r, g, b)
 
+    def get_pixels(self) -> list[tuple[int, int, int]]:
+        return list(self.pixels)
+
 
 class LEDController:
     _CONTINUOUS_ANIMATIONS = frozenset({"red_flag", "yellow_flag", "safety_car", "virtual_sc"})
@@ -95,9 +98,8 @@ class LEDController:
         self._delay_seconds = seconds
 
     def get_pixel_state(self) -> list[tuple[int, int, int]] | None:
-        if isinstance(self._strip, MockStrip):
-            return list(self._strip.pixels)
-        return None
+        get_pixels = getattr(self._strip, "get_pixels", None)
+        return get_pixels() if get_pixels else None
 
     def get_segment_breaks(self) -> list[int]:
         """Return the last pixel index of each segment except the final one."""
