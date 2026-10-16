@@ -490,3 +490,70 @@ def test_replay_load_resets_state_on_error(client_with_replay, app_state, replay
 
 def test_replay_endpoints_absent_without_replay_manager(client):
     assert client.get("/api/replay/sessions").status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Live delay Sync (feature 016)
+# ---------------------------------------------------------------------------
+
+from raceflag.state import SessionInfo  # noqa: E402
+
+
+@pytest.fixture
+def sync_env(tmp_path, app_state, config, led):
+    router = MagicMock()
+    path = tmp_path / "config.json"
+    c = TestClient(create_app(state=app_state, config=config, led=led, config_path=path,
+                              flag_router=router, clock=lambda: 1034.24))
+    app_state.set_session(SessionInfo(session_type="Race", is_active=True))
+    return c, router, path
+
+
+def test_sync_sets_saves_and_plays_race_start(sync_env, app_state, config):
+    c, router, path = sync_env
+    app_state.set_lights_out_at(1000.0)
+    resp = c.post("/api/delay/sync")
+    assert resp.status_code == 200
+    assert resp.json() == {"delay_seconds": 34.2}
+    assert config.delay_seconds == 34.2
+    assert json.loads(path.read_text())["delay_seconds"] == 34.2
+    router.sync.assert_called_once_with(34.2)
+
+
+@pytest.mark.parametrize("setup,message", [
+    ("not_race", "Sync needs a live race or sprint"),
+    ("replay", "Sync needs a live race or sprint"),
+    ("no_lights_out", "The race hasn't started yet"),
+    ("too_late", "Sync works within 90 s of the race start"),
+])
+def test_sync_refusals_change_nothing(sync_env, app_state, config, setup, message):
+    c, router, path = sync_env
+    config.delay_seconds = 7.0
+    app_state.set_lights_out_at(1000.0)
+    if setup == "not_race":
+        app_state.set_session(SessionInfo(session_type="Qualifying", is_active=True))
+    elif setup == "replay":
+        app_state.set_replay_state(True, "playing")
+    elif setup == "no_lights_out":
+        app_state.set_lights_out_at(None)
+    elif setup == "too_late":
+        app_state.set_lights_out_at(900.0)
+    resp = c.post("/api/delay/sync")
+    assert resp.status_code == 409
+    assert resp.json() == {"detail": message}
+    assert config.delay_seconds == 7.0
+    assert not path.exists()
+    router.sync.assert_not_called()
+
+
+def test_sync_after_race_end_keeps_saved_delay(sync_env, app_state, config):
+    from raceflag.f1_listener import F1Listener
+    c, router, path = sync_env
+    app_state.set_lights_out_at(1000.0)
+    assert c.post("/api/delay/sync").status_code == 200
+    F1Listener(state=app_state)._handle_feed("SessionStatus", {"Status": "Finished"})
+    assert app_state.lights_out_at is None
+    resp = c.post("/api/delay/sync")
+    assert resp.status_code == 409
+    assert config.delay_seconds == 34.2
+    assert json.loads(path.read_text())["delay_seconds"] == 34.2

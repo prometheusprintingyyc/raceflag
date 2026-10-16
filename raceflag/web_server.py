@@ -1,14 +1,16 @@
 from __future__ import annotations
 import asyncio
+import time
 from dataclasses import asdict
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 
-from raceflag import clock
+from raceflag import clock as clock_module
+from raceflag.delay_sync import SyncError, is_live_race, sync_delay
 from raceflag.config import Config, save as save_config
 from raceflag.led_controller import LEDController
 from raceflag.led_modes import MODES, is_hex_color, parse_hhmm
@@ -104,6 +106,7 @@ def create_app(
     listener=None,
     on_replay_event=None,
     flag_router=None,
+    clock: Callable[[], float] = time.monotonic,
 ) -> FastAPI:
     app = FastAPI(title="RaceFlag")
 
@@ -123,10 +126,33 @@ def create_app(
             save_config(config, config_path)
         return {"delay_seconds": req.seconds}
 
+    @app.post("/api/delay/sync")
+    async def delay_sync():
+        # Timestamp first: the press is "now", before any work below. Same clock as the
+        # listener's lights-out time (time.monotonic) in production.
+        now = clock()
+        session = state.session
+        try:
+            delay = sync_delay(
+                now,
+                state.lights_out_at,
+                is_live_race(session.session_type, session.is_active, state.replay_mode),
+            )
+        except SyncError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+        config.delay_seconds = delay
+        if config_path:
+            save_config(config, config_path)
+        if flag_router is not None:
+            flag_router.sync(delay)
+        else:
+            led.set_delay(delay)
+        return {"delay_seconds": delay}
+
     @app.post("/api/time/sync")
     async def time_sync(req: TimeSyncRequest):
         try:
-            result = clock.sync(req.timezone, req.epoch_ms, config, config_path)
+            result = clock_module.sync(req.timezone, req.epoch_ms, config, config_path)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc))
         led.set_timezone(config.timezone)
@@ -134,9 +160,9 @@ def create_app(
 
     @app.get("/api/time")
     async def get_time():
-        minutes = clock.local_minutes(config.timezone)
+        minutes = clock_module.local_minutes(config.timezone)
         return {
-            "timezone": clock.effective_timezone(config.timezone),
+            "timezone": clock_module.effective_timezone(config.timezone),
             "local_time": f"{minutes // 60:02d}:{minutes % 60:02d}",
         }
 
