@@ -81,4 +81,7 @@ class FlagRouter:
             self._pending_race_start = None
         self._led.set_delay(delay)
         self._state.set_display_track_status("track_clear")
-        self._led.trigger_timed("race_start", TIMED_EFFECTS["race_start"])
+        # Flush only what predates lights-out: flags that arrived after it (e.g. a
+        # lap-1 yellow) stay queued and fire on the new delay. None = full flush.
+        self._led.trigger_timed("race_start", TIMED_EFFECTS["race_start"],
+                                flush_before=self._state.lights_out_at)

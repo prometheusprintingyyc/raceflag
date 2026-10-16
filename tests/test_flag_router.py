@@ -1,10 +1,12 @@
 import asyncio
+import time
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
 
 from raceflag.flag_router import FlagRouter, TIMED_EFFECTS
+from raceflag.led_controller import LEDController, MockStrip
 from raceflag.state import AppState, SessionInfo
 
 
@@ -61,21 +63,53 @@ async def test_delayed_race_start_waits_for_delay():
 
 async def test_sync_cancels_pending_race_start_and_plays_once():
     router, state, led = _router(delay=0.05)
+    state.set_lights_out_at(1000.0)
     router.on_flag_change("race_start")
     router.sync(12.3)
     led.set_delay.assert_called_once_with(12.3)
     assert state.display_track_status == "track_clear"
-    led.trigger_timed.assert_called_once_with("race_start", TIMED_EFFECTS["race_start"])
+    led.trigger_timed.assert_called_once_with(
+        "race_start", TIMED_EFFECTS["race_start"], flush_before=1000.0)
     await asyncio.sleep(0.12)
     led.trigger_timed.assert_called_once()  # the cancelled original never fires
 
 
 def test_sync_without_pending_race_start_plays_once():
-    router, _, led = _router(delay=0.0)
+    router, state, led = _router(delay=0.0)
+    state.set_lights_out_at(1000.0)
     router.on_flag_change("race_start")  # delay 0: played immediately, nothing pending
     led.trigger_timed.reset_mock()
     router.sync(0.0)
-    led.trigger_timed.assert_called_once_with("race_start", TIMED_EFFECTS["race_start"])
+    led.trigger_timed.assert_called_once_with(
+        "race_start", TIMED_EFFECTS["race_start"], flush_before=1000.0)
+
+
+def test_sync_without_lights_out_flushes_whole_queue():
+    router, _, led = _router()
+    router.sync(5.0)
+    led.trigger_timed.assert_called_once_with(
+        "race_start", TIMED_EFFECTS["race_start"], flush_before=None)
+
+
+def test_sync_keeps_flags_that_arrived_after_lights_out(tmp_path):
+    # Real LEDController (thread not started): a lap-1 yellow queued after lights-out
+    # must survive Sync and fire on the new delay; a pre-lights-out item is flushed.
+    state = AppState()
+    state.set_session(SessionInfo(session_type="Race", is_active=True))
+    led = LEDController(strip=MockStrip(10), effects_path=tmp_path / "missing.json",
+                        delay_seconds=30.0)
+    router = FlagRouter(state=state, led=led, config=SimpleNamespace(delay_seconds=30.0))
+    lights_out = time.monotonic() - 10.0
+    state.set_lights_out_at(lights_out)
+    led._queue.put(("safety_car", lights_out - 5.0))  # pre-race, predates lights-out
+    led.trigger("yellow_flag")                         # arrives after lights-out
+
+    router.sync(5.0)
+
+    queued = []
+    while not led._queue.empty():
+        queued.append(led._queue.get_nowait()[0])
+    assert queued == ["yellow_flag"]
 
 
 async def test_second_sync_recalculates():
