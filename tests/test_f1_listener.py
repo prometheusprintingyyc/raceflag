@@ -340,3 +340,77 @@ def test_suspended_false_allows_callbacks():
     listener.suspended = False
     listener._handle_feed("TrackStatus", {"Status": "2"}, is_snapshot=False)
     assert "yellow_flag" in received
+
+
+# --- Live lights-out (features 004 / 016) -----------------------------------
+
+_RACE_INFO = {"Meeting": {"Name": "Belgian Grand Prix"}, "Type": "Race", "Name": "Race"}
+
+
+def _race_listener(monkeypatch, now=5000.0):
+    state = AppState()
+    calls = []
+    listener = F1Listener(state=state, on_track_status_change=calls.append)
+    monkeypatch.setattr("raceflag.f1_listener.time.monotonic", lambda: now)
+    return state, listener, calls
+
+
+def test_started_after_inactive_snapshot_is_lights_out(monkeypatch):
+    """Belgian GP 2024: box connects pre-race (snapshot Inactive), track stays AllClear."""
+    state, listener, calls = _race_listener(monkeypatch)
+    listener._handle_feed("SessionInfo", _RACE_INFO, is_snapshot=True)
+    listener._handle_feed("TrackStatus", {"Status": "1"}, is_snapshot=True)
+    listener._handle_feed("SessionStatus", {"Status": "Inactive"}, is_snapshot=True)
+    listener._handle_feed("Heartbeat", {})
+    listener._handle_feed("SessionStatus", {"Status": "Started"})
+    assert calls == ["race_start"]
+    assert state.lights_out_at == 5000.0
+    assert state.track_status == "track_clear"
+
+
+def test_pre_race_allclear_is_plain_and_started_is_lights_out(monkeypatch):
+    state, listener, calls = _race_listener(monkeypatch)
+    listener._handle_feed("SessionInfo", _RACE_INFO, is_snapshot=True)
+    listener._handle_feed("SessionStatus", {"Status": "Inactive"}, is_snapshot=True)
+    listener._handle_feed("TrackStatus", {"Status": "1"})
+    listener._handle_feed("SessionStatus", {"Status": "Started"})
+    assert calls == ["track_clear", "race_start"]
+    assert state.lights_out_at == 5000.0
+
+
+def test_started_in_snapshot_is_not_lights_out(monkeypatch):
+    """Reconnecting mid-race: the snapshot's Started must not pretend lights-out is now."""
+    state, listener, calls = _race_listener(monkeypatch)
+    listener._handle_feed("SessionInfo", _RACE_INFO, is_snapshot=True)
+    listener._handle_feed("SessionStatus", {"Status": "Started"}, is_snapshot=True)
+    assert calls == []
+    assert state.lights_out_at is None
+
+
+def test_started_in_replay_is_not_live_lights_out(monkeypatch):
+    state, listener, calls = _race_listener(monkeypatch)
+    state.set_replay_state(True, "playing")
+    listener._handle_feed("SessionInfo", _RACE_INFO)
+    listener._handle_feed("SessionStatus", {"Status": "Started"})
+    assert "race_start" not in calls
+    assert state.lights_out_at is None
+
+
+def test_started_in_qualifying_keeps_break_reset(monkeypatch):
+    state, listener, calls = _race_listener(monkeypatch)
+    listener._handle_feed("SessionInfo", {"Meeting": {"Name": "X"}, "Type": "Qualifying", "Name": "Qualifying"},
+                          is_snapshot=True)
+    listener._handle_feed("SessionStatus", {"Status": "Ends"})
+    listener._handle_feed("SessionStatus", {"Status": "Started"})
+    assert calls == ["break", "unknown"]
+    assert state.lights_out_at is None
+
+
+@pytest.mark.parametrize("end_status", ["Finished", "Finalised", "Ends", "Inactive"])
+def test_session_end_clears_lights_out(monkeypatch, end_status):
+    state, listener, calls = _race_listener(monkeypatch)
+    listener._handle_feed("SessionInfo", _RACE_INFO, is_snapshot=True)
+    listener._handle_feed("SessionStatus", {"Status": "Started"})
+    assert state.lights_out_at == 5000.0
+    listener._handle_feed("SessionStatus", {"Status": end_status})
+    assert state.lights_out_at is None

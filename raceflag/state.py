@@ -148,6 +148,7 @@ class AppState:
     replay_status: str = "idle"
     replay_session_name: str = ""
     replay_time_elapsed: str = ""
+    lights_out_at: Optional[float] = None  # box monotonic time of the live race's lights-out
     session: SessionInfo = field(default_factory=SessionInfo)
     weather: WeatherInfo = field(default_factory=WeatherInfo)
     race_control_messages: List[RaceControlMessage] = field(default_factory=list)
@@ -172,6 +173,10 @@ class AppState:
     def set_led_mode(self, mode: str) -> None:
         with self._lock:
             self.led_mode = mode
+
+    def set_lights_out_at(self, value: Optional[float]) -> None:
+        with self._lock:
+            self.lights_out_at = value
 
     def set_feed_connected(self, connected: bool) -> None:
         with self._lock:

@@ -2,6 +2,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from dataclasses import replace as _replace
 from datetime import datetime, timezone
 from urllib.parse import quote
@@ -201,6 +202,7 @@ class F1Listener:
             if status_msg in ("Finished", "Finalised", "Ends", "Inactive"):
                 is_race = self._state.session.session_type.lower() in ("race", "sprint")
                 self._state.set_session(_replace(self._state.session, is_active=False, extrapolating=False))
+                self._state.set_lights_out_at(None)
                 new_status = "finished" if (status_msg in ("Finished", "Finalised") or is_race) else "break"
                 self._state.set_track_status(new_status)
                 logger.info("Session ended: %s", status_msg)
@@ -208,21 +210,22 @@ class F1Listener:
                     self._on_track_status_change(new_status)
                 return
             if status_msg == "Started":
-                if self._state.track_status in ("break", "finished"):
+                is_race = self._state.session.session_type.lower() in ("race", "sprint")
+                if is_race and not is_snapshot and not self._state.replay_mode:
+                    # Live race lights-out (verified on Belgian GP 2024: Started lands with
+                    # GREEN LIGHT - PIT EXIT OPEN, 1:52 before lap 2). Checked before the
+                    # break/finished reset: a pre-race "Inactive" leaves track_status
+                    # "finished", which must not swallow lights-out.
+                    logger.info("Race lights-out (SessionStatus Started) — triggering race_start")
+                    self._state.set_lights_out_at(time.monotonic())
+                    self._state.set_track_status("track_clear")
+                    if self._on_track_status_change:
+                        self._on_track_status_change("race_start")
+                elif self._state.track_status in ("break", "finished"):
                     self._state.set_track_status("unknown")
                     logger.info("New session segment started — clearing break state")
                     if self._on_track_status_change and not is_snapshot:
                         self._on_track_status_change("unknown")
-                elif (not is_snapshot
-                      and self._on_track_status_change
-                      and self._state.session.session_type.lower() in ("race", "sprint")
-                      and not self._state.replay_mode):
-                    # Lights-out in a live race — fire track_clear so main.py promotes
-                    # it to race_start. In replay mode _playback_loop handles this via
-                    # the last-pre-race TrackStatus re-fire instead.
-                    logger.info("Race lights-out (SessionStatus Started) — triggering race_start")
-                    self._state.set_track_status("track_clear")
-                    self._on_track_status_change("track_clear")
 
         self._ensure_active()
 
