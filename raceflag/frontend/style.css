@@ -63,11 +63,11 @@ body {
 .delay-label { font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px; color: #666; }
 .delay-value { font-size: 20px; font-weight: 700; min-width: 36px; }
 .delay-unit { font-size: 11px; color: #666; }
-.delay-slider { flex: 1; accent-color: #e10600; }
+.delay-slider { flex: 1; min-width: 0; accent-color: #e10600; }
 .btn-sync {
   background: #2a2a2a; border: 1px solid #555; color: #ddd; border-radius: 6px;
   padding: 0 14px; min-height: 44px; font-size: 12px; font-weight: 700;
-  letter-spacing: 1px; text-transform: uppercase; cursor: pointer;
+  letter-spacing: 1px; text-transform: uppercase; cursor: pointer; flex-shrink: 0;
 }
 .btn-sync:active { transform: translateY(1px); }
 .btn-sync:disabled { opacity: 0.4; cursor: default; }
