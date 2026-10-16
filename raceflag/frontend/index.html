@@ -70,8 +70,10 @@
       <div><div class="delay-label" id="delay-label">LED Delay</div></div>
       <div class="delay-value" id="delay-value">0</div>
       <div class="delay-unit">sec</div>
-      <input type="range" class="delay-slider" id="delay-slider" min="0" max="90" value="0">
+      <input type="range" class="delay-slider" id="delay-slider" min="0" max="90" step="0.1" value="0">
+      <button type="button" class="btn-sync" id="btn-delay-sync">Sync</button>
     </div>
+    <div class="delay-sync-msg" id="delay-sync-msg" role="status" hidden></div>
 
     <div class="led-strip-panel" id="led-strip-panel">
       <div class="led-strip-header">

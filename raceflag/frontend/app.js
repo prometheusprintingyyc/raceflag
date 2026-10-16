@@ -99,12 +99,17 @@ function updateUI(data) {
       label.textContent = 'Sync Offset';
       slider.min = -30;
       slider.max = 30;
+      slider.step = 1;
+      document.getElementById('btn-delay-sync').hidden = true;
+      document.getElementById('delay-sync-msg').hidden = true;
       slider.value = 0;
       document.getElementById('delay-value').textContent = '0';
     } else {
       label.textContent = 'LED Delay';
       slider.min = 0;
       slider.max = 90;
+      slider.step = 0.1;
+      document.getElementById('btn-delay-sync').hidden = false;
       slider.value = _savedDelay;
       document.getElementById('delay-value').textContent = _savedDelay;
     }
@@ -271,6 +276,38 @@ document.getElementById('delay-slider').addEventListener('change', async functio
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ seconds: val }),
     });
+  }
+});
+
+let _syncMsgTimer = null;
+
+function _showSyncMessage(text, isError) {
+  const el = document.getElementById('delay-sync-msg');
+  el.textContent = text;
+  el.classList.toggle('error', !!isError);
+  el.hidden = false;
+  clearTimeout(_syncMsgTimer);
+  _syncMsgTimer = setTimeout(() => { el.hidden = true; }, 6000);
+}
+
+document.getElementById('btn-delay-sync').addEventListener('click', async function () {
+  this.disabled = true;
+  try {
+    const resp = await fetch('/api/delay/sync', { method: 'POST' });
+    const data = await resp.json().catch(() => ({}));
+    if (resp.ok) {
+      _savedDelay = data.delay_seconds;
+      const slider = document.getElementById('delay-slider');
+      slider.value = _savedDelay;
+      document.getElementById('delay-value').textContent = _savedDelay;
+      _showSyncMessage(`Delay set to ${_savedDelay} s`, false);
+    } else {
+      _showSyncMessage(data.detail || "Couldn't sync. Try again.", true);
+    }
+  } catch (e) {
+    _showSyncMessage("Couldn't reach RaceFlag. Check the connection.", true);
+  } finally {
+    this.disabled = false;
   }
 });
 
