@@ -22,7 +22,9 @@ enough for later races too, so people rarely adjust it again.
 - Only the race's single lights-out matters. No handling for aborted starts.
 - The box timestamps the press when the request arrives (not the phone's clock).
 - Sync works within 90 s of lights-out (the delay slider's maximum).
-- The synced delay is saved like a manual slider change.
+- The synced delay is saved like a manual slider change (`delay_seconds` in
+  `config.json`). It persists across races and reboots until the user syncs again or
+  moves the slider; nothing in this feature ever resets it.
 - The live lights-out bug (below) is fixed as part of this feature.
 
 ## Background: live lights-out is broken today
@@ -57,8 +59,9 @@ The listener's handling of it doesn't work:
   (replay still relies on it). A live AllClear is always a plain `track_clear`.
 - `Started` in a non-race session keeps today's behaviour (clears a `break`/`finished`
   status to `unknown`).
-- `lights_out_at` is cleared when the session ends (`finished`/`break`), so Sync can't use
-  a previous race's lights-out.
+- The lights-out **timestamp** (`lights_out_at`) is cleared when the session ends
+  (`finished`/`break`), so a Sync pressed before the next race can't measure from the
+  previous race's lights-out. This does **not** touch the delay.
 
 ### Sync
 
@@ -118,7 +121,8 @@ are not rescheduled; at the start of a race there are normally none.)
 
 - Listener: both Belgian GP sequences above (Inactive snapshot, then `Started`; live AllClear,
   then `Started`) report `race_start` exactly once, at `Started`, and record `lights_out_at`.
-  Non-race `Started` unchanged. Session end clears `lights_out_at`.
+  Non-race `Started` unchanged. Session end clears `lights_out_at` and leaves
+  `delay_seconds` unchanged (in memory and in `config.json`).
 - `delay_sync`: each row of the table, the 0.1 s rounding, and the 90 s boundary.
 - Route: success saves and applies the delay, cancels the pending race-start, and plays it
   once; each 409 changes nothing.
