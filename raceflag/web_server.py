@@ -12,6 +12,8 @@ from pydantic import BaseModel, Field
 from raceflag import clock as clock_module
 from raceflag.delay_sync import SyncError, is_live_race, sync_delay
 from raceflag.config import Config, save as save_config
+from raceflag.f1_account import LoginError, account_status, parse_login
+from raceflag.replay_manager import F1LoginRequired
 from raceflag.led_controller import LEDController
 from raceflag.led_modes import MODES, is_hex_color, parse_hhmm
 from raceflag.state import AppState
@@ -94,6 +96,10 @@ class TimeSyncRequest(BaseModel):
     epoch_ms: int
 
 
+class F1LoginRequest(BaseModel):
+    login: str = Field(max_length=20000)  # login-session cookie or token
+
+
 def create_app(
     state: AppState,
     config: Config,
@@ -116,7 +122,32 @@ def create_app(
 
     @app.get("/api/config")
     async def get_config():
-        return asdict(config)
+        data = asdict(config)
+        data.pop("f1_token", None)  # a login credential: never sent back to the page
+        return data
+
+    # F1 account (feature 017). The token's expiry is wall-clock epoch time.
+    @app.get("/api/f1/account")
+    async def get_f1_account():
+        return account_status(config.f1_token, time.time())
+
+    @app.post("/api/f1/account")
+    async def set_f1_account(req: F1LoginRequest):
+        try:
+            token = parse_login(req.login, time.time())
+        except LoginError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        config.f1_token = token
+        if config_path:
+            save_config(config, config_path)
+        return account_status(token, time.time())
+
+    @app.delete("/api/f1/account")
+    async def clear_f1_account():
+        config.f1_token = ""
+        if config_path:
+            save_config(config, config_path)
+        return account_status("", time.time())
 
     @app.post("/api/config/delay")
     async def set_delay(req: DelayRequest):
@@ -322,7 +353,10 @@ def create_app(
         async def get_replay_sessions():
             import datetime
             year = datetime.datetime.now().year
-            return await replay_manager.get_sessions(year=year)
+            try:
+                return await replay_manager.get_sessions(year=year)
+            except F1LoginRequired as exc:
+                raise HTTPException(status_code=401, detail=str(exc))
 
         @app.post("/api/replay/load")
         async def load_replay_session(req: LoadSessionRequest):
@@ -332,6 +366,9 @@ def create_app(
                 event_count = await replay_manager.load_session(
                     req.session_path, session_name=req.session_name
                 )
+            except F1LoginRequired as exc:
+                state.set_replay_state(mode=False, status="idle")
+                raise HTTPException(status_code=401, detail=str(exc))
             except Exception as exc:
                 state.set_replay_state(mode=False, status="idle")
                 raise HTTPException(status_code=502, detail=f"Failed to load session: {exc}")

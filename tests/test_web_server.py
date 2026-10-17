@@ -492,6 +492,92 @@ def test_replay_endpoints_absent_without_replay_manager(client):
     assert client.get("/api/replay/sessions").status_code == 404
 
 
+def test_replay_sessions_login_refused_returns_401(client_with_replay, replay_manager):
+    from raceflag.replay_manager import F1LoginRequired
+    replay_manager.get_sessions = AsyncMock(side_effect=F1LoginRequired())
+    resp = client_with_replay.get("/api/replay/sessions")
+    assert resp.status_code == 401
+    assert resp.json() == {"detail": "F1 login needed or expired. Paste a new one in Settings › F1 Account."}
+
+
+def test_replay_load_login_refused_returns_401_and_stays_idle(client_with_replay, replay_manager, app_state):
+    from raceflag.replay_manager import F1LoginRequired
+    replay_manager.load_session = AsyncMock(side_effect=F1LoginRequired())
+    resp = client_with_replay.post("/api/replay/load", json={"session_path": "p/", "session_name": "X"})
+    assert resp.status_code == 401
+    assert "F1 login needed" in resp.json()["detail"]
+    assert app_state.replay_mode is False
+
+
+# ---------------------------------------------------------------------------
+# F1 account (feature 017)
+# ---------------------------------------------------------------------------
+
+def _account_token(exp_offset: float = 3600.0) -> str:
+    import base64
+    def part(obj):
+        return base64.urlsafe_b64encode(json.dumps(obj).encode()).rstrip(b"=").decode()
+    return f"{part({'alg': 'x'})}.{part({'exp': int(time.time() + exp_offset)})}.sig"
+
+
+@pytest.fixture
+def account_env(tmp_path, app_state, config, led):
+    path = tmp_path / "config.json"
+    return TestClient(create_app(state=app_state, config=config, led=led, config_path=path)), path
+
+
+def test_account_starts_signed_out(account_env):
+    c, _ = account_env
+    assert c.get("/api/f1/account").json() == {"signed_in": False, "expires_at": None}
+
+
+def test_account_paste_cookie_saves_token(account_env, config):
+    from urllib.parse import quote
+    c, path = account_env
+    token = _account_token()
+    cookie = quote(json.dumps({"data": {"subscriptionToken": token}}))
+    resp = c.post("/api/f1/account", json={"login": cookie})
+    assert resp.status_code == 200
+    assert resp.json()["signed_in"] is True
+    assert config.f1_token == token
+    assert json.loads(path.read_text())["f1_token"] == token
+    assert c.get("/api/f1/account").json()["signed_in"] is True
+
+
+def test_account_paste_rejects_garbage_and_keeps_old_token(account_env, config):
+    c, path = account_env
+    config.f1_token = "previous"
+    resp = c.post("/api/f1/account", json={"login": "not a login"})
+    assert resp.status_code == 422
+    assert "isn't an F1 login" in resp.json()["detail"]
+    assert config.f1_token == "previous"
+    assert not path.exists()
+
+
+def test_account_paste_rejects_expired(account_env):
+    c, _ = account_env
+    resp = c.post("/api/f1/account", json={"login": _account_token(-60)})
+    assert resp.status_code == 422
+    assert "expired" in resp.json()["detail"]
+
+
+def test_account_sign_out_clears_token(account_env, config):
+    c, path = account_env
+    c.post("/api/f1/account", json={"login": _account_token()})
+    resp = c.delete("/api/f1/account")
+    assert resp.status_code == 200
+    assert resp.json() == {"signed_in": False, "expires_at": None}
+    assert config.f1_token == ""
+    assert json.loads(path.read_text())["f1_token"] == ""
+
+
+def test_get_config_never_returns_the_f1_token(account_env, config):
+    c, _ = account_env
+    config.f1_token = _account_token()
+    data = c.get("/api/config").json()
+    assert "f1_token" not in data
+
+
 # ---------------------------------------------------------------------------
 # Live delay Sync (feature 016)
 # ---------------------------------------------------------------------------

@@ -208,7 +208,7 @@ async def main() -> None:
     flag_router = FlagRouter(state=state, led=led, config=config)
 
     listener = F1Listener(state=state, on_track_status_change=flag_router.on_flag_change)
-    replay = ReplayManager(on_feed=listener.process_replay_event)
+    replay = ReplayManager(on_feed=listener.process_replay_event, get_token=lambda: config.f1_token)
 
     current_version = VERSION_FILE.read_text().strip() if VERSION_FILE.exists() else ""
     app = create_app(

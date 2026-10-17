@@ -186,6 +186,94 @@ async def test_get_sessions_returns_empty_for_no_race_sessions():
     assert sessions == []
 
 
+# ── F1 login on archive requests (feature 017) ───────────────────────────────
+
+def _login_token() -> str:
+    import base64, json as _json, time as _time
+    def part(obj):
+        return base64.urlsafe_b64encode(_json.dumps(obj).encode()).rstrip(b"=").decode()
+    return f"{part({'alg': 'x'})}.{part({'exp': int(_time.time()) + 3600})}.sig"
+
+
+def _status_client(status_code: int):
+    mock_resp = MagicMock()
+    mock_resp.status_code = status_code
+    mock_resp.text = ""
+    mock_resp.raise_for_status = MagicMock(side_effect=Exception(f"HTTP {status_code}"))
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_resp)
+    mock_ctx = MagicMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    return mock_ctx, mock_client
+
+
+@pytest.mark.asyncio
+async def test_get_sessions_sends_saved_login():
+    token = _login_token()
+    ctx = _make_index_client(INDEX_JSON)
+    with patch("raceflag.replay_manager.httpx.AsyncClient", return_value=ctx) as client_cls:
+        await ReplayManager(get_token=lambda: token).get_sessions(year=2025)
+    assert client_cls.call_args.kwargs["headers"] == {"Authorization": f"Bearer {token}"}
+
+
+@pytest.mark.asyncio
+async def test_get_sessions_without_login_sends_no_auth_header():
+    ctx = _make_index_client(INDEX_JSON)
+    with patch("raceflag.replay_manager.httpx.AsyncClient", return_value=ctx) as client_cls:
+        await ReplayManager().get_sessions(year=2025)
+    assert client_cls.call_args.kwargs["headers"] == {}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [401, 403])
+async def test_get_sessions_login_refused_raises_login_required(status):
+    from raceflag.replay_manager import F1LoginRequired
+    ctx, _ = _status_client(status)
+    with patch("raceflag.replay_manager.httpx.AsyncClient", return_value=ctx):
+        with pytest.raises(F1LoginRequired):
+            await ReplayManager().get_sessions(year=2025)
+
+
+@pytest.mark.asyncio
+async def test_load_session_sends_saved_login():
+    token = _login_token()
+    ctx = _make_stream_client({"TrackStatus": TS_STREAM})
+    with patch("raceflag.replay_manager.httpx.AsyncClient", return_value=ctx) as client_cls:
+        await ReplayManager(get_token=lambda: token).load_session("2025/path/")
+    assert client_cls.call_args.kwargs["headers"] == {"Authorization": f"Bearer {token}"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [401, 403])
+async def test_load_session_login_refused_raises_login_required(status):
+    from raceflag.replay_manager import F1LoginRequired
+    ctx, _ = _status_client(status)
+    with patch("raceflag.replay_manager.httpx.AsyncClient", return_value=ctx):
+        with pytest.raises(F1LoginRequired):
+            await ReplayManager().load_session("2025/path/")
+
+
+@pytest.mark.asyncio
+async def test_load_session_skips_a_single_refused_stream():
+    # The archive answers 403 for a stream a session doesn't have; that's not a login problem.
+    async def side_effect(url, **_):
+        resp = MagicMock()
+        if "TrackStatus" in url:
+            resp.status_code, resp.text = 200, TS_STREAM
+        else:
+            resp.status_code, resp.text = 403, ""
+        return resp
+    client = AsyncMock()
+    client.get = AsyncMock(side_effect=side_effect)
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=client)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+    with patch("raceflag.replay_manager.httpx.AsyncClient", return_value=ctx):
+        count = await ReplayManager().load_session("2025/path/")
+    assert count > 0
+
+
 # ── load_session (mocked HTTP) ───────────────────────────────────────────────
 
 TS_STREAM = "\n".join([

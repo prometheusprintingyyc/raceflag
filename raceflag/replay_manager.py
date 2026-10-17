@@ -8,6 +8,7 @@ from typing import Callable
 
 import httpx
 
+from raceflag.f1_account import LOGIN_NEEDED, auth_headers
 from raceflag.state import TRACK_STATUS_MAP
 
 logger = logging.getLogger(__name__)
@@ -46,11 +47,24 @@ def _parse_jsonstream_line(line: str) -> tuple[float, dict] | None:
         return None
 
 
+class F1LoginRequired(Exception):
+    """The archive refused the request (401/403): the F1 login is missing, expired or not accepted."""
+
+    def __init__(self) -> None:
+        super().__init__(LOGIN_NEEDED)
+
+
+_LOGIN_REFUSED = (401, 403)
+
+
 class ReplayManager:
     def __init__(
         self,
         on_feed: Callable[[str, dict, bool], None] | None = None,
+        get_token: Callable[[], str] | None = None,
     ) -> None:
+        # Returns the saved F1 login token ("" when signed out); sent with archive requests.
+        self._get_token = get_token or (lambda: "")
         # Called with (topic, data, is_snapshot) for every replayed event.
         # When set, all topics route through the same F1Listener that live mode uses,
         # so LED callbacks, weather, positions, and session state all update identically.
@@ -68,8 +82,10 @@ class ReplayManager:
     async def get_sessions(self, year: int = 2025) -> list[dict]:
         """Fetch Index.json and return Race and Sprint sessions."""
         url = f"{BASE_URL}/{year}/Index.json"
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=15.0, headers=self._auth_headers()) as client:
             resp = await client.get(url)
+            if resp.status_code in _LOGIN_REFUSED:
+                raise F1LoginRequired()
             resp.raise_for_status()
             data = resp.json()
 
@@ -96,6 +112,9 @@ class ReplayManager:
                 })
         return sessions
 
+    def _auth_headers(self) -> dict:
+        return auth_headers(self._get_token(), time.time())
+
     async def _fetch_stream(
         self,
         client: httpx.AsyncClient,
@@ -106,6 +125,8 @@ class ReplayManager:
         events: list[tuple[float, str, dict]] = []
         try:
             resp = await client.get(base + f"{topic}.jsonStream")
+            if resp.status_code in _LOGIN_REFUSED:
+                raise F1LoginRequired()
             if resp.status_code != 200:
                 logger.debug("Stream %s returned %s — skipping", topic, resp.status_code)
                 return events
@@ -115,6 +136,8 @@ class ReplayManager:
                 if parsed is not None:
                     abs_ts, payload = parsed
                     events.append((abs_ts, topic, payload))
+        except F1LoginRequired:
+            raise
         except Exception as exc:
             logger.warning("Failed to fetch %s stream: %s", topic, exc)
         return events
@@ -163,11 +186,15 @@ class ReplayManager:
     async def load_session(self, path: str, session_name: str = "") -> int:
         """Download all timing streams and return the count of real-time events (race_time >= 0)."""
         base = f"{BASE_URL}/{path}"
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, headers=self._auth_headers()) as client:
             results = await asyncio.gather(
                 *[self._fetch_stream(client, base, topic) for topic in REPLAY_STREAMS],
                 return_exceptions=True,
             )
+        # The archive also answers 403 for a stream a session doesn't have, so one refused
+        # stream is skipped; only when every stream is refused is the login the problem.
+        if all(isinstance(r, F1LoginRequired) for r in results):
+            raise F1LoginRequired()
 
         all_events: list[tuple[float, str, dict]] = []
         for result in results:

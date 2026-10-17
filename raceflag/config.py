@@ -19,6 +19,7 @@ class Config:
     lamp_brightness: int = 100
     lamp_use_schedule: bool = False
     timezone: str = ""
+    f1_token: str = ""  # F1 login token for the replay archive; never sent to the page
 
 
 # install.sh used to write led_count 60, left over from before the 21-LED layout.

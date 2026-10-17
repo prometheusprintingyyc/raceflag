@@ -351,6 +351,7 @@ document.getElementById('btn-confirm-stop').addEventListener('click', async () =
 document.getElementById('btn-settings').addEventListener('click', () => {
   document.getElementById('settings-overlay').classList.add('open');
   loadSettings();
+  _loadF1Account();
 });
 document.getElementById('btn-close-settings').addEventListener('click', () => {
   document.getElementById('settings-overlay').classList.remove('open');
@@ -859,6 +860,70 @@ document.getElementById('btn-send-logs').addEventListener('click', async () => {
   btn.disabled = false;
 });
 
+// ── F1 account (feature 017) ───────────────────────────────────────────────
+function _renderF1Account(acct) {
+  const expired = !acct.signed_in && !!acct.expires_at;
+  document.getElementById('f1-account-status').textContent =
+    acct.signed_in ? 'Signed in' : (expired ? 'Sign in again' : 'Not signed in');
+  document.getElementById('btn-f1-signout').hidden = !acct.signed_in && !expired;
+}
+
+function _showF1AccountMsg(text, isError) {
+  const el = document.getElementById('f1-account-msg');
+  el.textContent = text;
+  el.classList.toggle('error', !!isError);
+  el.hidden = !text;
+}
+
+async function _loadF1Account() {
+  try {
+    const resp = await fetch('/api/f1/account');
+    if (resp.ok) _renderF1Account(await resp.json());
+  } catch (e) {}
+}
+
+document.getElementById('btn-f1-login-save').addEventListener('click', async function () {
+  const input = document.getElementById('f1-login-input');
+  if (!input.value.trim()) return;
+  this.disabled = true;
+  try {
+    const resp = await fetch('/api/f1/account', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ login: input.value }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (resp.ok) {
+      input.value = '';
+      _renderF1Account(data);
+      _showF1AccountMsg('Saved. Replays will use this login.', false);
+      document.getElementById('replay-login-msg').hidden = true;
+    } else {
+      _showF1AccountMsg(data.detail || "Couldn't save that login.", true);
+    }
+  } catch (e) {
+    _showF1AccountMsg("Couldn't reach RaceFlag. Check the connection.", true);
+  } finally {
+    this.disabled = false;
+  }
+});
+
+document.getElementById('btn-f1-signout').addEventListener('click', async () => {
+  try {
+    const resp = await fetch('/api/f1/account', { method: 'DELETE' });
+    if (resp.ok) {
+      _renderF1Account(await resp.json());
+      _showF1AccountMsg('Signed out.', false);
+    }
+  } catch (e) {}
+});
+
+function _showReplayLoginMsg(text) {
+  const el = document.getElementById('replay-login-msg');
+  el.textContent = text;
+  el.hidden = false;
+}
+
 // ── Replay ──────────────────────────────────────────────────────────────────
 async function _loadReplaySessions() {
   const dropdown = document.getElementById('replay-dropdown');
@@ -870,8 +935,15 @@ async function _loadReplaySessions() {
   // Always reset server replay state so the dropdown shows (not a stale Play button)
   await fetch('/api/replay/stop', { method: 'POST' }).catch(() => {});
   await fetchState();
+  document.getElementById('replay-login-msg').hidden = true;
   try {
     const resp = await fetch('/api/replay/sessions');
+    if (resp.status === 401) {
+      const data = await resp.json().catch(() => ({}));
+      dropdown.innerHTML = '<option value="">F1 login needed</option>';
+      _showReplayLoginMsg(data.detail || 'F1 login needed. Paste one in Settings › F1 Account.');
+      return;
+    }
     if (!resp.ok) throw new Error('fetch failed');
     const sessions = await resp.json();
     dropdown.innerHTML = '<option value="">Select a race…</option>' +
@@ -901,6 +973,11 @@ document.getElementById('btn-replay-load').addEventListener('click', async () =>
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_path: path, session_name: name }),
     });
+    if (resp.status === 401) {
+      const data = await resp.json().catch(() => ({}));
+      _showReplayLoginMsg(data.detail || 'F1 login needed. Paste one in Settings › F1 Account.');
+      throw new Error('login needed');
+    }
     if (!resp.ok) throw new Error(`load failed: ${resp.status}`);
     document.getElementById('replay-race-chip').textContent = name;
     // Transition immediately without waiting for the poll cycle

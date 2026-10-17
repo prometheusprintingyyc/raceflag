@@ -45,6 +45,7 @@
       </select>
       <button class="btn-replay-action" id="btn-replay-load" disabled>Load</button>
     </div>
+    <div class="replay-login-msg" id="replay-login-msg" role="status" hidden></div>
     <!-- Row A-ready: shown when session is loaded, not yet playing -->
     <div class="replay-ready-row" id="replay-ready-row" style="display:none">
       <div class="replay-race-chip" id="replay-race-chip"></div>
@@ -191,6 +192,20 @@
       <div class="settings-row">
         <span class="settings-label">Check for updates</span>
         <button class="btn-update" id="btn-update" disabled>Up to date</button>
+      </div>
+      <div class="settings-row f1-account-row">
+        <div class="f1-account-head">
+          <span class="settings-label">F1 Account</span>
+          <span class="settings-val" id="f1-account-status">Not signed in</span>
+        </div>
+        <span class="f1-account-hint">Needed to load replays. A free F1 account works.</span>
+        <div class="f1-account-form">
+          <input type="text" id="f1-login-input" placeholder="Paste login-session cookie or token"
+                 autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="F1 login">
+          <button type="button" class="btn-update" id="btn-f1-login-save">Save</button>
+        </div>
+        <span class="f1-account-msg" id="f1-account-msg" role="status" hidden></span>
+        <button type="button" class="btn-f1-signout" id="btn-f1-signout" hidden>Sign out</button>
       </div>
       <div class="settings-row">
         <span class="settings-label">Demo Mode</span>

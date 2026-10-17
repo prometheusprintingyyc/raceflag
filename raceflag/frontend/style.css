@@ -238,6 +238,28 @@ body {
 }
 .btn-replay-action:disabled { background: #333; color: #666; cursor: not-allowed; }
 .btn-replay-action.flex1 { flex: 1; }
+.replay-login-msg { font-size: 12px; color: #ffd700; line-height: 1.4; }
+.replay-login-msg[hidden] { display: none; }
+
+/* F1 account (feature 017) */
+.settings-row.f1-account-row { flex-direction: column; align-items: stretch; gap: 8px; }
+.f1-account-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.f1-account-hint { font-size: 12px; color: #999; }
+.f1-account-form { display: flex; gap: 8px; }
+.f1-account-form input {
+  flex: 1; min-width: 0; background: #2a2a2a; border: 1px solid #444; color: #eee;
+  border-radius: 6px; padding: 0 10px; min-height: 40px; font-size: 13px; font-family: inherit;
+}
+.f1-account-form input:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.f1-account-form .btn-update { flex-shrink: 0; }
+.f1-account-msg { font-size: 12px; color: #aaa; }
+.f1-account-msg.error { color: #ff5a52; }
+.f1-account-msg[hidden] { display: none; }
+.btn-f1-signout {
+  align-self: flex-start; background: #2a2a2a; border: 1px solid #555; color: #ddd; border-radius: 6px;
+  padding: 0 14px; min-height: 36px; font-size: 12px; font-weight: 700; font-family: inherit; cursor: pointer;
+}
+.btn-f1-signout[hidden] { display: none; }
 .btn-replay-action.secondary { background: #2a2a2a; color: #aaa; border: 1px solid #444; }
 
 /* ── Replay pill badge (on section titles) ───────────────────────────────── */
