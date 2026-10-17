@@ -45,7 +45,10 @@
       </select>
       <button class="btn-replay-action" id="btn-replay-load" disabled>Load</button>
     </div>
-    <div class="replay-login-msg" id="replay-login-msg" role="status" hidden></div>
+    <div class="replay-login-msg" id="replay-login-msg" role="status" hidden>
+      <span id="replay-login-text"></span>
+      <button type="button" class="btn-f1-signout" id="btn-replay-open-settings">Open Settings</button>
+    </div>
     <!-- Row A-ready: shown when session is loaded, not yet playing -->
     <div class="replay-ready-row" id="replay-ready-row" style="display:none">
       <div class="replay-race-chip" id="replay-race-chip"></div>
@@ -195,17 +198,19 @@
       </div>
       <div class="settings-row f1-account-row">
         <div class="f1-account-head">
-          <span class="settings-label">F1 Account</span>
-          <span class="settings-val" id="f1-account-status">Not signed in</span>
-        </div>
-        <span class="f1-account-hint">Needed to load replays. A free F1 account works.</span>
-        <div class="f1-account-form">
-          <input type="text" id="f1-login-input" placeholder="Paste login-session cookie or token"
-                 autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="F1 login">
-          <button type="button" class="btn-update" id="btn-f1-login-save">Save</button>
+          <div class="f1-account-text">
+            <span class="settings-label">F1 Account</span>
+            <span class="f1-status" id="f1-account-status" data-status="signed_out">
+              <svg class="f1-icon f1-icon-signed_out" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12"></path><path d="M18 6L6 18"></path></svg>
+              <svg class="f1-icon f1-icon-signed_in" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg>
+              <svg class="f1-icon f1-icon-sign_in_again" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l10 18H2z"></path><path d="M12 10v5"></path><path d="M12 18v.01"></path></svg>
+              <span id="f1-account-status-text">Not signed in</span>
+            </span>
+          </div>
+          <button type="button" class="btn-update" id="btn-f1-setup">Set up</button>
+          <button type="button" class="btn-f1-signout" id="btn-f1-signout" hidden>Sign out</button>
         </div>
         <span class="f1-account-msg" id="f1-account-msg" role="status" hidden></span>
-        <button type="button" class="btn-f1-signout" id="btn-f1-signout" hidden>Sign out</button>
       </div>
       <div class="settings-row">
         <span class="settings-label">Demo Mode</span>
@@ -355,6 +360,36 @@
       <div class="confirm-actions">
         <button type="button" class="btn-confirm-cancel" id="btn-sched-cancel">Cancel</button>
         <button type="button" class="btn-confirm-stop" id="btn-sched-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="f1-setup-overlay">
+    <div class="confirm-dialog mode-dialog" role="dialog" aria-modal="true" aria-labelledby="f1-setup-title">
+      <div class="mode-dialog-head">
+        <div class="confirm-title" id="f1-setup-title">Connect your F1 account</div>
+        <div class="confirm-body">Add a “Send to RaceFlag” bookmark once. To sign in, tap it while signed in on f1tv.formula1.com.</div>
+      </div>
+      <ol class="f1-steps">
+        <li>Tap <b>Copy bookmark code</b> below.</li>
+        <li>Bookmark any page, then edit that bookmark: name it <b>Send to RaceFlag</b> and replace its address with the copied code.</li>
+        <li>Open <a href="https://f1tv.formula1.com/" target="_blank" rel="noopener">f1tv.formula1.com</a>, sign in, then open the bookmark. On Android Chrome, type “Send to RaceFlag” in the address bar and tap it.</li>
+      </ol>
+      <textarea class="f1-bookmark-code" id="f1-bookmark-code" readonly rows="3" aria-label="Bookmark code"></textarea>
+      <button type="button" class="btn-confirm-stop" id="btn-f1-copy">Copy bookmark code</button>
+      <div class="f1-setup-note">On a computer you can drag this link to the bookmarks bar: <a class="f1-bookmark-link" id="f1-bookmark-link" href="#">Send to RaceFlag</a></div>
+      <div class="f1-setup-note">This bookmark sends your login to <span class="f1-addr">raceflag.local:8080</span></div>
+      <div class="f1-paste">
+        <label class="dialog-field-label" for="f1-login-input">OR PASTE YOUR LOGIN</label>
+        <div class="f1-account-form">
+          <input type="text" id="f1-login-input" placeholder="login-session cookie or token"
+                 autocomplete="off" autocapitalize="off" spellcheck="false">
+          <button type="button" class="btn-f1-signout" id="btn-f1-login-save">Save</button>
+        </div>
+        <span class="f1-account-msg" id="f1-setup-msg" role="status" hidden></span>
+      </div>
+      <div class="confirm-actions">
+        <button type="button" class="btn-confirm-cancel" id="btn-f1-setup-close">Close</button>
       </div>
     </div>
   </div>

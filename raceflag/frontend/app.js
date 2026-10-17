@@ -861,15 +861,19 @@ document.getElementById('btn-send-logs').addEventListener('click', async () => {
 });
 
 // ── F1 account (feature 017) ───────────────────────────────────────────────
+const F1_BOOKMARK_CODE = "javascript:(()=>{const c=document.cookie.split('; ').find(x=>x.startsWith('login-session='));if(!c){alert('Sign in on F1 TV first, then tap Send to RaceFlag again.');return;}location.href='http://raceflag.local:8080/#f1login='+encodeURIComponent(c.slice(14));})()";
+const F1_STATUS_TEXT = { signed_out: 'Not signed in', signed_in: 'Signed in', sign_in_again: 'Sign in again' };
+
 function _renderF1Account(acct) {
-  const expired = !acct.signed_in && !!acct.expires_at;
-  document.getElementById('f1-account-status').textContent =
-    acct.signed_in ? 'Signed in' : (expired ? 'Sign in again' : 'Not signed in');
-  document.getElementById('btn-f1-signout').hidden = !acct.signed_in && !expired;
+  const status = F1_STATUS_TEXT[acct.status] ? acct.status : 'signed_out';
+  document.getElementById('f1-account-status').dataset.status = status;
+  document.getElementById('f1-account-status-text').textContent = F1_STATUS_TEXT[status];
+  document.getElementById('btn-f1-setup').hidden = status === 'signed_in';
+  document.getElementById('btn-f1-signout').hidden = status !== 'signed_in';
 }
 
-function _showF1AccountMsg(text, isError) {
-  const el = document.getElementById('f1-account-msg');
+function _showMsg(id, text, isError) {
+  const el = document.getElementById(id);
   el.textContent = text;
   el.classList.toggle('error', !!isError);
   el.hidden = !text;
@@ -882,30 +886,65 @@ async function _loadF1Account() {
   } catch (e) {}
 }
 
-document.getElementById('btn-f1-login-save').addEventListener('click', async function () {
-  const input = document.getElementById('f1-login-input');
-  if (!input.value.trim()) return;
-  this.disabled = true;
+async function _saveF1Login(value, msgId) {
   try {
     const resp = await fetch('/api/f1/account', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ login: input.value }),
+      body: JSON.stringify({ login: value }),
     });
     const data = await resp.json().catch(() => ({}));
     if (resp.ok) {
-      input.value = '';
       _renderF1Account(data);
-      _showF1AccountMsg('Saved. Replays will use this login.', false);
+      _showMsg(msgId, 'Signed in. Replays will use this login.', false);
       document.getElementById('replay-login-msg').hidden = true;
-    } else {
-      _showF1AccountMsg(data.detail || "Couldn't save that login.", true);
+      return true;
     }
+    _showMsg(msgId, data.detail || "Couldn't save that login.", true);
   } catch (e) {
-    _showF1AccountMsg("Couldn't reach RaceFlag. Check the connection.", true);
-  } finally {
-    this.disabled = false;
+    _showMsg(msgId, "Couldn't reach RaceFlag. Check the connection.", true);
   }
+  return false;
+}
+
+function _openF1Setup() {
+  document.getElementById('f1-bookmark-code').value = F1_BOOKMARK_CODE;
+  document.getElementById('f1-bookmark-link').setAttribute('href', F1_BOOKMARK_CODE);
+  _showMsg('f1-setup-msg', '', false);
+  document.getElementById('f1-setup-overlay').classList.add('open');
+}
+
+function _closeF1Setup() {
+  document.getElementById('f1-setup-overlay').classList.remove('open');
+}
+
+document.getElementById('btn-f1-setup').addEventListener('click', _openF1Setup);
+document.getElementById('btn-f1-setup-close').addEventListener('click', _closeF1Setup);
+document.getElementById('f1-setup-overlay').addEventListener('click', function (e) {
+  if (e.target === this) _closeF1Setup();
+});
+document.getElementById('f1-bookmark-link').addEventListener('click', e => {
+  e.preventDefault();  // the link is for dragging to the bookmarks bar, not for clicking here
+  _showMsg('f1-setup-msg', 'Drag this link to your bookmarks bar.', false);
+});
+
+document.getElementById('btn-f1-copy').addEventListener('click', () => {
+  // Plain http has no navigator.clipboard, so use the selection + execCommand route.
+  const box = document.getElementById('f1-bookmark-code');
+  box.focus();
+  box.select();
+  box.setSelectionRange(0, box.value.length);
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) {}
+  _showMsg('f1-setup-msg', ok ? 'Copied. Now create the bookmark.' : 'Press and hold the code, then copy it.', !ok);
+});
+
+document.getElementById('btn-f1-login-save').addEventListener('click', async function () {
+  const input = document.getElementById('f1-login-input');
+  if (!input.value.trim()) return;
+  this.disabled = true;
+  if (await _saveF1Login(input.value, 'f1-setup-msg')) input.value = '';
+  this.disabled = false;
 });
 
 document.getElementById('btn-f1-signout').addEventListener('click', async () => {
@@ -913,16 +952,21 @@ document.getElementById('btn-f1-signout').addEventListener('click', async () => 
     const resp = await fetch('/api/f1/account', { method: 'DELETE' });
     if (resp.ok) {
       _renderF1Account(await resp.json());
-      _showF1AccountMsg('Signed out.', false);
+      _showMsg('f1-account-msg', 'Signed out.', false);
     }
   } catch (e) {}
 });
 
 function _showReplayLoginMsg(text) {
-  const el = document.getElementById('replay-login-msg');
-  el.textContent = text;
-  el.hidden = false;
+  document.getElementById('replay-login-text').textContent = text;
+  document.getElementById('replay-login-msg').hidden = false;
 }
+
+document.getElementById('btn-replay-open-settings').addEventListener('click', () => {
+  document.getElementById('settings-overlay').classList.add('open');
+  loadSettings();
+  _loadF1Account();
+});
 
 // ── Replay ──────────────────────────────────────────────────────────────────
 async function _loadReplaySessions() {
@@ -1031,3 +1075,15 @@ fetch('/api/time/sync', {
 _renderLedMode();
 setInterval(fetchState, POLL_MS);
 setInterval(_tickClock, 1000);
+
+// "Send to RaceFlag" bookmark lands here as #f1login=<login-session cookie>.
+(function _receiveF1Login() {
+  const m = /^#f1login=(.*)$/.exec(location.hash);
+  if (!m) return;
+  history.replaceState(null, '', location.pathname + location.search);  // drop the login from the address bar
+  let value;
+  try { value = decodeURIComponent(m[1]); } catch (e) { return; }
+  document.getElementById('settings-overlay').classList.add('open');
+  loadSettings();
+  _saveF1Login(value, 'f1-account-msg');
+})();

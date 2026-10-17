@@ -137,7 +137,7 @@ body {
 .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: flex-end; justify-content: center; }
 .overlay.open { display: flex; }
 .settings-panel { background: #1a1a1a; border: 1px solid #333; border-radius: 12px 12px 0 0; width: 100%; max-width: 480px; padding: 20px 20px 40px; }
-#confirm-replay-overlay, #confirm-shutdown-overlay, #lamp-overlay, #schedule-overlay { align-items: center; padding: 0 16px; }
+#confirm-replay-overlay, #confirm-shutdown-overlay, #lamp-overlay, #schedule-overlay, #f1-setup-overlay { align-items: center; padding: 0 16px; }
 .confirm-dialog { background: #1a1a1a; border: 1px solid #333; border-radius: 12px; width: 100%; max-width: 360px; padding: 24px 20px 20px; }
 .confirm-title { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
 .confirm-body { font-size: 13px; color: #888; line-height: 1.5; margin-bottom: 20px; }
@@ -238,28 +238,46 @@ body {
 }
 .btn-replay-action:disabled { background: #333; color: #666; cursor: not-allowed; }
 .btn-replay-action.flex1 { flex: 1; }
-.replay-login-msg { font-size: 12px; color: #ffd700; line-height: 1.4; }
+.replay-login-msg { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; font-size: 12px; color: #ffd700; line-height: 1.4; }
 .replay-login-msg[hidden] { display: none; }
 
 /* F1 account (feature 017) */
 .settings-row.f1-account-row { flex-direction: column; align-items: stretch; gap: 8px; }
 .f1-account-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.f1-account-hint { font-size: 12px; color: #999; }
-.f1-account-form { display: flex; gap: 8px; }
-.f1-account-form input {
-  flex: 1; min-width: 0; background: #2a2a2a; border: 1px solid #444; color: #eee;
-  border-radius: 6px; padding: 0 10px; min-height: 40px; font-size: 13px; font-family: inherit;
+.f1-account-text { display: flex; flex-direction: column; gap: 2px; }
+.f1-status { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; }
+.f1-status[data-status="signed_out"] { color: #ff5a52; }
+.f1-status[data-status="signed_in"] { color: #3ecf6b; }
+.f1-status[data-status="sign_in_again"] { color: #ffd700; }
+.f1-icon { display: none; flex-shrink: 0; }
+.f1-status[data-status="signed_out"] .f1-icon-signed_out,
+.f1-status[data-status="signed_in"] .f1-icon-signed_in,
+.f1-status[data-status="sign_in_again"] .f1-icon-sign_in_again { display: block; }
+#btn-f1-setup { min-height: 44px; flex-shrink: 0; }
+#btn-f1-setup[hidden] { display: none; }
+.btn-f1-signout {
+  flex-shrink: 0; background: #2a2a2a; border: 1px solid #555; color: #ddd; border-radius: 6px;
+  padding: 0 14px; min-height: 44px; font-size: 12px; font-weight: 700; font-family: inherit; cursor: pointer;
 }
-.f1-account-form input:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-.f1-account-form .btn-update { flex-shrink: 0; }
+.btn-f1-signout[hidden] { display: none; }
 .f1-account-msg { font-size: 12px; color: #aaa; }
 .f1-account-msg.error { color: #ff5a52; }
 .f1-account-msg[hidden] { display: none; }
-.btn-f1-signout {
-  align-self: flex-start; background: #2a2a2a; border: 1px solid #555; color: #ddd; border-radius: 6px;
-  padding: 0 14px; min-height: 36px; font-size: 12px; font-weight: 700; font-family: inherit; cursor: pointer;
+.f1-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.45; color: #ddd; }
+.f1-steps a, .f1-setup-note a { color: #ff5a52; }
+.f1-bookmark-code {
+  width: 100%; box-sizing: border-box; background: #111; border: 1px solid #333; color: #bbb; border-radius: 6px;
+  padding: 8px; font-size: 11px; font-family: Consolas, 'Cascadia Mono', monospace; resize: none;
 }
-.btn-f1-signout[hidden] { display: none; }
+.f1-setup-note { font-size: 12px; color: #999; }
+.f1-addr { color: #ddd; font-family: Consolas, 'Cascadia Mono', monospace; }
+.f1-paste { border-top: 1px solid #2a2a2a; padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.f1-account-form { display: flex; gap: 8px; }
+.f1-account-form input {
+  flex: 1; min-width: 0; background: #2a2a2a; border: 1px solid #444; color: #eee;
+  border-radius: 6px; padding: 0 10px; min-height: 44px; font-size: 13px; font-family: inherit;
+}
+.f1-account-form input:focus-visible, .f1-bookmark-code:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 .btn-replay-action.secondary { background: #2a2a2a; color: #aaa; border: 1px solid #444; }
 
 /* ── Replay pill badge (on section titles) ───────────────────────────────── */
