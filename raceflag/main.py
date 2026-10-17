@@ -11,6 +11,7 @@ from raceflag.config import load as load_config, save as save_config, Config, fi
 from raceflag.state import AppState
 from raceflag.f1_listener import F1Listener
 from raceflag.flag_router import FlagRouter
+from raceflag.f1_renewal import F1LoginRenewer
 from raceflag.api_client import JolpicaClient
 from raceflag.web_server import create_app
 from raceflag.replay_manager import ReplayManager
@@ -209,6 +210,7 @@ async def main() -> None:
 
     listener = F1Listener(state=state, on_track_status_change=flag_router.on_flag_change)
     replay = ReplayManager(on_feed=listener.process_replay_event, get_token=lambda: config.f1_token)
+    f1_renewer = F1LoginRenewer(config, CONFIG_PATH)
 
     current_version = VERSION_FILE.read_text().strip() if VERSION_FILE.exists() else ""
     app = create_app(
@@ -223,12 +225,13 @@ async def main() -> None:
         listener=listener,
         on_replay_event=flag_router.on_flag_change,
         flag_router=flag_router,
+        f1_renewer=f1_renewer,
     )
 
     server_config = uvicorn.Config(app, host="0.0.0.0", port=8080, log_level="warning")
     server = uvicorn.Server(server_config)
 
-    tasks = [_refresh_standings_loop(jolpica, state), listener.start(), server.serve(), button.start(), _ensure_overlayroot(ota)]
+    tasks = [_refresh_standings_loop(jolpica, state), listener.start(), server.serve(), button.start(), _ensure_overlayroot(ota), f1_renewer.run()]
     if WIFI_ENABLED:
         tasks.append(wifi.start())
     await asyncio.gather(*tasks)

@@ -112,6 +112,7 @@ def create_app(
     listener=None,
     on_replay_event=None,
     flag_router=None,
+    f1_renewer=None,
     clock: Callable[[], float] = time.monotonic,
 ) -> FastAPI:
     app = FastAPI(title="RaceFlag")
@@ -127,9 +128,13 @@ def create_app(
         return data
 
     # F1 account (feature 017). The token's expiry is wall-clock epoch time.
+    def _f1_status(token: str) -> dict:
+        rejected = bool(f1_renewer and f1_renewer.rejected)
+        return account_status(token, time.time(), rejected=rejected)
+
     @app.get("/api/f1/account")
     async def get_f1_account():
-        return account_status(config.f1_token, time.time())
+        return _f1_status(config.f1_token)
 
     @app.post("/api/f1/account")
     async def set_f1_account(req: F1LoginRequest):
@@ -140,14 +145,18 @@ def create_app(
         config.f1_token = token
         if config_path:
             save_config(config, config_path)
-        return account_status(token, time.time())
+        if f1_renewer is not None:
+            f1_renewer.login_saved()
+        return _f1_status(token)
 
     @app.delete("/api/f1/account")
     async def clear_f1_account():
         config.f1_token = ""
         if config_path:
             save_config(config, config_path)
-        return account_status("", time.time())
+        if f1_renewer is not None:
+            f1_renewer.login_saved()
+        return _f1_status("")
 
     @app.post("/api/config/delay")
     async def set_delay(req: DelayRequest):

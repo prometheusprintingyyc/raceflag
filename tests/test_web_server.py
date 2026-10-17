@@ -571,6 +571,43 @@ def test_account_sign_out_clears_token(account_env, config):
     assert json.loads(path.read_text())["f1_token"] == ""
 
 
+@pytest.fixture
+def renewer_env(tmp_path, app_state, config, led):
+    renewer = MagicMock()
+    renewer.rejected = False
+    path = tmp_path / "config.json"
+    c = TestClient(create_app(state=app_state, config=config, led=led, config_path=path, f1_renewer=renewer))
+    return c, renewer
+
+
+def test_account_reports_sign_in_again_when_renewal_refused(renewer_env, config):
+    c, renewer = renewer_env
+    config.f1_token = _account_token()
+    renewer.rejected = True
+    data = c.get("/api/f1/account").json()
+    assert data["status"] == "sign_in_again"
+    assert data["signed_in"] is False
+
+
+def test_saving_a_login_clears_the_refusal(renewer_env):
+    c, renewer = renewer_env
+    resp = c.post("/api/f1/account", json={"login": _account_token()})
+    assert resp.status_code == 200
+    renewer.login_saved.assert_called_once_with()
+
+
+def test_sign_out_clears_the_refusal(renewer_env):
+    c, renewer = renewer_env
+    c.delete("/api/f1/account")
+    renewer.login_saved.assert_called_once_with()
+
+
+def test_rejected_login_does_not_call_login_saved(renewer_env):
+    c, renewer = renewer_env
+    c.post("/api/f1/account", json={"login": "junk"})
+    renewer.login_saved.assert_not_called()
+
+
 def test_get_config_never_returns_the_f1_token(account_env, config):
     c, _ = account_env
     config.f1_token = _account_token()
