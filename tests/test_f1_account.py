@@ -27,7 +27,7 @@ def _cookie(token: str) -> str:
 
 
 def test_login_needed_message():
-    assert LOGIN_NEEDED == "F1 login needed or expired. Paste a new one in Settings › F1 Account."
+    assert LOGIN_NEEDED == "F1 login needed or expired. Sign in again."
 
 
 def test_parse_raw_token():

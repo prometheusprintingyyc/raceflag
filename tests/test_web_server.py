@@ -497,7 +497,7 @@ def test_replay_sessions_login_refused_returns_401(client_with_replay, replay_ma
     replay_manager.get_sessions = AsyncMock(side_effect=F1LoginRequired())
     resp = client_with_replay.get("/api/replay/sessions")
     assert resp.status_code == 401
-    assert resp.json() == {"detail": "F1 login needed or expired. Paste a new one in Settings › F1 Account."}
+    assert resp.json() == {"detail": "F1 login needed or expired. Sign in again."}
 
 
 def test_replay_load_login_refused_returns_401_and_stays_idle(client_with_replay, replay_manager, app_state):

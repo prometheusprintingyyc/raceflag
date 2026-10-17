@@ -985,7 +985,7 @@ async function _loadReplaySessions() {
     if (resp.status === 401) {
       const data = await resp.json().catch(() => ({}));
       dropdown.innerHTML = '<option value="">F1 login needed</option>';
-      _showReplayLoginMsg(data.detail || 'F1 login needed. Paste one in Settings › F1 Account.');
+      _showReplayLoginMsg(data.detail || 'F1 login needed or expired. Sign in again.');
       return;
     }
     if (!resp.ok) throw new Error('fetch failed');
@@ -1019,7 +1019,7 @@ document.getElementById('btn-replay-load').addEventListener('click', async () =>
     });
     if (resp.status === 401) {
       const data = await resp.json().catch(() => ({}));
-      _showReplayLoginMsg(data.detail || 'F1 login needed. Paste one in Settings › F1 Account.');
+      _showReplayLoginMsg(data.detail || 'F1 login needed or expired. Sign in again.');
       throw new Error('login needed');
     }
     if (!resp.ok) throw new Error(`load failed: ${resp.status}`);

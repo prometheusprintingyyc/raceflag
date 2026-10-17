@@ -11,7 +11,7 @@ import json
 from datetime import datetime, timezone
 from urllib.parse import unquote
 
-LOGIN_NEEDED = "F1 login needed or expired. Paste a new one in Settings › F1 Account."
+LOGIN_NEEDED = "F1 login needed or expired. Sign in again."
 RENEW_WINDOW_S = 86400.0  # renew when less than a day is left
 
 
