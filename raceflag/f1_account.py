@@ -12,26 +12,47 @@ from datetime import datetime, timezone
 from urllib.parse import unquote
 
 LOGIN_NEEDED = "F1 login needed or expired. Paste a new one in Settings › F1 Account."
+RENEW_WINDOW_S = 86400.0  # renew when less than a day is left
 
 
 class LoginError(ValueError):
     """The pasted value can't be used; the message is shown to the user."""
 
 
-def _token_expiry(token: str) -> float:
-    """The token's `exp` claim (epoch seconds). Raises LoginError if it isn't a JWT with one."""
+def _claims(token: str) -> dict:
+    """The JWT's payload claims, or {} if it can't be read."""
     parts = token.split(".")
-    if len(parts) != 3 or not all(parts):
-        raise LoginError("That isn't an F1 login. Paste the login-session cookie or its token.")
+    if len(parts) != 3:
+        return {}
     try:
         padded = parts[1] + "=" * (-len(parts[1]) % 4)
-        payload = json.loads(base64.urlsafe_b64decode(padded))
-        exp = payload["exp"]
-        if isinstance(exp, bool) or not isinstance(exp, (int, float)):
-            raise TypeError(exp)
-    except (ValueError, KeyError, TypeError) as exc:
-        raise LoginError("That isn't an F1 login. Paste the login-session cookie or its token.") from exc
+        claims = json.loads(base64.urlsafe_b64decode(padded))
+    except ValueError:
+        return {}
+    return claims if isinstance(claims, dict) else {}
+
+
+def token_expiry(token: str) -> float:
+    """The token's `exp` claim (epoch seconds). Raises LoginError if it isn't a JWT with one."""
+    parts = token.split(".")
+    exp = _claims(token).get("exp") if len(parts) == 3 and all(parts) else None
+    if isinstance(exp, bool) or not isinstance(exp, (int, float)):
+        raise LoginError("That isn't an F1 login. Paste the login-session cookie or its token.")
     return float(exp)
+
+
+def session_id(token: str) -> str | None:
+    """The F1 sign-in session the token belongs to (used to renew it), if present."""
+    value = _claims(token).get("SessionId")
+    return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def needs_renewal(token: str, now: float) -> bool:
+    """True when a readable token has less than RENEW_WINDOW_S left (or has expired)."""
+    try:
+        return token_expiry(token) - now < RENEW_WINDOW_S
+    except LoginError:
+        return False
 
 
 def parse_login(value: str, now: float) -> str:
@@ -47,21 +68,27 @@ def parse_login(value: str, now: float) -> str:
         except (ValueError, KeyError, TypeError) as exc:
             raise LoginError("That cookie has no F1 login in it. Sign in on formula1.com first.") from exc
         text = token.strip()
-    if _token_expiry(text) <= now:
+    if token_expiry(text) <= now:
         raise LoginError("That F1 login has expired. Sign in on formula1.com again and copy a fresh one.")
     return text
 
 
-def account_status(token: str, now: float) -> dict:
-    """{"signed_in", "expires_at"}: signed in only while the saved token is unexpired."""
+def account_status(token: str, now: float, rejected: bool = False) -> dict:
+    """{"status", "signed_in", "expires_at"}.
+
+    status: "signed_out" (nothing saved), "signed_in" (saved, unexpired, not refused) or
+    "sign_in_again" (expired, unreadable, or F1 refused a renewal).
+    """
     if not token:
-        return {"signed_in": False, "expires_at": None}
+        return {"status": "signed_out", "signed_in": False, "expires_at": None}
     try:
-        exp = _token_expiry(token)
+        exp = token_expiry(token)
     except LoginError:
-        return {"signed_in": False, "expires_at": None}
+        return {"status": "sign_in_again", "signed_in": False, "expires_at": None}
     expires_at = datetime.fromtimestamp(exp, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    return {"signed_in": exp > now, "expires_at": expires_at}
+    signed_in = exp > now and not rejected
+    return {"status": "signed_in" if signed_in else "sign_in_again",
+            "signed_in": signed_in, "expires_at": expires_at}
 
 
 def auth_headers(token: str, now: float) -> dict:

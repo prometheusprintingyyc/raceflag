@@ -528,7 +528,7 @@ def account_env(tmp_path, app_state, config, led):
 
 def test_account_starts_signed_out(account_env):
     c, _ = account_env
-    assert c.get("/api/f1/account").json() == {"signed_in": False, "expires_at": None}
+    assert c.get("/api/f1/account").json() == {"status": "signed_out", "signed_in": False, "expires_at": None}
 
 
 def test_account_paste_cookie_saves_token(account_env, config):
@@ -566,7 +566,7 @@ def test_account_sign_out_clears_token(account_env, config):
     c.post("/api/f1/account", json={"login": _account_token()})
     resp = c.delete("/api/f1/account")
     assert resp.status_code == 200
-    assert resp.json() == {"signed_in": False, "expires_at": None}
+    assert resp.json() == {"status": "signed_out", "signed_in": False, "expires_at": None}
     assert config.f1_token == ""
     assert json.loads(path.read_text())["f1_token"] == ""
 
