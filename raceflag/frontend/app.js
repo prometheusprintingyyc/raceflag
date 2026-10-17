@@ -1085,5 +1085,5 @@ setInterval(_tickClock, 1000);
   try { value = decodeURIComponent(m[1]); } catch (e) { return; }
   document.getElementById('settings-overlay').classList.add('open');
   loadSettings();
-  _saveF1Login(value, 'f1-account-msg');
+  _saveF1Login(value, 'f1-account-msg').then(saved => { if (!saved) _loadF1Account(); });
 })();

@@ -68,6 +68,8 @@ class F1LoginRenewer:
         except (httpx.HTTPError, asyncio.TimeoutError) as exc:
             logger.info("F1 login renewal: no answer (%s) — will retry", type(exc).__name__)
             return "retry"
+        if self._config.f1_token != token:
+            return "skipped"  # a new login was saved (or signed out) during the request; the answer is stale
         if resp.status_code in (401, 403):
             self.rejected = True
             logger.warning("F1 login renewal refused — sign in again in Settings › F1 Account")
@@ -82,8 +84,6 @@ class F1LoginRenewer:
         except (ValueError, KeyError, TypeError, LoginError):
             logger.info("F1 login renewal: unusable answer — will retry")
             return "retry"
-        if self._config.f1_token != token:
-            return "skipped"  # a new login was saved during the request; keep it
         self._config.f1_token = new
         if self._config_path:
             try:

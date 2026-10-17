@@ -76,8 +76,8 @@ javascript:(()=>{const c=document.cookie.split('; ').find(x=>x.startsWith('login
 
 ### Receiving it (RaceFlag page load)
 
-- If the address has `#f1login=<value>`: remove it from the address bar and history
-  (`history.replaceState`), `POST /api/f1/account` with the decoded value, open Settings, and show
+- If the address has `#f1login=<value>`: remove it from the address bar
+  (`history.replaceState`; the browser's own history may still hold it), `POST /api/f1/account` with the decoded value, open Settings, and show
   the result in the F1 Account row ("Signed in" or the 422 reason).
 
 ### Automatic renewal

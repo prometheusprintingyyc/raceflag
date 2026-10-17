@@ -138,6 +138,26 @@ async def test_renewal_does_not_overwrite_a_login_saved_meanwhile():
     save.assert_not_called()
 
 
+@pytest.mark.parametrize("status", [401, 403, 500])
+async def test_answer_for_an_old_login_is_ignored_after_a_new_one_is_saved(status):
+    # The old session is refused while the user re-signs in: the new login must stay usable.
+    r, config, save, client = _renewer()
+    replacement = _jwt(NOW + 2 * 86400, SessionId="other")
+
+    async def post(*args, **kwargs):
+        config.f1_token = replacement
+        r.login_saved()
+        resp = MagicMock()
+        resp.status_code = status
+        resp.json = MagicMock(return_value={})
+        return resp
+    client.post = AsyncMock(side_effect=post)
+    assert await r.check_once() == "skipped"
+    assert r.rejected is False
+    assert config.f1_token == replacement
+    save.assert_not_called()
+
+
 async def test_save_failure_keeps_renewed_token_in_memory():
     r, config, save, _ = _renewer(body={"data": {"subscriptionToken": NEW}})
     save.side_effect = OSError("read-only")
