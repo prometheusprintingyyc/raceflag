@@ -11,9 +11,13 @@ break it, whatever else the change is for.
 - New Python dependencies may not get installed by an update (pip has no network inside
   `overlayroot-chroot` and its errors are ignored). New code must still start without them.
 - New code must start with any older `config.json`; older code must tolerate a newer one.
-- Any change that touches the update path must be called out to the owner, and an OTA from
-  the current release to the new one must be tested on a unit with overlayroot active before
-  a release is tagged.
+- Any change that touches the update path must be called out to the owner.
+- **Release gate: no release is ever tagged or published until an OTA update to it has been
+  verified on a unit with overlayroot active**, every release, whatever it changes. The test
+  unit runs the release it would update from (the current latest), overlayroot is confirmed
+  active (`grep overlayroot /proc/mounts`), the update is installed through the page's Update
+  button, and after a reboot the unit reports the new version and runs the new code. If any
+  step fails, the release is not published. Report the result to the owner before tagging.
 - Never delete releases, rename the repo, or publish a non-numeric or pre-release tag as latest.
 
 ## Shared specs (../raceflag_specs)
