@@ -10,7 +10,8 @@ from pathlib import Path
 import httpx
 
 from raceflag.ota_archive import ReleaseArchiveError, check_archive, read_member
-from raceflag.ota_deps import DependencyError, fetch_missing
+from raceflag.ota_deps import DependencyError, fetch_all, fetch_missing
+from raceflag.ota_safety import code_hash, tar_tree
 
 logger = logging.getLogger(__name__)
 
@@ -256,6 +257,57 @@ class OTAUpdater:
                              err.decode(errors="replace"))
         except Exception as e:
             logger.error("Recovery after a timed-out update failed: %s", e)
+
+    def clean_leftovers(self) -> None:
+        """At start: remove downloads the old updater left on the boot partition, and any
+        unfinished work directory. Errors are logged and ignored."""
+        try:
+            for path in self._boot_dir.glob("raceflag-*.tar.gz"):
+                path.unlink()
+                logger.info("Removed leftover update download %s", path.name)
+        except OSError as e:
+            logger.warning("Could not remove leftover update downloads: %s", e)
+        shutil.rmtree(self._work_dir, ignore_errors=True)
+
+    async def persist_if_ram_only(self) -> str:
+        """Safety net: if overlayroot is active and the running code differs from the SD card's
+        saved copy (it only lives in RAM), save it to the SD card through the install script.
+        Returns 'not_protected', 'same', 'saved' or 'failed'."""
+        if not await self._is_overlayroot_active() or not self._saved_install_dir.is_dir():
+            return "not_protected"
+        async with self._lock:
+            running = await asyncio.to_thread(code_hash, self._install_dir)
+            saved = await asyncio.to_thread(code_hash, self._saved_install_dir)
+            if running is None or running == saved:
+                return "same"
+            logger.warning("Running code is only in RAM — saving it to the SD card")
+            try:
+                shutil.rmtree(self._work_dir, ignore_errors=True)
+                self._work_dir.mkdir(parents=True)
+                await fetch_all(self._install_dir / "requirements.txt", self._wheels_dir)
+                data = await asyncio.to_thread(tar_tree, self._install_dir)
+                await self._run_install_script(data)
+            except (DependencyError, UpdateError) as e:
+                logger.error("Could not save the running code to the SD card: %s", e)
+                return "failed"
+            finally:
+                shutil.rmtree(self._work_dir, ignore_errors=True)
+            logger.info("Running code saved to the SD card")
+            return "saved"
+
+    async def run_safety_net(self, first_delay: float = 60.0, retry: float = 3600.0) -> None:
+        """Start-up task: check once after `first_delay` (only code that has run that long is
+        saved), then retry every `retry` seconds until nothing is left to do."""
+        await asyncio.sleep(first_delay)
+        while True:
+            try:
+                result = await self.persist_if_ram_only()
+            except Exception:
+                logger.exception("Safety net check failed")
+                result = "failed"
+            if result != "failed":
+                return
+            await asyncio.sleep(retry)
 
     def _apply_direct(self, archive_path: Path) -> bool:
         """Apply update by writing directly to the filesystem (overlayroot not yet active).

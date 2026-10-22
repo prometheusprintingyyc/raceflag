@@ -203,6 +203,7 @@ async def main() -> None:
     wifi = WiFiManager(config=config, config_path=CONFIG_PATH, on_hotspot_change=led.set_hotspot_mode)
     button = ButtonManager(gpio_pin=BUTTON_GPIO, wifi_manager=wifi, led=led)
     ota = OTAUpdater(version_file=VERSION_FILE, install_dir=INSTALL_DIR, github_repo=GITHUB_REPO)
+    ota.clean_leftovers()
 
     jolpica = JolpicaClient()
 
@@ -231,7 +232,7 @@ async def main() -> None:
     server_config = uvicorn.Config(app, host="0.0.0.0", port=8080, log_level="warning")
     server = uvicorn.Server(server_config)
 
-    tasks = [_refresh_standings_loop(jolpica, state), listener.start(), server.serve(), button.start(), _ensure_overlayroot(ota), f1_renewer.run()]
+    tasks = [_refresh_standings_loop(jolpica, state), listener.start(), server.serve(), button.start(), _ensure_overlayroot(ota), f1_renewer.run(), ota.run_safety_net()]
     if WIFI_ENABLED:
         tasks.append(wifi.start())
     await asyncio.gather(*tasks)
