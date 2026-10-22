@@ -119,6 +119,55 @@ def test_replay_restart_after_red_flag_plays_start():
     led.trigger_timed.assert_called_once_with("race_start", TIMED_EFFECTS["race_start"])
 
 
+def test_live_start_plays_in_a_new_session_even_if_the_end_was_missed():
+    # The session end can arrive only in a snapshot (never reaches the router); the
+    # listener still clears the lights-out time, so the next race is a new start.
+    router, state, _ = _router()
+    state.set_lights_out_at(1000.0)
+    assert router.resolve("race_start") == ("track_clear", "race_start")
+    state.set_lights_out_at(None)      # session ended (snapshot)
+    state.set_lights_out_at(2000.0)    # next race's lights-out
+    assert router.resolve("race_start") == ("track_clear", "race_start")
+
+
+def test_next_live_race_starts_after_an_end_seen_only_in_a_snapshot():
+    from raceflag.f1_listener import F1Listener
+    router, state, led = _router(active=False)
+    listener = F1Listener(state=state, on_track_status_change=router.on_flag_change)
+    race = {"Meeting": {"Name": "X"}, "Type": "Race", "Name": "Race"}
+    listener._handle_feed("SessionInfo", race, is_snapshot=True)
+    listener._handle_feed("SessionStatus", {"Status": "Started"})           # race 1
+    listener._handle_feed("SessionStatus", {"Status": "Finalised"}, is_snapshot=True)
+    listener._handle_feed("SessionStatus", {"Status": "Inactive"}, is_snapshot=True)
+    led.reset_mock()
+    listener._handle_feed("SessionStatus", {"Status": "Started"})           # race 2
+    assert [c.args[0] for c in led.trigger_timed.call_args_list] == ["race_start"]
+
+
+def test_live_repeat_in_the_same_session_plays_nothing():
+    router, state, _ = _router()
+    state.set_lights_out_at(1000.0)
+    router.resolve("race_start")
+    assert router.resolve("race_start") == ("track_clear", None)
+
+
+def test_live_start_plays_after_a_replay_played_its_start():
+    router, state, _ = _router(replay=True)
+    router.resolve("track_clear")      # replay's promoted start
+    state.set_replay_state(False, "idle")
+    state.set_lights_out_at(1000.0)
+    assert router.resolve("race_start") == ("track_clear", "race_start")
+
+
+def test_new_race_lets_a_replay_promote_its_start_after_a_live_race():
+    router, state, _ = _router()
+    state.set_lights_out_at(1000.0)
+    router.resolve("race_start")       # live start; the session end never arrived
+    state.set_replay_state(True, "loading")
+    router.new_race()
+    assert router.resolve("track_clear") == ("track_clear", "race_start")
+
+
 async def test_delayed_repeated_lights_out_updates_page_only():
     router, state, led = _router(delay=0.05)
     router.on_flag_change("race_start")

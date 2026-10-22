@@ -567,6 +567,14 @@ def test_replay_load_failure_resumes_live_feed(replay_env, replay_manager, error
     assert listener.suspended is False
 
 
+def test_replay_load_starts_a_new_race_for_the_flag_router(app_state, config, led, replay_manager):
+    router = MagicMock()
+    app = create_app(state=app_state, config=config, led=led,
+                     replay_manager=replay_manager, flag_router=router)
+    TestClient(app).post("/api/replay/load", json={"session_path": "p/", "session_name": "X"})
+    router.new_race.assert_called_once_with()
+
+
 def test_replay_stop_after_load_resumes_live_feed(replay_env):
     c, listener = replay_env
     c.post("/api/replay/load", json={"session_path": "p/", "session_name": "X"})

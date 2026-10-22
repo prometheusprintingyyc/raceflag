@@ -385,6 +385,8 @@ def create_app(
                 # message can't overwrite the loaded race before Play; start from empty timing.
                 listener.suspended = True
                 listener.reset_timing_state()
+            if flag_router is not None:
+                flag_router.new_race()
             state.set_replay_state(mode=True, status="loading",
                                    session_name=req.session_name)
             try:

@@ -20,6 +20,9 @@ class FlagRouter:
         self._race_started = False
         # A red flag since the last start: the next lights-out (the restart) plays the start again.
         self._red_since_start = False
+        # Which race the start belongs to: the live lights-out time (the listener clears it at
+        # every session end, even one seen only in a snapshot), or None for a replay.
+        self._start_key: float | None = None
         # Every pending delayed display/timed-effect task, so Sync can cancel them all.
         self._pending: set[asyncio.Future] = set()
         # Live flag changes since the last live race_start: (status, effective, received_at).
@@ -39,10 +42,12 @@ class FlagRouter:
         if status == "race_start":
             # Lights-out (F1's Started), reported by the listener. The page shows All Clear.
             # One start per race; a restart after a red flag plays it again (feature 004).
-            if self._race_started and not self._red_since_start:
+            key = None if self._state.replay_mode else self._state.lights_out_at
+            if self._race_started and key == self._start_key and not self._red_since_start:
                 return "track_clear", None
             self._race_started = True
             self._red_since_start = False
+            self._start_key = key
             return "track_clear", "race_start"
         if (status == "track_clear"
                 and not self._race_started
@@ -51,8 +56,15 @@ class FlagRouter:
             # Replay only: the last pre-race TrackStatus is re-fired at lights-out
             # (feature 006), so the first AllClear is the start.
             self._race_started = True
+            self._start_key = None
             return status, "race_start"
         return status, status
+
+    def new_race(self) -> None:
+        """Forget the last start (a replay is loading: its start must play)."""
+        self._race_started = False
+        self._red_since_start = False
+        self._start_key = None
 
     def _goes_to_led_queue(self, effective: str) -> bool:
         state = self._state
