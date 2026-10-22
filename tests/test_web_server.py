@@ -842,3 +842,23 @@ def test_sync_applies_before_saving(sync_env, app_state, monkeypatch):
     with pytest.raises(OSError):
         c.post("/api/delay/sync")
     router.sync.assert_called_once_with(34.2)
+
+
+# ── POST /api/update/apply reports why an update didn't install (feature 011) ──
+
+def _ota_client(app_state, config, led, result):
+    ota = MagicMock()
+    ota.apply = AsyncMock(return_value=result)
+    return TestClient(create_app(state=app_state, config=config, led=led, ota=ota))
+
+
+def test_update_apply_success_has_no_detail(app_state, config, led):
+    resp = _ota_client(app_state, config, led, (True, None)).post("/api/update/apply")
+    assert resp.status_code == 200
+    assert resp.json() == {"success": True, "detail": None}
+
+
+def test_update_apply_failure_returns_the_reason(app_state, config, led):
+    reason = "Could not install the update (packages). Nothing was changed."
+    resp = _ota_client(app_state, config, led, (False, reason)).post("/api/update/apply")
+    assert resp.json() == {"success": False, "detail": reason}

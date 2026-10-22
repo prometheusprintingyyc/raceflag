@@ -413,7 +413,17 @@ document.getElementById('btn-update').addEventListener('click', async () => {
   const btn = document.getElementById('btn-update');
   btn.textContent = 'Updating…';
   btn.disabled = true;
-  try { await fetch('/api/update/apply', { method: 'POST' }); } catch (e) {}
+  _showMsg('update-msg', '', false);
+  let result = null;
+  try {
+    const resp = await fetch('/api/update/apply', { method: 'POST' });
+    result = await resp.json().catch(() => null);
+  } catch (e) { /* the unit may restart before answering; keep polling below */ }
+  if (result && result.success === false) {
+    _showMsg('update-msg', result.detail || "The update didn't install. Nothing was changed.", true);
+    loadSettings();  // puts the button back ("Update to vX" or "Up to date")
+    return;
+  }
 
   // Service restarts after update — poll until it comes back, then confirm
   const versionEl = document.getElementById('update-current');

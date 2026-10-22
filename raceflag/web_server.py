@@ -310,8 +310,8 @@ def create_app(
     async def apply_update():
         if ota is None:
             raise HTTPException(503, "OTA not available")
-        success = await ota.apply()
-        return {"success": success}
+        success, detail = await ota.apply()
+        return {"success": success, "detail": detail}
 
     @app.get("/api/wifi/status")
     async def wifi_status():
