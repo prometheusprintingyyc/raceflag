@@ -1,28 +1,96 @@
 from __future__ import annotations
 import asyncio
 import logging
+import os
 import shutil
+import signal
 import tarfile
 from pathlib import Path
 
 import httpx
+
+from raceflag.ota_archive import ReleaseArchiveError, check_archive, read_member
+from raceflag.ota_deps import DependencyError, fetch_missing
 
 logger = logging.getLogger(__name__)
 
 GITHUB_API = "https://api.github.com/repos/{repo}/releases/latest"
 
 # /boot/firmware/raceflag/ is on the FAT32 boot partition — always writable even when
-# overlayroot makes the root filesystem read-only.
+# overlayroot makes the root filesystem read-only. Config and version.txt live there.
 BOOT_DIR = Path("/boot/firmware/raceflag")
+# Update downloads: RAM, and /run is shared with overlayroot-chroot (unlike /boot/firmware).
+UPDATE_DIR = Path("/run/raceflag-update")
+# The real SD card's copy of the install, as overlayroot mounts it (read-only).
+SAVED_INSTALL_DIR = Path("/media/root-ro/opt/raceflag")
+INSTALL_SCRIPT = Path(__file__).with_name("ota_install.sh")
+CHROOT_TIMEOUT_S = 300.0
+# After a timeout: put the install back only if the kill landed between the script's two renames.
+RECOVER_SCRIPT = '[ -d "$INSTALL" ] || { [ -d "$BACKUP" ] && mv "$BACKUP" "$INSTALL"; }'
 _OVERLAYROOT_CONF = Path("/etc/overlayroot.local.conf")
 _NM_CONN_SRC = Path("/etc/NetworkManager/system-connections")
 
+# Shown on the page when an update doesn't install (POST /api/update/apply "detail").
+UP_TO_DATE = "Already up to date."
+NO_ASSET = "The release has no update file."
+DOWNLOAD_FAILED = "Could not download the update. Check the connection."
+NOT_A_RELEASE = "The download is not a RaceFlag release."
+PACKAGES_FAILED = "Could not download the packages this update needs."
+TIMED_OUT = "The update took too long and was cancelled."
+NO_CHROOT = "SD card protection tools are missing."
+UNEXPECTED = "The update failed. Nothing was changed."
+
+
+def install_failed(step: str) -> str:
+    return f"Could not install the update ({step}). Nothing was changed."
+
+
+class UpdateError(Exception):
+    """An update attempt failed; `reason` is shown on the page."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
+def last_step(output: str) -> str:
+    """The last 'STEP <name>' the install script printed ('start' if none)."""
+    steps = [line[5:].strip() for line in output.splitlines() if line.startswith("STEP ")]
+    return steps[-1] if steps else "start"
+
+
+def _kill_group(pid: int, sig: int) -> None:
+    os.killpg(pid, sig)
+
+
+async def _stop_process_group(proc) -> None:
+    """End the chroot and everything it started (tar, pip). TERM first so overlayroot-chroot
+    can unmount and make the SD card read-only again; KILL if it doesn't stop."""
+    for sig, wait_s in ((signal.SIGTERM, 10.0), (getattr(signal, "SIGKILL", signal.SIGTERM), 5.0)):
+        try:
+            _kill_group(proc.pid, sig)
+        except ProcessLookupError:
+            return
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=wait_s)
+            return
+        except asyncio.TimeoutError:
+            continue
+
 
 class OTAUpdater:
-    def __init__(self, version_file: Path, install_dir: Path, github_repo: str):
+    def __init__(self, version_file: Path, install_dir: Path, github_repo: str, *,
+                 work_dir: Path = UPDATE_DIR, boot_dir: Path = BOOT_DIR,
+                 saved_install_dir: Path = SAVED_INSTALL_DIR):
         self._version_file = version_file
         self._install_dir = install_dir
         self._github_repo = github_repo
+        self._work_dir = work_dir
+        self._wheels_dir = work_dir / "wheels"
+        self._boot_dir = boot_dir
+        self._saved_install_dir = saved_install_dir
+        # One update or safety-net save at a time.
+        self._lock = asyncio.Lock()
 
     def _current_version(self) -> str:
         try:
@@ -70,67 +138,124 @@ class OTAUpdater:
             logger.warning("OTA check failed: %s", e)
             return {"current": current, "latest": None, "update_available": False}
 
-    async def apply(self) -> bool:
+    async def apply(self) -> tuple[bool, str | None]:
+        """Install the latest release: (True, None), or (False, reason to show on the page)."""
+        async with self._lock:
+            return await self._apply()
+
+    async def _apply(self) -> tuple[bool, str | None]:
         current = self._current_version()
         overlayroot_active = await self._is_overlayroot_active()
-
         try:
             release = await self._fetch_latest_release()
-            tag = release.get("tag_name", "")
-            if not self._is_newer(tag, current):
-                return False
+        except Exception as e:
+            logger.error("OTA: could not get the latest release: %s", e)
+            return False, DOWNLOAD_FAILED
+        tag = release.get("tag_name", "")
+        if not self._is_newer(tag, current):
+            return False, UP_TO_DATE
+        asset = next(
+            (a for a in release.get("assets", []) if a.get("name", "").endswith(".tar.gz")),
+            None,
+        )
+        if not asset:
+            logger.error("No .tar.gz asset found in release %s", tag)
+            return False, NO_ASSET
+        try:
+            archive = await self._download(asset["browser_download_url"], tag)
+            try:
+                check_archive(archive)
+            except ReleaseArchiveError as e:
+                logger.error("OTA: %s", e)
+                raise UpdateError(NOT_A_RELEASE) from e
+            if overlayroot_active:
+                await self._install_protected(archive)
+            elif not self._apply_direct(archive):
+                raise UpdateError(install_failed("files"))
+            self._version_file.write_text(tag.lstrip("v"))
+        except UpdateError as e:
+            logger.error("OTA update to %s failed: %s", tag, e.reason)
+            return False, e.reason
+        except Exception:
+            logger.exception("OTA update to %s failed", tag)
+            return False, UNEXPECTED
+        finally:
+            shutil.rmtree(self._work_dir, ignore_errors=True)
 
-            asset = next(
-                (a for a in release.get("assets", []) if a["name"].endswith(".tar.gz")),
-                None,
-            )
-            if not asset:
-                logger.error("No .tar.gz asset found in release %s", tag)
-                return False
+        # If overlayroot is not yet active, _deferred_restart sets it up and reboots.
+        asyncio.create_task(self._deferred_restart(enable_overlayroot=not overlayroot_active))
+        return True, None
 
-            # Ensure the boot dir exists before writing to it (created by install.sh
-            # on new installs; may not exist on units upgrading from older versions).
-            BOOT_DIR.mkdir(parents=True, exist_ok=True)
-
-            # Download to /boot/firmware/raceflag/ — writable under both normal and overlayroot
-            # operation, and accessible inside overlayroot-chroot via the /boot bind-mount.
-            archive_path = BOOT_DIR / f"raceflag-{tag}.tar.gz"
-
+    async def _download(self, url: str, tag: str) -> Path:
+        shutil.rmtree(self._work_dir, ignore_errors=True)
+        self._work_dir.mkdir(parents=True)
+        path = self._work_dir / f"raceflag-{tag}.tar.gz"
+        try:
             async with httpx.AsyncClient(timeout=120.0, follow_redirects=True) as client:
-                async with client.stream("GET", asset["browser_download_url"]) as resp:
+                async with client.stream("GET", url) as resp:
                     resp.raise_for_status()
-                    with open(archive_path, "wb") as f:
+                    with open(path, "wb") as f:
                         async for chunk in resp.aiter_bytes(8192):
                             f.write(chunk)
+        except (httpx.HTTPError, OSError) as e:
+            logger.error("OTA download failed: %s", e)
+            raise UpdateError(DOWNLOAD_FAILED) from e
+        return path
 
-            if overlayroot_active:
-                success = await self._apply_with_chroot(archive_path)
-            else:
-                success = self._apply_direct(archive_path)
+    async def _install_protected(self, archive: Path) -> None:
+        """overlayroot active: packages first (outside the chroot), then the install script."""
+        requirements = self._work_dir / "requirements.txt"
+        try:
+            requirements.write_bytes(read_member(archive, "requirements.txt"))
+            await fetch_missing(requirements, self._wheels_dir)
+        except DependencyError as e:
+            logger.error("OTA packages: %s", e)
+            raise UpdateError(PACKAGES_FAILED) from e
+        await self._run_install_script(archive.read_bytes())
 
-            if not success:
-                return False
+    def _script_env(self) -> list[str]:
+        parent = self._install_dir.parent
+        return [f"INSTALL={self._install_dir}", f"STAGING={parent / 'raceflag-staging'}",
+                f"BACKUP={parent / 'raceflag.bak'}", f"WHEELS={self._wheels_dir}"]
 
-            # Write version to /boot/firmware/raceflag/ — always writable regardless of overlayroot.
-            self._version_file.write_text(tag.lstrip("v"))
-
-            # Schedule restart. If overlayroot is not yet active, _deferred_restart will
-            # set it up and issue a full reboot (30–60 s on Zero W) instead of a quick
-            # service restart, so the protection is in place before the next power cycle.
-            asyncio.create_task(
-                self._deferred_restart(enable_overlayroot=not overlayroot_active)
+    async def _run_install_script(self, archive_bytes: bytes) -> None:
+        """Run ota_install.sh in overlayroot-chroot with the archive on stdin. Raises UpdateError."""
+        env = self._script_env()
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "overlayroot-chroot", "/usr/bin/env", *env, "/bin/bash", "-c",
+                INSTALL_SCRIPT.read_text(),
+                stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE, start_new_session=True,
             )
-            return True
+        except FileNotFoundError as e:
+            raise UpdateError(NO_CHROOT) from e
+        try:
+            out, err = await asyncio.wait_for(proc.communicate(archive_bytes),
+                                              timeout=CHROOT_TIMEOUT_S)
+        except asyncio.TimeoutError:
+            logger.error("Install script timed out after %.0f s", CHROOT_TIMEOUT_S)
+            await _stop_process_group(proc)
+            await self._recover_after_timeout(env)
+            raise UpdateError(TIMED_OUT)
+        if proc.returncode != 0:
+            step = last_step(out.decode(errors="replace"))
+            logger.error("Install script failed at %s: %s", step,
+                         err.decode(errors="replace")[-2000:])
+            raise UpdateError(install_failed(step))
 
+    async def _recover_after_timeout(self, env: list[str]) -> None:
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "overlayroot-chroot", "/usr/bin/env", *env, "/bin/bash", "-c", RECOVER_SCRIPT,
+                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE,
+            )
+            _, err = await asyncio.wait_for(proc.communicate(), timeout=60)
+            if proc.returncode:
+                logger.error("Recovery after a timed-out update failed: %s",
+                             err.decode(errors="replace"))
         except Exception as e:
-            logger.error("OTA update failed: %s — rolling back", e)
-            if not overlayroot_active:
-                backup_dir = self._install_dir.parent / "raceflag.bak"
-                if backup_dir.exists():
-                    if self._install_dir.exists():
-                        shutil.rmtree(self._install_dir)
-                    shutil.copytree(backup_dir, self._install_dir)
-            return False
+            logger.error("Recovery after a timed-out update failed: %s", e)
 
     def _apply_direct(self, archive_path: Path) -> bool:
         """Apply update by writing directly to the filesystem (overlayroot not yet active)."""
@@ -168,73 +293,6 @@ class OTAUpdater:
             archive_path.unlink(missing_ok=True)
             return False
 
-    async def _apply_with_chroot(self, archive_path: Path) -> bool:
-        """Apply update via overlayroot-chroot so writes reach the real underlying filesystem."""
-        install = self._install_dir
-        backup = install.parent / "raceflag.bak"
-        staging = install.parent / "raceflag-staging"
-
-        # Extract to staging first (safe — doesn't touch live install until tar succeeds).
-        # pip3 install runs inside the chroot so packages land on the real disk, not the overlay.
-        script = (
-            "set -e\n"
-            f"rm -rf {staging} && mkdir -p {staging}\n"
-            f"tar xzf {archive_path} -C {staging}\n"
-            f"rm -rf {backup}\n"
-            f"cp -r {install} {backup}\n"
-            f"rm -rf {install}\n"
-            f"mv {staging} {install}\n"
-            f"rm -f {archive_path}\n"
-            f"pip3 install -r {install}/requirements.txt"
-            f" --extra-index-url https://www.piwheels.org/simple/"
-            f" --break-system-packages -q 2>/dev/null || true\n"
-            # Update service file on the real underlying filesystem so the corrected
-            # paths survive the next reboot (chroot writes bypass the tmpfs overlay).
-            "sed -i"
-            " 's|RACEFLAG_CONFIG=/opt/raceflag/config.json"
-            "|RACEFLAG_CONFIG=/boot/firmware/raceflag/config.json|g;"
-            " s|RACEFLAG_VERSION=/opt/raceflag/version.txt"
-            "|RACEFLAG_VERSION=/boot/firmware/raceflag/version.txt|g'"
-            " /etc/systemd/system/raceflag.service 2>/dev/null || true\n"
-        )
-
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "overlayroot-chroot", "/bin/bash", "-c", script,
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            _, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
-            if proc.returncode != 0:
-                logger.error("overlayroot-chroot apply failed: %s", stderr.decode())
-                await self._rollback_with_chroot()
-                return False
-            return True
-        except asyncio.TimeoutError:
-            logger.error("overlayroot-chroot apply timed out after 300 s")
-            return False
-        except FileNotFoundError:
-            logger.error("overlayroot-chroot not found — cannot apply update safely with overlayroot active")
-            return False
-
-    async def _rollback_with_chroot(self) -> None:
-        backup = self._install_dir.parent / "raceflag.bak"
-        script = (
-            f"if [ -d {backup} ]; then "
-            f"rm -rf {self._install_dir} && "
-            f"cp -r {backup} {self._install_dir} && "
-            f"echo 'rolled back from backup'; fi"
-        )
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "overlayroot-chroot", "/bin/bash", "-c", script,
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-            await asyncio.wait_for(proc.communicate(), timeout=60)
-        except Exception as e:
-            logger.error("Rollback via overlayroot-chroot failed: %s", e)
-
     async def _deferred_restart(self, *, enable_overlayroot: bool) -> None:
         await asyncio.sleep(2)
 
@@ -260,7 +318,7 @@ class OTAUpdater:
             )
             await proc.wait()
         else:
-            # overlayroot already active — pip ran inside the chroot in _apply_with_chroot.
+            # overlayroot already active — pip ran inside the chroot (ota_install.sh).
             # Patch the overlay copy of the service file (chroot already fixed the real FS copy)
             # so the corrected paths take effect on this boot without waiting for a reboot.
             _svc = Path("/etc/systemd/system/raceflag.service")
