@@ -24,6 +24,7 @@ BOOT_DIR = Path("/boot/firmware/raceflag")
 UPDATE_DIR = Path("/run/raceflag-update")
 # The real SD card's copy of the install, as overlayroot mounts it (read-only).
 SAVED_INSTALL_DIR = Path("/media/root-ro/opt/raceflag")
+UPDATE_DONE_MARKER = Path("/run/raceflag-update.done")
 INSTALL_SCRIPT = Path(__file__).with_name("ota_install.sh")
 CHROOT_TIMEOUT_S = 300.0
 # After a timeout: put the install back only if the kill landed between the script's two renames.
@@ -82,7 +83,8 @@ async def _stop_process_group(proc) -> None:
 class OTAUpdater:
     def __init__(self, version_file: Path, install_dir: Path, github_repo: str, *,
                  work_dir: Path = UPDATE_DIR, boot_dir: Path = BOOT_DIR,
-                 saved_install_dir: Path = SAVED_INSTALL_DIR):
+                 saved_install_dir: Path = SAVED_INSTALL_DIR,
+                 done_marker: Path = UPDATE_DONE_MARKER):
         self._version_file = version_file
         self._install_dir = install_dir
         self._github_repo = github_repo
@@ -90,6 +92,7 @@ class OTAUpdater:
         self._wheels_dir = work_dir / "wheels"
         self._boot_dir = boot_dir
         self._saved_install_dir = saved_install_dir
+        self._done_marker = done_marker
         # One update or safety-net save at a time.
         self._lock = asyncio.Lock()
 
@@ -174,6 +177,13 @@ class OTAUpdater:
             elif not self._apply_direct(archive):
                 raise UpdateError(install_failed("files"))
             self._version_file.write_text(tag.lstrip("v"))
+            if overlayroot_active:
+                # The SD card changed under the mounted overlay: the safety net must stand
+                # down until the reboot gives the new code a clean view.
+                try:
+                    self._done_marker.touch()
+                except OSError as e:
+                    logger.error("Could not write the update marker: %s", e)
         except UpdateError as e:
             logger.error("OTA update to %s failed: %s", tag, e.reason)
             return False, e.reason
@@ -276,6 +286,9 @@ class OTAUpdater:
         if not await self._is_overlayroot_active() or not self._saved_install_dir.is_dir():
             return "not_protected"
         async with self._lock:
+            if self._done_marker.exists():
+                logger.info("Update installed — waiting for the reboot")
+                return "updated"
             running = await asyncio.to_thread(code_hash, self._install_dir)
             saved = await asyncio.to_thread(code_hash, self._saved_install_dir)
             if running is None or running == saved:
@@ -384,31 +397,12 @@ class OTAUpdater:
             )
             await proc.wait()
         else:
-            # overlayroot already active — pip ran inside the chroot (ota_install.sh).
-            # Patch the overlay copy of the service file (chroot already fixed the real FS copy)
-            # so the corrected paths take effect on this boot without waiting for a reboot.
-            _svc = Path("/etc/systemd/system/raceflag.service")
-            if _svc.exists():
-                content = _svc.read_text()
-                updated = content.replace(
-                    "Environment=RACEFLAG_CONFIG=/opt/raceflag/config.json",
-                    "Environment=RACEFLAG_CONFIG=/boot/firmware/raceflag/config.json",
-                ).replace(
-                    "Environment=RACEFLAG_VERSION=/opt/raceflag/version.txt",
-                    "Environment=RACEFLAG_VERSION=/boot/firmware/raceflag/version.txt",
-                )
-                if updated != content:
-                    _svc.write_text(updated)
-                    reload = await asyncio.create_subprocess_exec(
-                        "systemctl", "daemon-reload",
-                        stdout=asyncio.subprocess.DEVNULL,
-                        stderr=asyncio.subprocess.DEVNULL,
-                    )
-                    await reload.wait()
-                    logger.info("Updated service file paths to boot partition")
-            # Restart the service to pick up the new code and corrected environment.
+            # overlayroot already active — pip ran inside the chroot (ota_install.sh), which also
+            # fixed the service file on the SD card. The SD card changed under the mounted
+            # overlay, so only a reboot gives the new code a clean view.
+            logger.info("Update installed — rebooting so the new code runs from the SD card")
             proc = await asyncio.create_subprocess_exec(
-                "systemctl", "restart", "raceflag",
+                "reboot",
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
             )

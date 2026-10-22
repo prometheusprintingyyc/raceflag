@@ -59,7 +59,7 @@ def unit(tmp_path, mocker):
     saved = _tree(tmp_path / "media" / "root-ro" / "opt" / "raceflag", main="OLD\n")
     up = OTAUpdater(version_file=tmp_path / "version.txt", install_dir=running, github_repo="x/y",
                     work_dir=tmp_path / "run" / "raceflag-update", boot_dir=tmp_path / "boot",
-                    saved_install_dir=saved)
+                    saved_install_dir=saved, done_marker=tmp_path / "done")
     mocker.patch.object(OTAUpdater, "_is_overlayroot_active", return_value=True)
     fetch = mocker.patch("raceflag.ota.fetch_all", return_value=None)
     script = mocker.patch.object(up, "_run_install_script", new=mocker.AsyncMock())
@@ -96,6 +96,25 @@ async def test_ram_only_code_is_saved_through_the_install_script(unit):
     with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
         assert tf.extractfile("raceflag/main.py").read() == b"NEW\n"
     assert not up._work_dir.exists()
+
+
+async def test_marker_present_means_updated_and_nothing_runs(unit):
+    up, _, _, fetch, script = unit
+    up._done_marker.touch()
+    assert await up.persist_if_ram_only() == "updated"
+    fetch.assert_not_called()
+    script.assert_not_called()
+
+
+async def test_check_queued_behind_an_update_stands_down(unit):
+    up, _, _, fetch, script = unit
+    await up._lock.acquire()
+    task = asyncio.create_task(up.persist_if_ram_only())
+    await asyncio.sleep(0.05)
+    up._done_marker.touch()
+    up._lock.release()
+    assert await task == "updated"
+    script.assert_not_called()
 
 
 @pytest.mark.parametrize("error", [DependencyError("no network"), UpdateError("x")])

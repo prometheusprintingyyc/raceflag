@@ -113,7 +113,8 @@ def box(tmp_path, mocker):
     up = OTAUpdater(version_file=version_file, install_dir=install_dir,
                     github_repo="prometheusprintingyyc/raceflag",
                     work_dir=tmp_path / "run" / "raceflag-update", boot_dir=tmp_path / "boot",
-                    saved_install_dir=tmp_path / "media" / "root-ro" / "opt" / "raceflag")
+                    saved_install_dir=tmp_path / "media" / "root-ro" / "opt" / "raceflag",
+                    done_marker=tmp_path / "done")
     mocker.patch.object(up, "_fetch_latest_release", return_value=LATEST_RELEASE)
 
     async def download(url, tag):
@@ -173,6 +174,7 @@ async def test_protected_success_feeds_the_archive_on_stdin_and_writes_version(b
     assert kwargs.get("start_new_session") is True
     assert proc.stdin_data == _release_bytes()
     assert version_file.read_text() == "0.2.0"
+    assert up._done_marker.exists()
     up._deferred_restart.assert_called_once_with(enable_overlayroot=False)
     assert not up._work_dir.exists()
 
@@ -317,6 +319,7 @@ async def test_unprotected_uses_the_direct_path(box, mocker):
     exec_.assert_not_called()
     assert (up._install_dir / "raceflag" / "main.py").read_text() == "NEW\n"
     assert version_file.read_text() == "0.2.0"
+    assert not up._done_marker.exists()
     up._deferred_restart.assert_called_once_with(enable_overlayroot=True)
 
 
@@ -371,3 +374,28 @@ def test_direct_success_keeps_previous_code_as_backup(box):
     assert (up._install_dir / "raceflag" / "main.py").read_text() == "NEW\n"
     backup = up._install_dir.parent / "raceflag.bak"
     assert (backup / "raceflag" / "main.py").read_text() == "OLD\n"
+
+
+async def test_protected_failure_does_not_create_the_marker(box, mocker):
+    up, _ = box
+    mocker.patch.object(up, "_install_protected", side_effect=UpdateError("x"))
+    mocker.patch.object(OTAUpdater, "_is_overlayroot_active", return_value=True)
+    assert (await up.apply())[0] is False
+    assert not up._done_marker.exists()
+
+
+async def test_protected_deferred_restart_reboots_not_restarts(tmp_path, mocker):
+    up = OTAUpdater(version_file=tmp_path / "v", install_dir=tmp_path / "i", github_repo="x/y",
+                    work_dir=tmp_path / "w", boot_dir=tmp_path / "b", done_marker=tmp_path / "d")
+    mocker.patch("raceflag.ota.asyncio.sleep", new=mocker.AsyncMock())
+    calls = []
+
+    async def fake_exec(*args, **kwargs):
+        calls.append(args)
+        proc = mocker.AsyncMock()
+        proc.wait.return_value = 0
+        return proc
+    mocker.patch("raceflag.ota.asyncio.create_subprocess_exec", side_effect=fake_exec)
+    await up._deferred_restart(enable_overlayroot=False)
+    assert ("reboot",) in calls
+    assert not any("systemctl" in c for c in calls)

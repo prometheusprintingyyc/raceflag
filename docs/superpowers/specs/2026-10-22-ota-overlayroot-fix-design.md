@@ -91,8 +91,9 @@ landed between the two renames. Reason: "The update took too long and was cancel
 
 ### 4. After the chroot
 
-Success: write `version.txt`, then the existing deferred service restart (overlay service-file
-patch + `systemctl restart raceflag`). Failure: `version.txt` untouched, no restart.
+Success: write `version.txt` and the marker `/run/raceflag-update.done`, then reboot (deferred 2 s,
+as the restart was): the SD card changed under the mounted overlay, and only a reboot gives the
+new code a clean view. Failure: `version.txt` untouched, no restart.
 
 ### 5. Direct path (overlayroot not active)
 
@@ -128,7 +129,7 @@ is offered again. The fixed code saves itself to the SD card when this happens:
 
 - **When:** a start-up task, 60 s after start (so only code that has run for a minute is saved),
   only when overlayroot is active and the lower filesystem is mounted at `/media/root-ro`
-  (otherwise it does nothing). Not while an update is in progress.
+  (otherwise it does nothing). Not while an update is in progress, and not after an update until the next reboot (the `/run` marker).
 - **Check:** a SHA-256 over every file under `/opt/raceflag/raceflag/` plus `requirements.txt`
   (sorted relative paths and contents; `__pycache__`/`*.pyc` skipped), computed for the running
   view `/opt/raceflag` and for `/media/root-ro/opt/raceflag` (read-only, outside the chroot).
