@@ -77,3 +77,32 @@ def test_read_member_returns_contents_with_or_without_dot_slash(tmp_path):
 def test_read_member_missing_raises(tmp_path):
     with pytest.raises(ReleaseArchiveError):
         read_member(_write(tmp_path / "r.tar.gz", GOOD), "nope.txt")
+
+
+def test_check_archive_rejects_symlink_inside_archive(tmp_path):
+    link = tarfile.TarInfo("raceflag/link")
+    link.type = tarfile.SYMTYPE
+    link.linkname = "main.py"
+    with pytest.raises(ReleaseArchiveError, match="raceflag/link"):
+        check_archive(_write(tmp_path / "r.tar.gz", GOOD + [link]))
+
+
+def test_check_archive_rejects_hardlink_member(tmp_path):
+    link = tarfile.TarInfo("raceflag/copy.py")
+    link.type = tarfile.LNKTYPE
+    link.linkname = "raceflag/main.py"
+    with pytest.raises(ReleaseArchiveError, match="raceflag/copy.py"):
+        check_archive(_write(tmp_path / "r.tar.gz", GOOD + [link]))
+
+
+def test_check_archive_rejects_chained_symlinks(tmp_path):
+    # a/l1 -> .. passes a per-link lexical check, and l2 -> a/l1/.. then escapes
+    # the extraction directory once l1 is resolved on disk.
+    l1 = tarfile.TarInfo("raceflag/a/l1")
+    l1.type = tarfile.SYMTYPE
+    l1.linkname = ".."
+    l2 = tarfile.TarInfo("raceflag/l2")
+    l2.type = tarfile.SYMTYPE
+    l2.linkname = "a/l1/.."
+    with pytest.raises(ReleaseArchiveError):
+        check_archive(_write(tmp_path / "r.tar.gz", GOOD + [l1, l2]))

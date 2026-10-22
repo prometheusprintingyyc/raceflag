@@ -30,12 +30,9 @@ def check_archive(path: Path) -> None:
     for m in members:
         if not _inside(m.name):
             raise ReleaseArchiveError(f"member outside the archive: {m.name}")
-        if m.issym() and (m.linkname.startswith("/") or not _inside(
-                posixpath.join(posixpath.dirname(posixpath.normpath(m.name)), m.linkname))):
-            raise ReleaseArchiveError(f"link outside the archive: {m.name}")
-        if m.islnk() and not _inside(m.linkname):
-            raise ReleaseArchiveError(f"link outside the archive: {m.name}")
-        if not (m.isfile() or m.isdir() or m.issym() or m.islnk()):
+        if m.issym() or m.islnk():
+            raise ReleaseArchiveError(f"links are not allowed: {m.name}")
+        if not (m.isfile() or m.isdir()):
             raise ReleaseArchiveError(f"unsupported member type: {m.name}")
         names.add(posixpath.normpath(m.name))
     for required in REQUIRED:
