@@ -1,0 +1,54 @@
+# raceflag/ota_archive.py
+"""Checks a downloaded release before anything is installed (feature 011)."""
+from __future__ import annotations
+
+import posixpath
+import tarfile
+from pathlib import Path
+
+REQUIRED = ("requirements.txt", "raceflag/main.py")
+
+
+class ReleaseArchiveError(ValueError):
+    """The download is not a usable RaceFlag release."""
+
+
+def _inside(path: str) -> bool:
+    norm = posixpath.normpath(path)
+    return not (path.startswith("/") or norm == ".." or norm.startswith("../"))
+
+
+def check_archive(path: Path) -> None:
+    """Raise ReleaseArchiveError unless `path` is a gzip tar whose members all stay inside the
+    extraction directory and which holds requirements.txt and raceflag/main.py."""
+    try:
+        with tarfile.open(path, "r:gz") as tf:
+            members = tf.getmembers()
+    except (tarfile.TarError, OSError, EOFError) as e:
+        raise ReleaseArchiveError(f"not a gzip tar archive: {e}") from e
+    names = set()
+    for m in members:
+        if not _inside(m.name):
+            raise ReleaseArchiveError(f"member outside the archive: {m.name}")
+        if m.issym() and (m.linkname.startswith("/") or not _inside(
+                posixpath.join(posixpath.dirname(posixpath.normpath(m.name)), m.linkname))):
+            raise ReleaseArchiveError(f"link outside the archive: {m.name}")
+        if m.islnk() and not _inside(m.linkname):
+            raise ReleaseArchiveError(f"link outside the archive: {m.name}")
+        if not (m.isfile() or m.isdir() or m.issym() or m.islnk()):
+            raise ReleaseArchiveError(f"unsupported member type: {m.name}")
+        names.add(posixpath.normpath(m.name))
+    for required in REQUIRED:
+        if required not in names:
+            raise ReleaseArchiveError(f"missing {required}")
+
+
+def read_member(path: Path, name: str) -> bytes:
+    """Contents of `name` (also found as ./name). Raises ReleaseArchiveError if absent."""
+    with tarfile.open(path, "r:gz") as tf:
+        for m in tf.getmembers():
+            if m.isfile() and posixpath.normpath(m.name) == name:
+                f = tf.extractfile(m)
+                if f is not None:
+                    return f.read()
+    raise ReleaseArchiveError(f"missing {name}")
