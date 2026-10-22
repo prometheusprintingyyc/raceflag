@@ -258,40 +258,54 @@ class OTAUpdater:
             logger.error("Recovery after a timed-out update failed: %s", e)
 
     def _apply_direct(self, archive_path: Path) -> bool:
-        """Apply update by writing directly to the filesystem (overlayroot not yet active)."""
+        """Apply update by writing directly to the filesystem (overlayroot not yet active).
+
+        Swaps like ota_install.sh: extract to staging, then two renames. The old install is
+        never deleted or overwritten by a copy; a failed swap renames it back."""
         backup_dir = self._install_dir.parent / "raceflag.bak"
         staging = self._install_dir.parent / "raceflag-staging"
         try:
-            if backup_dir.exists():
-                shutil.rmtree(backup_dir)
-            shutil.copytree(self._install_dir, backup_dir)
+            try:
+                if staging.exists():
+                    shutil.rmtree(staging)
+                staging.mkdir()
+                with tarfile.open(archive_path) as tf:
+                    # filter="data" (Python 3.12+) blocks path traversal; fall back to manual check on 3.11
+                    try:
+                        tf.extractall(staging, filter="data")
+                    except TypeError:
+                        for member in tf.getmembers():
+                            dest = (staging / member.name).resolve()
+                            if not str(dest).startswith(str(staging.resolve())):
+                                raise ValueError(f"Unsafe tar member: {member.name}")
+                        tf.extractall(staging)
+            except Exception as e:
+                logger.error("Direct apply failed while extracting: %s", e)
+                shutil.rmtree(staging, ignore_errors=True)
+                return False
 
-            if staging.exists():
-                shutil.rmtree(staging)
-            staging.mkdir()
-            with tarfile.open(archive_path) as tf:
-                # filter="data" (Python 3.12+) blocks path traversal; fall back to manual check on 3.11
+            try:
+                if backup_dir.exists():
+                    shutil.rmtree(backup_dir)
+                os.rename(self._install_dir, backup_dir)
+            except Exception as e:
+                logger.error("Direct apply failed while making the backup: %s", e)
+                shutil.rmtree(staging, ignore_errors=True)
+                return False
+
+            try:
+                os.rename(staging, self._install_dir)
+            except Exception as e:
+                logger.error("Direct apply failed while swapping in the update: %s", e)
                 try:
-                    tf.extractall(staging, filter="data")
-                except TypeError:
-                    for member in tf.getmembers():
-                        dest = (staging / member.name).resolve()
-                        if not str(dest).startswith(str(staging.resolve())):
-                            raise ValueError(f"Unsafe tar member: {member.name}")
-                    tf.extractall(staging)
-
-            shutil.rmtree(self._install_dir)
-            shutil.move(str(staging), str(self._install_dir))
-            archive_path.unlink(missing_ok=True)
+                    os.rename(backup_dir, self._install_dir)
+                except Exception as e2:
+                    logger.error("Could not put the previous install back: %s", e2)
+                shutil.rmtree(staging, ignore_errors=True)
+                return False
             return True
-        except Exception as e:
-            logger.error("Direct apply failed: %s", e)
-            if backup_dir.exists():
-                if self._install_dir.exists():
-                    shutil.rmtree(self._install_dir)
-                shutil.copytree(backup_dir, self._install_dir)
+        finally:
             archive_path.unlink(missing_ok=True)
-            return False
 
     async def _deferred_restart(self, *, enable_overlayroot: bool) -> None:
         await asyncio.sleep(2)

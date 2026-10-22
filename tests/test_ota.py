@@ -326,3 +326,48 @@ async def test_unprotected_failure_reports_files_step(box, mocker):
     mocker.patch.object(up, "_apply_direct", return_value=False)
     assert await up.apply() == (False, install_failed("files"))
     assert version_file.read_text() == "0.1.0"
+
+
+# ── _apply_direct: swap like ota_install.sh, never copy a backup over a live install ──
+def _direct_archive(up):
+    up._work_dir.mkdir(parents=True, exist_ok=True)
+    path = up._work_dir / "r.tar.gz"
+    path.write_bytes(_release_bytes())
+    return path
+
+
+def test_direct_backup_failure_leaves_the_install_untouched(box, mocker):
+    up, _ = box
+    stale = up._install_dir.parent / "raceflag.bak"
+    (stale / "raceflag").mkdir(parents=True)
+    (stale / "raceflag" / "main.py").write_text("STALE")
+    real_rmtree = ota_module.shutil.rmtree
+
+    def rmtree(path, *a, **k):
+        if Path(path) == stale:
+            raise OSError("I/O error")
+        return real_rmtree(path, *a, **k)
+    mocker.patch("raceflag.ota.shutil.rmtree", side_effect=rmtree)
+    assert up._apply_direct(_direct_archive(up)) is False
+    assert (up._install_dir / "raceflag" / "main.py").read_text() == "OLD\n"
+
+
+def test_direct_failed_second_rename_puts_the_install_back(box, mocker):
+    up, _ = box
+    real_rename = ota_module.os.rename
+
+    def rename(src, dst):
+        if Path(dst) == up._install_dir and Path(src).name == "raceflag-staging":
+            raise OSError("boom")
+        return real_rename(src, dst)
+    mocker.patch("raceflag.ota.os.rename", side_effect=rename)
+    assert up._apply_direct(_direct_archive(up)) is False
+    assert (up._install_dir / "raceflag" / "main.py").read_text() == "OLD\n"
+
+
+def test_direct_success_keeps_previous_code_as_backup(box):
+    up, _ = box
+    assert up._apply_direct(_direct_archive(up)) is True
+    assert (up._install_dir / "raceflag" / "main.py").read_text() == "NEW\n"
+    backup = up._install_dir.parent / "raceflag.bak"
+    assert (backup / "raceflag" / "main.py").read_text() == "OLD\n"
