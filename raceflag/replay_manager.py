@@ -78,6 +78,13 @@ class ReplayManager:
         self._sync_offset: float = 0.0
         self._task: asyncio.Task | None = None
         self._last_pre_race_track_status: dict | None = None
+        # Streams finished (downloaded, skipped or failed) in the current or last load.
+        self._streams_done: int = 0
+
+    @property
+    def load_percent(self) -> int:
+        """Progress of a load: streams finished out of REPLAY_STREAMS, 0-100."""
+        return self._streams_done * 100 // len(REPLAY_STREAMS)
 
     async def get_sessions(self, year: int = 2025) -> list[dict]:
         """Fetch Index.json and return Race and Sprint sessions."""
@@ -140,6 +147,8 @@ class ReplayManager:
             raise
         except Exception as exc:
             logger.warning("Failed to fetch %s stream: %s", topic, exc)
+        finally:
+            self._streams_done += 1
         return events
 
     def _find_lights_out(self, events: list[tuple[float, str, dict]]) -> float:
@@ -186,6 +195,7 @@ class ReplayManager:
     async def load_session(self, path: str, session_name: str = "") -> int:
         """Download all timing streams and return the count of real-time events (race_time >= 0)."""
         base = f"{BASE_URL}/{path}"
+        self._streams_done = 0
         async with httpx.AsyncClient(timeout=30.0, headers=self._auth_headers()) as client:
             results = await asyncio.gather(
                 *[self._fetch_stream(client, base, topic) for topic in REPLAY_STREAMS],
@@ -290,6 +300,7 @@ class ReplayManager:
         self._events = []
         self._session_name = ""
         self._last_pre_race_track_status = None
+        self._streams_done = 0
 
     def set_sync_offset(self, seconds: float) -> None:
         self._sync_offset = max(-30.0, min(30.0, float(seconds)))

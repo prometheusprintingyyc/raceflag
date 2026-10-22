@@ -1009,14 +1009,22 @@ document.getElementById('btn-replay-load').addEventListener('click', async () =>
   const name = dropdown.options[dropdown.selectedIndex]?.dataset?.name || '';
   if (!path) return;
   const btn = document.getElementById('btn-replay-load');
-  btn.textContent = 'Loading…';
+  btn.textContent = 'Loading 0%';
   btn.disabled = true;
+  // The load request answers when the download is done; meanwhile show its progress.
+  let loading = true;
+  const progressPoll = setInterval(async () => {
+    try {
+      const p = await (await fetch('/api/replay/progress')).json();
+      if (loading && p.status === 'loading') btn.textContent = `Loading ${p.percent}%`;
+    } catch (e) { /* keep the last value */ }
+  }, 500);
   try {
     const resp = await fetch('/api/replay/load', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_path: path, session_name: name }),
-    });
+    }).finally(() => { loading = false; clearInterval(progressPoll); });
     if (resp.status === 401) {
       const data = await resp.json().catch(() => ({}));
       _showReplayLoginMsg(data.detail || 'F1 login needed or expired. Sign in again.');

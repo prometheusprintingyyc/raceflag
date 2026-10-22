@@ -509,6 +509,81 @@ def test_replay_load_login_refused_returns_401_and_stays_idle(client_with_replay
     assert app_state.replay_mode is False
 
 
+# ── GET /api/replay/progress ─────────────────────────────────────────────────
+
+_LOAD = {"session_path": "2025/brit/", "session_name": "2025 British GP"}
+
+
+def test_replay_progress_when_idle(client_with_replay):
+    resp = client_with_replay.get("/api/replay/progress")
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "idle", "percent": 0, "stream": None, "event_count": 0,
+                           "session_name": "", "detail": None, "login_needed": False}
+
+
+def test_replay_progress_while_loading_reports_streams_finished(client_with_replay, replay_manager, app_state):
+    app_state.set_replay_state(mode=True, status="loading", session_name="2025 British GP")
+    replay_manager._streams_done = 3
+    body = client_with_replay.get("/api/replay/progress").json()
+    assert body["status"] == "loading"
+    assert body["percent"] == 30
+    assert body["session_name"] == "2025 British GP"
+    assert body["event_count"] == 0
+
+
+def test_replay_progress_after_load_is_ready_at_100(client_with_replay):
+    client_with_replay.post("/api/replay/load", json=_LOAD)
+    body = client_with_replay.get("/api/replay/progress").json()
+    assert body == {"status": "ready", "percent": 100, "stream": None, "event_count": 42,
+                    "session_name": "2025 British GP", "detail": None, "login_needed": False}
+
+
+def test_replay_progress_after_login_refused(client_with_replay, replay_manager):
+    from raceflag.replay_manager import F1LoginRequired
+    replay_manager.load_session = AsyncMock(side_effect=F1LoginRequired())
+    client_with_replay.post("/api/replay/load", json=_LOAD)
+    body = client_with_replay.get("/api/replay/progress").json()
+    assert body["status"] == "idle"
+    assert body["percent"] == 0
+    assert body["detail"] == "F1 login needed or expired. Sign in again."
+    assert body["login_needed"] is True
+
+
+def test_replay_progress_after_failed_load(client_with_replay, replay_manager):
+    replay_manager.load_session.side_effect = Exception("network error")
+    client_with_replay.post("/api/replay/load", json=_LOAD)
+    body = client_with_replay.get("/api/replay/progress").json()
+    assert body["status"] == "idle"
+    assert "network error" in body["detail"]
+    assert body["login_needed"] is False
+
+
+def test_replay_progress_failure_cleared_by_next_load(client_with_replay, replay_manager):
+    replay_manager.load_session.side_effect = Exception("network error")
+    client_with_replay.post("/api/replay/load", json=_LOAD)
+    replay_manager.load_session.side_effect = None
+    client_with_replay.post("/api/replay/load", json=_LOAD)
+    assert client_with_replay.get("/api/replay/progress").json()["detail"] is None
+
+
+def test_replay_progress_failure_cleared_by_stop(client_with_replay, replay_manager):
+    replay_manager.load_session.side_effect = Exception("network error")
+    client_with_replay.post("/api/replay/load", json=_LOAD)
+    client_with_replay.post("/api/replay/stop")
+    body = client_with_replay.get("/api/replay/progress").json()
+    assert body["detail"] is None
+    assert body["login_needed"] is False
+
+
+def test_replay_progress_event_count_cleared_by_stop(client_with_replay):
+    client_with_replay.post("/api/replay/load", json=_LOAD)
+    client_with_replay.post("/api/replay/stop")
+    body = client_with_replay.get("/api/replay/progress").json()
+    assert body["status"] == "idle"
+    assert body["event_count"] == 0
+    assert body["percent"] == 0
+
+
 # ---------------------------------------------------------------------------
 # F1 account (feature 017)
 # ---------------------------------------------------------------------------

@@ -367,8 +367,15 @@ def create_app(
             except F1LoginRequired as exc:
                 raise HTTPException(status_code=401, detail=str(exc))
 
+        # Outcome of the last load, for GET /api/replay/progress. Cleared by a new load or Stop.
+        _load_result: dict = {"event_count": 0, "detail": None, "login_needed": False}
+
+        def _clear_load_result() -> None:
+            _load_result.update(event_count=0, detail=None, login_needed=False)
+
         @app.post("/api/replay/load")
         async def load_replay_session(req: LoadSessionRequest):
+            _clear_load_result()
             state.set_replay_state(mode=True, status="loading",
                                    session_name=req.session_name)
             try:
@@ -377,14 +384,37 @@ def create_app(
                 )
             except F1LoginRequired as exc:
                 state.set_replay_state(mode=False, status="idle")
+                _load_result.update(detail=str(exc), login_needed=True)
                 raise HTTPException(status_code=401, detail=str(exc))
             except Exception as exc:
                 state.set_replay_state(mode=False, status="idle")
-                raise HTTPException(status_code=502, detail=f"Failed to load session: {exc}")
+                detail = f"Failed to load session: {exc}"
+                _load_result.update(detail=detail)
+                raise HTTPException(status_code=502, detail=detail)
+            _load_result.update(event_count=event_count)
             state.set_replay_state(mode=True, status="ready",
                                    session_name=req.session_name)
             return {"status": "ready", "session_name": req.session_name,
                     "event_count": event_count}
+
+        @app.get("/api/replay/progress")
+        async def get_replay_progress():
+            # Streams download in parallel, so there is no single stream in progress.
+            status = state.replay_status
+            loaded = status in ("ready", "playing", "paused")
+            if status == "loading":
+                percent = replay_manager.load_percent
+            else:
+                percent = 100 if loaded else 0
+            return {
+                "status": status,
+                "percent": percent,
+                "stream": None,
+                "event_count": _load_result["event_count"] if loaded else 0,
+                "session_name": state.replay_session_name,
+                "detail": _load_result["detail"],
+                "login_needed": _load_result["login_needed"],
+            }
 
         @app.post("/api/replay/play")
         async def play_replay():
@@ -431,6 +461,7 @@ def create_app(
         @app.post("/api/replay/stop")
         async def stop_replay():
             replay_manager.stop()
+            _clear_load_result()
             if listener is not None:
                 listener.suspended = False
                 listener.reset_timing_state()

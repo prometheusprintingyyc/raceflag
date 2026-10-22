@@ -4,7 +4,7 @@ import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from raceflag.replay_manager import ReplayManager, _parse_ts, _parse_jsonstream_line
+from raceflag.replay_manager import REPLAY_STREAMS, ReplayManager, _parse_ts, _parse_jsonstream_line
 
 
 # ── Pure helper tests ────────────────────────────────────────────────────────
@@ -272,6 +272,77 @@ async def test_load_session_skips_a_single_refused_stream():
     with patch("raceflag.replay_manager.httpx.AsyncClient", return_value=ctx):
         count = await ReplayManager().load_session("2025/path/")
     assert count > 0
+
+
+# ── load progress (percent of streams finished) ──────────────────────────────
+
+@pytest.mark.asyncio
+async def test_load_percent_counts_finished_streams():
+    release = asyncio.Event()
+
+    async def side_effect(url, **_):
+        if "TimingData" in url:
+            await release.wait()  # the big stream finishes last
+        resp = MagicMock()
+        resp.status_code, resp.text = 404, ""
+        return resp
+    client = AsyncMock()
+    client.get = AsyncMock(side_effect=side_effect)
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=client)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+
+    rm = ReplayManager()
+    assert rm.load_percent == 0
+    with patch("raceflag.replay_manager.httpx.AsyncClient", return_value=ctx):
+        task = asyncio.create_task(rm.load_session("2025/path/"))
+        for _ in range(50):
+            await asyncio.sleep(0)
+        assert rm.load_percent == 90
+        release.set()
+        await task
+    assert rm.load_percent == 100
+
+
+@pytest.mark.asyncio
+async def test_load_percent_counts_refused_and_failed_streams_as_finished():
+    ctx, _ = _status_client(500)
+    rm = ReplayManager()
+    with patch("raceflag.replay_manager.httpx.AsyncClient", return_value=ctx):
+        await rm.load_session("2025/path/")
+    assert rm.load_percent == 100
+
+
+@pytest.mark.asyncio
+async def test_load_percent_restarts_at_zero_for_a_new_load():
+    release = asyncio.Event()
+
+    async def side_effect(url, **_):
+        await release.wait()
+        resp = MagicMock()
+        resp.status_code, resp.text = 404, ""
+        return resp
+    client = AsyncMock()
+    client.get = AsyncMock(side_effect=side_effect)
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=client)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+
+    rm = ReplayManager()
+    rm._streams_done = len(REPLAY_STREAMS)  # a previous load finished
+    with patch("raceflag.replay_manager.httpx.AsyncClient", return_value=ctx):
+        task = asyncio.create_task(rm.load_session("2025/path/"))
+        await asyncio.sleep(0)
+        assert rm.load_percent == 0
+        release.set()
+        await task
+
+
+def test_stop_resets_load_percent():
+    rm = ReplayManager()
+    rm._streams_done = len(REPLAY_STREAMS)
+    rm.stop()
+    assert rm.load_percent == 0
 
 
 # ── load_session (mocked HTTP) ───────────────────────────────────────────────
