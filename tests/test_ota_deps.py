@@ -105,3 +105,13 @@ async def test_run_timeout_raises_dependency_error(monkeypatch):
     monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_exec)
     with pytest.raises(DependencyError):
         await ota_deps._run("pip3", "download", timeout=0.01)
+
+
+async def test_run_missing_executable_raises_dependency_error(monkeypatch):
+    import asyncio
+
+    async def fake_exec(*a, **k):
+        raise FileNotFoundError(2, "No such file or directory", a[0])
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_exec)
+    with pytest.raises(DependencyError):
+        await ota_deps._run("pip3", "download", timeout=1)

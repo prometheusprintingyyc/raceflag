@@ -32,8 +32,11 @@ def to_install(report: dict) -> list[str]:
 
 
 async def _run(*args: str, timeout: float) -> tuple[int, bytes, bytes]:
-    proc = await asyncio.create_subprocess_exec(
-        *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    except OSError as e:
+        raise DependencyError(f"could not run {args[0]}: {e}") from e
     try:
         out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
     except asyncio.TimeoutError as e:
