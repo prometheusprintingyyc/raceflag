@@ -897,7 +897,8 @@ async function _saveF1Login(value, msgId) {
     if (resp.ok) {
       _renderF1Account(data);
       _showMsg(msgId, 'Signed in. Replays will use this login.', false);
-      document.getElementById('replay-login-msg').hidden = true;
+      // The race list was waiting for a login: fetch it now.
+      if (_replayNeedsLogin()) _loadReplaySessions();
       return true;
     }
     _showMsg(msgId, data.detail || "Couldn't save that login.", true);
@@ -957,16 +958,19 @@ document.getElementById('btn-f1-signout').addEventListener('click', async () => 
   } catch (e) {}
 });
 
-function _showReplayLoginMsg(text) {
-  document.getElementById('replay-login-text').textContent = text;
-  document.getElementById('replay-login-msg').hidden = false;
+const REPLAY_LOGIN_NEEDED = 'F1 login needed';
+
+// F1 refused the archive: say so in the race list (Settings → F1 Account fixes it).
+function _showReplayLoginNeeded() {
+  const dropdown = document.getElementById('replay-dropdown');
+  dropdown.innerHTML = `<option value="">${REPLAY_LOGIN_NEEDED}</option>`;
+  document.getElementById('btn-replay-load').disabled = true;
 }
 
-document.getElementById('btn-replay-open-settings').addEventListener('click', () => {
-  document.getElementById('settings-overlay').classList.add('open');
-  loadSettings();
-  _loadF1Account();
-});
+function _replayNeedsLogin() {
+  const dropdown = document.getElementById('replay-dropdown');
+  return dropdown.options.length === 1 && dropdown.options[0].textContent === REPLAY_LOGIN_NEEDED;
+}
 
 // ── Replay ──────────────────────────────────────────────────────────────────
 async function _loadReplaySessions() {
@@ -979,13 +983,10 @@ async function _loadReplaySessions() {
   // Always reset server replay state so the dropdown shows (not a stale Play button)
   await fetch('/api/replay/stop', { method: 'POST' }).catch(() => {});
   await fetchState();
-  document.getElementById('replay-login-msg').hidden = true;
   try {
     const resp = await fetch('/api/replay/sessions');
     if (resp.status === 401) {
-      const data = await resp.json().catch(() => ({}));
-      dropdown.innerHTML = '<option value="">F1 login needed</option>';
-      _showReplayLoginMsg(data.detail || 'F1 login needed or expired. Sign in again.');
+      _showReplayLoginNeeded();
       return;
     }
     if (!resp.ok) throw new Error('fetch failed');
@@ -1026,9 +1027,9 @@ document.getElementById('btn-replay-load').addEventListener('click', async () =>
       body: JSON.stringify({ session_path: path, session_name: name }),
     }).finally(() => { loading = false; clearInterval(progressPoll); });
     if (resp.status === 401) {
-      const data = await resp.json().catch(() => ({}));
-      _showReplayLoginMsg(data.detail || 'F1 login needed or expired. Sign in again.');
-      throw new Error('login needed');
+      _showReplayLoginNeeded();
+      btn.textContent = 'Load';
+      return;
     }
     if (!resp.ok) throw new Error(`load failed: ${resp.status}`);
     document.getElementById('replay-race-chip').textContent = name;

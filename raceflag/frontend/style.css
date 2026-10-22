@@ -238,8 +238,6 @@ body {
 }
 .btn-replay-action:disabled { background: #333; color: #666; cursor: not-allowed; }
 .btn-replay-action.flex1 { flex: 1; }
-.replay-login-msg { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; font-size: 12px; color: #ffd700; line-height: 1.4; }
-.replay-login-msg[hidden] { display: none; }
 
 /* F1 account (feature 017) */
 .settings-row.f1-account-row { flex-direction: column; align-items: stretch; gap: 8px; }
