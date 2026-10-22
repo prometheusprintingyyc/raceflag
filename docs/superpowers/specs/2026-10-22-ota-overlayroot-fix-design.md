@@ -118,9 +118,36 @@ The page: on `success: false` it shows the reason under the Update button and re
 At start, delete `/boot/firmware/raceflag/raceflag-*.tar.gz` (left by failed attempts of the old
 updater) and `/run/raceflag-update/`. Errors are logged and ignored.
 
+### 8. Safety net: code that only lives in RAM saves itself
+
+A protected unit can end up running code that exists only in overlayroot's RAM layer: a failed
+old-updater attempt restores a pre-overlayroot backup (≤ v0.2.21), whose updater then writes
+the next release into the overlay. That code runs until the next reboot, while `version.txt` (boot
+partition) already shows the new version, so after the reboot the old code is back and no update
+is offered again. The fixed code saves itself to the SD card when this happens:
+
+- **When:** a start-up task, 60 s after start (so only code that has run for a minute is saved),
+  only when overlayroot is active and the lower filesystem is mounted at `/media/root-ro`
+  (otherwise it does nothing). Not while an update is in progress.
+- **Check:** a SHA-256 over every file under `/opt/raceflag/raceflag/` plus `requirements.txt`
+  (sorted relative paths and contents; `__pycache__`/`*.pyc` skipped), computed for the running
+  view `/opt/raceflag` and for `/media/root-ro/opt/raceflag` (read-only, outside the chroot).
+  Equal → nothing to do (the normal case: one hash pass at start, no writes).
+- **Different:** log "Running code is only in RAM — saving it to the SD card", then reuse the update
+  machinery: `pip3 download -r requirements.txt` (full set, outside the chroot; the RAM layer's
+  packages can't tell what the SD card lacks), then the same chroot script with
+  `tar -C /opt/raceflag -cz --exclude=__pycache__ .` on stdin (offline pip install, swap by
+  rename with this attempt's backup). Success → logged; the hashes now match.
+- **Failure** (no network, pip, chroot): logged; tried again every hour until it succeeds. It never
+  restarts the service or reboots, and never touches `version.txt`.
+- A unit with code changed by hand over SSH (a test unit) is saved the same way after a minute;
+  the log line says so.
+
 ## Releasing the first fixed version
 
-Re-flash the two units that took a direct OTA before overlayroot (they hold an older backup).
+Re-flash the two units that took a direct OTA before overlayroot (they hold an older backup);
+if their backup is pre-overlayroot code, the safety net (section 8) recovers them even after a
+roll-back, but a backup from v0.2.22/23 (chroot updater) cannot recover without a re-flash.
 Until they are re-flashed their owners shouldn't tap Update; if that can't be relied on, mark the
 first fixed GitHub release as a pre-release by hand (old updaters only see "latest"; the SD image
 build is unaffected). No code depends on that choice.
@@ -130,7 +157,9 @@ build is unaffected). No code depends on that choice.
 - **Unit tests** (mocked network/subprocess): archive check (good, missing files, traversal,
   links); dependency planning from a `--report` JSON (none needed, some needed, pip failing);
   apply on each path returns the right reason and never writes `version.txt` on failure;
-  timeout runs the recovery; start-up clean-up; route answers `detail`.
+  timeout runs the recovery; start-up clean-up; route answers `detail`; safety net: equal
+  hashes do nothing, not protected or no `/media/root-ro` does nothing, different hashes run the
+  save, a failure retries, `__pycache__` changes don't count.
 - **Script tests** (bash in a temp directory, fake `pip`): success swaps and keeps the previous
   version as backup; a bad archive, a missing file or pip failing leaves the install and an old
   backup untouched; a failing `mv` restores the install.
@@ -139,7 +168,10 @@ build is unaffected). No code depends on that choice.
   higher test release whose `requirements.txt` adds a small new package; (3) Update button →
   new version; reboot → still new version, new code, package present; (4) a test release with a
   broken archive → reason shown, install unchanged after reboot; (5) the direct path once with
-  overlayroot disabled. Only then is a real release tagged.
+  overlayroot disabled; (6) safety net: copy a different build into `/opt/raceflag` without the
+  chroot (RAM only), restart, wait a minute → log says saved; reboot → that build still runs;
+  (7) for the first fixed release, if a unit or SD card with v0.2.21 is available, update from it
+  (direct path, then protection turns on). Only then is a real release tagged.
 
 ## Out of scope
 
