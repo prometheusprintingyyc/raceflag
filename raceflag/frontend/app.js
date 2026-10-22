@@ -425,24 +425,28 @@ document.getElementById('btn-update').addEventListener('click', async () => {
     return;
   }
 
-  // Service restarts after update — poll until it comes back, then confirm
+  // The unit reboots after an update (2-3 minutes on a Zero): wait for it, then confirm.
+  _showMsg('update-msg', 'Update installed. RaceFlag is restarting — this takes 2–3 minutes.', false);
   const versionEl = document.getElementById('update-current');
-  await new Promise(r => setTimeout(r, 5000));
-  let attempts = 0;
-  const poll = setInterval(async () => {
-    attempts++;
+  const deadline = Date.now() + 6 * 60 * 1000;
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 5000));
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 4000);
     try {
-      const resp = await fetch('/api/update/check');
-      if (!resp.ok) return;
+      const resp = await fetch('/api/update/check', { signal: ctrl.signal });
+      if (!resp.ok) continue;
       const data = await resp.json();
-      versionEl.textContent = data.current || '—';
       if (!data.update_available) {
-        clearInterval(poll);
+        versionEl.textContent = data.current || '—';
         btn.textContent = 'Up to date';
+        btn.disabled = true;
+        _showMsg('update-msg', `Updated to v${data.current}.`, false);
+        return;
       }
-    } catch (e) { /* still restarting */ }
-    if (attempts >= 40) { clearInterval(poll); location.reload(); }
-  }, 3000);
+    } catch (e) { /* still restarting */ } finally { clearTimeout(timer); }
+  }
+  _showMsg('update-msg', "RaceFlag hasn't come back yet. Wait a minute, then reload this page.", false);
 });
 
 document.querySelectorAll('[data-effect]').forEach(btn => {

@@ -106,3 +106,16 @@ def test_check_archive_rejects_chained_symlinks(tmp_path):
     l2.linkname = "a/l1/.."
     with pytest.raises(ReleaseArchiveError):
         check_archive(_write(tmp_path / "r.tar.gz", GOOD + [l1, l2]))
+
+
+def test_check_archive_rejects_corrupt_compressed_data(tmp_path):
+    import os
+    big = os.urandom(200_000)  # incompressible, so the corruption lands inside the deflate data
+    p = _write(tmp_path / "r.tar.gz", [("requirements.txt", b"httpx\n"), ("raceflag/main.py", big)])
+    raw = bytearray(p.read_bytes())
+    mid = len(raw) // 2
+    for i in range(mid, mid + 8):
+        raw[i] ^= 0xFF
+    p.write_bytes(bytes(raw))
+    with pytest.raises(ReleaseArchiveError):
+        check_archive(p)

@@ -139,3 +139,16 @@ def test_service_file_paths_are_fixed(box):
     text = svc.read_text()
     assert "RACEFLAG_CONFIG=/boot/firmware/raceflag/config.json" in text
     assert "RACEFLAG_VERSION=/boot/firmware/raceflag/version.txt" in text
+
+
+def test_sync_runs_before_the_swap():
+    text = SCRIPT.read_text()
+    assert "sync" in text.split('echo "STEP swap"')[0].split('echo "STEP packages"')[1]
+
+
+def test_installs_when_no_install_dir_exists_on_the_card(box):
+    tmp, install, backup, env = box
+    shutil.rmtree(install)
+    r = _run(env, _tar_gz(RELEASE))
+    assert r.returncode == 0, r.stderr
+    assert (install / "raceflag" / "main.py").read_text() == "NEW\n"

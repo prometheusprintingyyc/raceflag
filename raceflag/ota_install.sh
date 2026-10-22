@@ -27,13 +27,21 @@ mkdir -p "$WHEELS"
 # Offline: requirements already installed are satisfied; new ones come from $WHEELS.
 $PIP install --no-index --find-links "$WHEELS" -r "$STAGING/requirements.txt" \
   --break-system-packages -q
+# Get everything written before the renames commit (a power cut must not leave empty files).
+sync || true
 
 echo "STEP swap"
-# The backup is always this attempt's: the code that is running now.
-rm -rf "$BACKUP"
-mv "$INSTALL" "$BACKUP"
+# The backup is always this attempt's: the code that is running now (if there is any).
+made_backup=0
+if [ -d "$INSTALL" ]; then
+  rm -rf "$BACKUP"
+  mv "$INSTALL" "$BACKUP"
+  made_backup=1
+fi
 if ! mv "$STAGING" "$INSTALL"; then
-  mv "$BACKUP" "$INSTALL"
+  if [ "$made_backup" = 1 ]; then
+    mv "$BACKUP" "$INSTALL"
+  fi
   exit 1
 fi
 

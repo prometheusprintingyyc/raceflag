@@ -2,6 +2,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import shutil
 import signal
 import tarfile
@@ -97,10 +98,21 @@ class OTAUpdater:
         self._lock = asyncio.Lock()
 
     def _current_version(self) -> str:
+        """The installed version; "0.0.0" if version.txt is missing or damaged, so the unit is
+        still offered updates."""
         try:
-            return self._version_file.read_text().strip()
-        except FileNotFoundError:
+            text = self._version_file.read_text().strip()
+        except OSError:
             return "0.0.0"
+        if not re.fullmatch(r"\d+\.\d+\.\d+", text):
+            logger.warning("version.txt is unreadable (%r) — treating as 0.0.0", text[:40])
+            return "0.0.0"
+        return text
+
+    def _write_version(self, tag: str) -> None:
+        tmp = self._version_file.with_name(self._version_file.name + ".tmp")
+        tmp.write_text(tag.lstrip("v"))
+        os.replace(tmp, self._version_file)
 
     def _is_newer(self, tag: str, current: str) -> bool:
         def parse(v: str) -> tuple[int, ...]:
@@ -156,7 +168,11 @@ class OTAUpdater:
             logger.error("OTA: could not get the latest release: %s", e)
             return False, DOWNLOAD_FAILED
         tag = release.get("tag_name", "")
-        if not self._is_newer(tag, current):
+        if not re.fullmatch(r"v?\d+\.\d+\.\d+", str(tag)):
+            logger.error("OTA: malformed release tag %r", tag)
+            return False, UNEXPECTED
+        newer = self._is_newer(tag, current)
+        if not newer:
             return False, UP_TO_DATE
         asset = next(
             (a for a in release.get("assets", []) if a.get("name", "").endswith(".tar.gz")),
@@ -176,7 +192,6 @@ class OTAUpdater:
                 await self._install_protected(archive)
             elif not self._apply_direct(archive):
                 raise UpdateError(install_failed("files"))
-            self._version_file.write_text(tag.lstrip("v"))
             if overlayroot_active:
                 # The SD card changed under the mounted overlay: the safety net must stand
                 # down until the reboot gives the new code a clean view.
@@ -184,6 +199,7 @@ class OTAUpdater:
                     self._done_marker.touch()
                 except OSError as e:
                     logger.error("Could not write the update marker: %s", e)
+            self._write_version(tag)
         except UpdateError as e:
             logger.error("OTA update to %s failed: %s", tag, e.reason)
             return False, e.reason
@@ -251,6 +267,11 @@ class OTAUpdater:
             raise UpdateError(TIMED_OUT)
         if proc.returncode != 0:
             step = last_step(out.decode(errors="replace"))
+            if step == "done":
+                # The install finished; only overlayroot-chroot's own cleanup failed.
+                logger.warning("Install script finished but exited with %s: %s", proc.returncode,
+                               err.decode(errors="replace")[-2000:])
+                return
             logger.error("Install script failed at %s: %s", step,
                          err.decode(errors="replace")[-2000:])
             raise UpdateError(install_failed(step))

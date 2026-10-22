@@ -261,7 +261,8 @@ body {
 .f1-account-msg { font-size: 12px; color: #aaa; }
 .f1-account-msg.error { color: #ff5a52; }
 .f1-account-msg[hidden] { display: none; }
-.update-msg { display: block; font-size: 12px; color: #ff5a52; line-height: 1.4; }
+.update-msg { display: block; font-size: 12px; color: #aaa; line-height: 1.4; }
+.update-msg.error { color: #ff5a52; }
 .update-msg[hidden] { display: none; }
 .f1-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.45; color: #ddd; }
 .f1-steps a, .f1-setup-note a { color: #ff5a52; }

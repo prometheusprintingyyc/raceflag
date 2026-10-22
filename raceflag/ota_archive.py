@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import posixpath
 import tarfile
+import zlib
 from pathlib import Path
 
 REQUIRED = ("requirements.txt", "raceflag/main.py")
@@ -24,7 +25,15 @@ def check_archive(path: Path) -> None:
     try:
         with tarfile.open(path, "r:gz") as tf:
             members = tf.getmembers()
-    except (tarfile.TarError, OSError, EOFError) as e:
+            for m in members:  # reading to the end checks the gzip CRC
+                if m.isfile():
+                    f = tf.extractfile(m)
+                    while f is not None and f.read(1 << 16):
+                        pass
+            # tarfile stops at the end-of-archive blocks; read on so the gzip trailer is checked.
+            while tf.fileobj.read(1 << 16):
+                pass
+    except (tarfile.TarError, OSError, EOFError, zlib.error) as e:
         raise ReleaseArchiveError(f"not a gzip tar archive: {e}") from e
     names = set()
     for m in members:

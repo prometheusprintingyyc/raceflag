@@ -399,3 +399,52 @@ async def test_protected_deferred_restart_reboots_not_restarts(tmp_path, mocker)
     await up._deferred_restart(enable_overlayroot=False)
     assert ("reboot",) in calls
     assert not any("systemctl" in c for c in calls)
+
+
+async def test_malformed_release_tag_is_refused_not_raised(box, mocker):
+    up, version_file = box
+    mocker.patch.object(up, "_fetch_latest_release", return_value={"tag_name": "nightly", "assets": []})
+    assert await up.apply() == (False, UNEXPECTED)
+    assert version_file.read_text() == "0.1.0"
+
+
+@pytest.mark.parametrize("content", ["", "garbage", "1.2"])
+async def test_unreadable_installed_version_still_gets_offered_updates(box, mocker, content):
+    up, version_file = box
+    version_file.write_text(content)
+    mocker.patch.object(up, "_fetch_latest_release", return_value=LATEST_RELEASE)
+    result = await up.check()
+    assert result["update_available"] is True
+    assert result["current"] == "0.0.0"
+
+
+async def test_unreadable_installed_version_can_be_updated(box, mocker):
+    up, version_file = box
+    version_file.write_text("")
+    _protected(mocker, up, [_Proc()])
+    assert await up.apply() == (True, None)
+    assert version_file.read_text() == "0.2.0"
+
+
+async def test_version_file_is_written_atomically(box, mocker):
+    up, version_file = box
+    _protected(mocker, up, [_Proc()])
+    await up.apply()
+    assert version_file.read_text() == "0.2.0"
+    assert not version_file.with_name("version.txt.tmp").exists()
+
+
+async def test_nonzero_exit_after_step_done_counts_as_installed(box, mocker):
+    up, version_file = box
+    _protected(mocker, up, [_Proc(rc=1, out=b"STEP swap\nSTEP service\nSTEP done\n", err=b"umount busy")])
+    assert await up.apply() == (True, None)
+    assert version_file.read_text() == "0.2.0"
+    assert up._done_marker.exists()
+
+
+async def test_marker_is_written_even_if_the_version_write_fails(box, mocker):
+    up, version_file = box
+    _protected(mocker, up, [_Proc()])
+    mocker.patch.object(up, "_write_version", side_effect=OSError("disk"))
+    assert await up.apply() == (False, UNEXPECTED)
+    assert up._done_marker.exists()
