@@ -54,7 +54,8 @@ def _run_case(events):
 
     def on_flag_change(status):
         _display, effective = router.resolve(status)
-        decisions.append(effective)
+        if effective is not None:  # a repeated lights-out plays nothing and isn't listed
+            decisions.append(effective)
 
     listener = F1Listener(state=state, on_track_status_change=on_flag_change)
     for _ts, topic, data in events:

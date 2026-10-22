@@ -51,6 +51,87 @@ def test_live_race_start_blocks_later_replay_style_promotion():
     assert router.resolve("track_clear") == ("track_clear", "track_clear")
 
 
+# ── One start per race, again after a red flag (feature 004, ESP32 rule) ─────
+
+def test_repeated_lights_out_shows_all_clear_and_plays_nothing():
+    router, state, led = _router()
+    router.on_flag_change("race_start")
+    led.reset_mock()
+    state.set_display_track_status("yellow_flag")
+    router.on_flag_change("race_start")
+    assert state.display_track_status == "track_clear"
+    led.trigger_timed.assert_not_called()
+    led.trigger.assert_not_called()
+    led.force_trigger.assert_not_called()
+
+
+def test_repeated_lights_out_resolves_to_no_effect():
+    router, _, _ = _router()
+    router.resolve("race_start")
+    assert router.resolve("race_start") == ("track_clear", None)
+
+
+def test_lights_out_after_red_flag_plays_start_again():
+    router, _, led = _router()
+    router.on_flag_change("race_start")
+    router.on_flag_change("red_flag")
+    led.reset_mock()
+    router.on_flag_change("race_start")
+    led.trigger_timed.assert_called_once_with("race_start", TIMED_EFFECTS["race_start"])
+
+
+def test_red_flag_allows_only_one_restart():
+    router, _, _ = _router()
+    router.resolve("race_start")
+    router.resolve("red_flag")
+    assert router.resolve("race_start") == ("track_clear", "race_start")
+    assert router.resolve("race_start") == ("track_clear", None)
+
+
+def test_red_flag_before_the_start_does_not_allow_a_second_start():
+    router, _, _ = _router()
+    router.resolve("red_flag")
+    router.resolve("race_start")
+    assert router.resolve("race_start") == ("track_clear", None)
+
+
+def test_session_end_allows_the_next_start():
+    router, _, _ = _router()
+    router.resolve("race_start")
+    router.resolve("finished")
+    assert router.resolve("race_start") == ("track_clear", "race_start")
+
+
+def test_replay_play_with_promoted_allclear_then_started_plays_once():
+    # At Play the re-fired pre-race AllClear is promoted, then F1's Started arrives.
+    router, _, led = _router(replay=True)
+    router.on_flag_change("track_clear")
+    router.on_flag_change("race_start")
+    assert [c.args[0] for c in led.trigger_timed.call_args_list] == ["race_start"]
+
+
+def test_replay_restart_after_red_flag_plays_start():
+    router, _, led = _router(replay=True)
+    router.on_flag_change("track_clear")      # promoted start
+    router.on_flag_change("red_flag")
+    led.reset_mock()
+    router.on_flag_change("race_start")       # Started at the restart
+    led.trigger_timed.assert_called_once_with("race_start", TIMED_EFFECTS["race_start"])
+
+
+async def test_delayed_repeated_lights_out_updates_page_only():
+    router, state, led = _router(delay=0.05)
+    router.on_flag_change("race_start")
+    await asyncio.sleep(0.08)
+    led.reset_mock()
+    state.set_display_track_status("yellow_flag")
+    router.on_flag_change("race_start")
+    assert state.display_track_status == "yellow_flag"  # waits for the delay
+    await asyncio.sleep(0.08)
+    assert state.display_track_status == "track_clear"
+    led.trigger_timed.assert_not_called()
+
+
 async def test_delayed_race_start_waits_for_delay():
     router, state, led = _router(delay=0.05)
     router.on_flag_change("race_start")

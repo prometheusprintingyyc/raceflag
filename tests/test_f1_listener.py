@@ -387,13 +387,34 @@ def test_started_in_snapshot_is_not_lights_out(monkeypatch):
     assert state.lights_out_at is None
 
 
-def test_started_in_replay_is_not_live_lights_out(monkeypatch):
+def test_started_in_replay_is_lights_out_but_not_live(monkeypatch):
+    # The router decides whether it plays (one start per race, again after a red flag);
+    # Sync's lights-out time is for live races only.
     state, listener, calls = _race_listener(monkeypatch)
     state.set_replay_state(True, "playing")
     listener._handle_feed("SessionInfo", _RACE_INFO)
     listener._handle_feed("SessionStatus", {"Status": "Started"})
-    assert "race_start" not in calls
+    assert calls == ["race_start"]
+    assert state.track_status == "track_clear"
     assert state.lights_out_at is None
+
+
+def test_started_in_replay_snapshot_is_not_lights_out(monkeypatch):
+    state, listener, calls = _race_listener(monkeypatch)
+    state.set_replay_state(True, "loading")
+    listener._handle_feed("SessionInfo", _RACE_INFO, is_snapshot=True)
+    listener._handle_feed("SessionStatus", {"Status": "Started"}, is_snapshot=True)
+    assert calls == []
+
+
+def test_repeated_live_started_keeps_first_lights_out_time(monkeypatch):
+    state, listener, calls = _race_listener(monkeypatch)
+    listener._handle_feed("SessionInfo", _RACE_INFO, is_snapshot=True)
+    listener._handle_feed("SessionStatus", {"Status": "Started"})
+    monkeypatch.setattr("raceflag.f1_listener.time.monotonic", lambda: 9000.0)
+    listener._handle_feed("SessionStatus", {"Status": "Started"})
+    assert calls == ["race_start", "race_start"]
+    assert state.lights_out_at == 5000.0
 
 
 def test_started_in_qualifying_keeps_break_reset(monkeypatch):

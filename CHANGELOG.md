@@ -35,6 +35,7 @@ All notable changes to RaceFlag are documented here.
 - `install.sh` wrote `"led_count": 60` to new units' `config.json`, left over from before the 21-LED layout, which made Demo Mode's strip panel far too long. It now writes 21, and at startup a saved `led_count` of exactly 60 is corrected to 21 (beta)
 - The race-start animation now plays at live lights-out (beta). It never played live when the box connected before the race (the feed's pre-race "Inactive" status blocked it), and played too early when an All Clear arrived before the start
 - Replay pauses the live feed from the moment you press Load, not only at Play, and starts from empty timing data (beta). A live message arriving between Load and Play could overwrite the loaded race's starting flag, positions or session info. A failed load resumes the live feed. Matches the ESP32
+- Race start plays once per race, and again after a red flag (beta), as on the ESP32. A repeated lights-out signal from F1 now shows All Clear and plays nothing new; live, every "Started" used to replay the start animation. In a replay, the restart after a red flag now plays the start animation (it used to play nothing). Live Sync keeps measuring from the first lights-out
 
 ---
 

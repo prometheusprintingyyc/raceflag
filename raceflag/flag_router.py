@@ -18,19 +18,31 @@ class FlagRouter:
         self._led = led
         self._config = config
         self._race_started = False
+        # A red flag since the last start: the next lights-out (the restart) plays the start again.
+        self._red_since_start = False
         # Every pending delayed display/timed-effect task, so Sync can cancel them all.
         self._pending: set[asyncio.Future] = set()
         # Live flag changes since the last live race_start: (status, effective, received_at).
         # None until a live race_start; cleared by an idle status. Sync re-times these.
         self._live_log: list[tuple[str, str, float]] | None = None
 
-    def resolve(self, status: str) -> tuple[str, str]:
-        """(status to display, effect to play) for a flag change; updates the race-start latch."""
+    def resolve(self, status: str) -> tuple[str, str | None]:
+        """(status to display, effect to play) for a flag change; updates the race-start latch.
+
+        The effect is None for a repeated lights-out: the page shows All Clear, nothing plays.
+        """
         if status in IDLE_STATUSES:
             self._race_started = False
+            self._red_since_start = False
+        if status == "red_flag" and self._race_started:
+            self._red_since_start = True
         if status == "race_start":
-            # Live lights-out, reported by the listener. The page shows All Clear.
+            # Lights-out (F1's Started), reported by the listener. The page shows All Clear.
+            # One start per race; a restart after a red flag plays it again (feature 004).
+            if self._race_started and not self._red_since_start:
+                return "track_clear", None
             self._race_started = True
+            self._red_since_start = False
             return "track_clear", "race_start"
         if (status == "track_clear"
                 and not self._race_started
@@ -47,7 +59,7 @@ class FlagRouter:
         return (effective not in IDLE_STATUSES and effective not in TIMED_EFFECTS
                 and (state.session.is_active or state.replay_mode))
 
-    def _schedule(self, status: str, effective: str, delay: float, received_at: float) -> None:
+    def _schedule(self, status: str, effective: str | None, delay: float, received_at: float) -> None:
         task = asyncio.ensure_future(self._delayed(status, effective, delay, received_at))
         self._pending.add(task)
         task.add_done_callback(self._pending.discard)
@@ -59,6 +71,14 @@ class FlagRouter:
         logger.info("Flag change received: %s  delay=%.1fs", status, delay)
         raw_status = status
         status, effective = self.resolve(status)
+
+        if effective is None:
+            # Repeated lights-out: update the page (after the delay), play nothing new.
+            if delay <= 0:
+                state.set_display_track_status(status)
+            else:
+                self._schedule(status, effective, delay, received_at)
+            return
 
         if not state.replay_mode:
             if raw_status == "race_start":
@@ -83,7 +103,7 @@ class FlagRouter:
         else:
             self._schedule(status, effective, delay, received_at)
 
-    async def _delayed(self, status: str, effective: str, delay: float, received_at: float) -> None:
+    async def _delayed(self, status: str, effective: str | None, delay: float, received_at: float) -> None:
         # trigger_timed only flushes queue items that predate this status's arrival —
         # items queued during the delay window (e.g. a yellow flag that arrived while
         # waiting to fire track_clear) are preserved.

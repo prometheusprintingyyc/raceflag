@@ -211,13 +211,16 @@ class F1Listener:
                 return
             if status_msg == "Started":
                 is_race = self._state.session.session_type.lower() in ("race", "sprint")
-                if is_race and not is_snapshot and not self._state.replay_mode:
-                    # Live race lights-out (verified on Belgian GP 2024: Started lands with
-                    # GREEN LIGHT - PIT EXIT OPEN, 1:52 before lap 2). Checked before the
+                if is_race and not is_snapshot:
+                    # Race lights-out, live or replay (verified on Belgian GP 2024: Started lands
+                    # with GREEN LIGHT - PIT EXIT OPEN, 1:52 before lap 2). Checked before the
                     # break/finished reset: a pre-race "Inactive" leaves track_status
-                    # "finished", which must not swallow lights-out.
-                    logger.info("Race lights-out (SessionStatus Started) — triggering race_start")
-                    self._state.set_lights_out_at(time.monotonic())
+                    # "finished", which must not swallow lights-out. The flag router decides
+                    # whether the start effect plays (once per race, again after a red flag).
+                    logger.info("Race lights-out (SessionStatus Started) — reporting race_start")
+                    if not self._state.replay_mode and self._state.lights_out_at is None:
+                        # Sync measures from the first live lights-out of the session.
+                        self._state.set_lights_out_at(time.monotonic())
                     self._state.set_track_status("track_clear")
                     if self._on_track_status_change:
                         self._on_track_status_change("race_start")
