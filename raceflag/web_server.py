@@ -373,9 +373,18 @@ def create_app(
         def _clear_load_result() -> None:
             _load_result.update(event_count=0, detail=None, login_needed=False)
 
+        def _resume_live_feed() -> None:
+            if listener is not None:
+                listener.suspended = False
+
         @app.post("/api/replay/load")
         async def load_replay_session(req: LoadSessionRequest):
             _clear_load_result()
+            if listener is not None:
+                # Pause the live feed from the start of loading (as on the ESP32) so a live
+                # message can't overwrite the loaded race before Play; start from empty timing.
+                listener.suspended = True
+                listener.reset_timing_state()
             state.set_replay_state(mode=True, status="loading",
                                    session_name=req.session_name)
             try:
@@ -383,10 +392,12 @@ def create_app(
                     req.session_path, session_name=req.session_name
                 )
             except F1LoginRequired as exc:
+                _resume_live_feed()
                 state.set_replay_state(mode=False, status="idle")
                 _load_result.update(detail=str(exc), login_needed=True)
                 raise HTTPException(status_code=401, detail=str(exc))
             except Exception as exc:
+                _resume_live_feed()
                 state.set_replay_state(mode=False, status="idle")
                 detail = f"Failed to load session: {exc}"
                 _load_result.update(detail=detail)

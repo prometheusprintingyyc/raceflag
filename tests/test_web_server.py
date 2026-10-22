@@ -509,6 +509,71 @@ def test_replay_load_login_refused_returns_401_and_stays_idle(client_with_replay
     assert app_state.replay_mode is False
 
 
+# ── Live feed paused from the start of a load (feature 006, ESP32 difference 1) ─
+
+@pytest.fixture
+def replay_env(app_state, config, led, replay_manager):
+    from raceflag.f1_listener import F1Listener
+    listener = F1Listener(state=app_state)
+    app = create_app(state=app_state, config=config, led=led,
+                     replay_manager=replay_manager, listener=listener)
+    return TestClient(app), listener
+
+
+def test_replay_load_pauses_live_feed_while_downloading(replay_env, replay_manager):
+    c, listener = replay_env
+    seen = {}
+
+    async def load(path, session_name=""):
+        seen["suspended"] = listener.suspended
+        return 42
+    replay_manager.load_session = AsyncMock(side_effect=load)
+    c.post("/api/replay/load", json={"session_path": "p/", "session_name": "X"})
+    assert seen["suspended"] is True
+
+
+def test_replay_load_keeps_live_feed_paused_until_play(replay_env, app_state):
+    c, listener = replay_env
+    c.post("/api/replay/load", json={"session_path": "p/", "session_name": "X"})
+    assert app_state.replay_status == "ready"
+    assert listener.suspended is True
+    # A live message arriving before Play no longer overwrites the loaded race.
+    listener._handle_feed("TrackStatus", {"Status": "5"})
+    assert app_state.track_status != "red_flag"
+
+
+def test_replay_load_starts_from_empty_timing_data(replay_env, app_state, replay_manager):
+    c, listener = replay_env
+    listener._timing_lines = {"44": {"Position": "1"}}
+    app_state.set_driver_positions([{"number": "44"}])
+    seen = {}
+
+    async def load(path, session_name=""):
+        seen["lines"] = dict(listener._timing_lines)
+        seen["positions"] = list(app_state.driver_positions)
+        return 42
+    replay_manager.load_session = AsyncMock(side_effect=load)
+    c.post("/api/replay/load", json={"session_path": "p/", "session_name": "X"})
+    assert seen == {"lines": {}, "positions": []}
+
+
+@pytest.mark.parametrize("error", ["login", "network"])
+def test_replay_load_failure_resumes_live_feed(replay_env, replay_manager, error):
+    from raceflag.replay_manager import F1LoginRequired
+    c, listener = replay_env
+    replay_manager.load_session = AsyncMock(
+        side_effect=F1LoginRequired() if error == "login" else Exception("network error"))
+    c.post("/api/replay/load", json={"session_path": "p/", "session_name": "X"})
+    assert listener.suspended is False
+
+
+def test_replay_stop_after_load_resumes_live_feed(replay_env):
+    c, listener = replay_env
+    c.post("/api/replay/load", json={"session_path": "p/", "session_name": "X"})
+    c.post("/api/replay/stop")
+    assert listener.suspended is False
+
+
 # ── GET /api/replay/progress ─────────────────────────────────────────────────
 
 _LOAD = {"session_path": "2025/brit/", "session_name": "2025 British GP"}
