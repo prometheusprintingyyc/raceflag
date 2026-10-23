@@ -28,6 +28,7 @@ All notable changes to RaceFlag are documented here.
 - F1 Account (beta): **Send to RaceFlag** bookmark sign-in — Set up gives you the bookmark code; sign in on f1tv.formula1.com and tap the bookmark to send your login to `raceflag.local:8080` (paste stays as a fallback). The login now **renews automatically** before its 4-day expiry, so you sign in again only when F1 ends the session (about a month). Settings shows ✕ Not signed in, ✓ Signed in or ⚠ Sign in again
 - Replay (beta): without an F1 login the race list just says **F1 login needed** (the message and Open Settings button under it are gone); it reloads by itself after you sign in
 - Replay (beta): the Load button shows download progress (**Loading 30%**, streams finished out of 10), as on the ESP32. New route `GET /api/replay/progress`
+- **Update RaceFlag over SSH from Windows** (beta): `tools/Update RaceFlag.cmd` updates a unit on the same network — it asks for the unit's username, SSH asks for the password once, and the unit installs the release exactly as the Update button does, keeping its settings. For units with SD card protection whose updater can't update them. Nothing is stored; the password is never saved
 
 ### Fixed
 - Replay shows "F1 login needed or expired" instead of an empty or failing race list when Formula 1's archive refuses the request (beta)
