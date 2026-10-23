@@ -57,7 +57,8 @@ exit "${FAKE_PIP_RC:-0}"
 '''
 
 FAKE_CHROOT = '#!/bin/bash\necho "$@" >> "$CHROOT_LOG"\nexec "$@"\n'
-FAKE_REBOOT = '#!/bin/bash\necho rebooted >> "$REBOOT_LOG"\n'
+FAKE_REBOOT = '#!/bin/bash\necho rebooted >> "$REBOOT_LOG"\nexit "${FAKE_REBOOT_RC:-0}"\n'
+FAKE_FALLBACK = '#!/bin/bash\necho rebooted >> "$FALLBACK_LOG"\nexit "${FAKE_FALLBACK_RC:-0}"\n'
 
 
 def _program(path: Path, text: str) -> str:
@@ -95,6 +96,9 @@ def box(tmp_path):
         PYTHON=Path(sys.executable).as_posix(), PIP=pip,
         OVERLAYROOT_CHROOT=_program(bin_dir / "fakechroot", FAKE_CHROOT),
         REBOOT=_program(bin_dir / "fakereboot", FAKE_REBOOT),
+        REBOOT_FALLBACK=_program(bin_dir / "fakefallback", FAKE_FALLBACK),
+        DONE_MARKER=(tmp_path / "update.done").as_posix(),
+        FALLBACK_LOG=(tmp_path / "fallback.log").as_posix(),
         PROC_MOUNTS=mounts.as_posix(), INSTALL=install.as_posix(),
         BOOT_DIR=boot.as_posix(), WORK_DIR=(tmp_path / "work").as_posix(),
         REQUIRE_ROOT="0", FAKE_RELEASE=release.as_posix(),
@@ -230,3 +234,57 @@ def test_install_failure_reports_step(box):
     assert _main(env) == "OLD"
     assert (Path(env["BOOT_DIR"]) / "version.txt").read_text().strip() == "0.0.1"
     assert not Path(env["REBOOT_LOG"]).exists()
+
+
+def test_protected_success_creates_done_marker(box):
+    tmp, env = box
+    Path(env["PROC_MOUNTS"]).write_text("overlayroot / overlay rw 0 0\n")
+    _assert_clean(env, _run(env, "v9.9.9"), 0)
+    assert Path(env["DONE_MARKER"]).exists()
+
+
+def test_unprotected_success_has_no_done_marker(box):
+    tmp, env = box
+    _assert_clean(env, _run(env, "v9.9.9"), 0)
+    assert not Path(env["DONE_MARKER"]).exists()
+
+
+def test_failures_leave_no_done_marker(box):
+    tmp, env = box
+    Path(env["PROC_MOUNTS"]).write_text("overlayroot / overlay rw 0 0\n")
+    env["FAKE_PIP_INSTALL_RC"] = "1"
+    _assert_clean(env, _run(env, "v9.9.9"), 1)
+    assert not Path(env["DONE_MARKER"]).exists()
+
+
+def test_reboot_fallback_used_when_reboot_fails(box):
+    tmp, env = box
+    env["FAKE_REBOOT_RC"] = "1"
+    r = _run(env, "v9.9.9")
+    _assert_clean(env, r, 0)
+    assert _lines(r)[-1] == "DONE"
+    assert Path(env["FALLBACK_LOG"]).exists()
+
+
+def test_both_reboots_failing_is_an_error(box):
+    tmp, env = box
+    env["FAKE_REBOOT_RC"] = "1"
+    env["FAKE_FALLBACK_RC"] = "1"
+    r = _run(env, "v9.9.9")
+    _assert_clean(env, r, 1)
+    assert ("ERROR The update was installed, but RaceFlag couldn't restart itself. "
+            "Unplug it, wait 10 seconds and plug it back in.") in _lines(r)
+    assert "DONE" not in _lines(r)
+    assert (Path(env["BOOT_DIR"]) / "version.txt").read_text().strip() == "9.9.9"
+
+
+def test_script_body_runs_only_from_main_on_last_line():
+    lines = [l for l in SCRIPT.read_text().splitlines() if l.strip()]
+    assert lines[-1] == 'main "$@"'
+    assert any(l.startswith("main() {") for l in lines)
+
+
+def test_download_has_a_timeout(box):
+    tmp, env = box
+    _assert_clean(env, _run(env, "v9.9.9"), 0)
+    assert "--max-time" in Path(env["CURL_LOG"]).read_text()
