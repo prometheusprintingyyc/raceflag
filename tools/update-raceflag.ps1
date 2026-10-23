@@ -14,7 +14,25 @@ param(
 
 function Get-RemoteCommand {
     param([string]$Tag, [string]$Repo)
-    return "curl -fsSL https://raw.githubusercontent.com/$Repo/$Tag/tools/raceflag-remote-update.sh | sudo bash -s -- $Tag $Repo"
+    return "curl -fsSL --connect-timeout 20 --max-time 120 https://raw.githubusercontent.com/$Repo/$Tag/tools/raceflag-remote-update.sh | sudo bash -s -- $Tag $Repo"
+}
+
+function Get-SshTools {
+    # Windows' own OpenSSH first (Sysnative for a 32-bit host on 64-bit Windows), else ssh.exe
+    # from PATH. ssh-keygen comes from the same folder. Ssh is $null if there is no client.
+    $root = $env:SystemRoot
+    if ($root) {
+        foreach ($sub in @('Sysnative', 'System32')) {
+            $exe = Join-Path (Join-Path (Join-Path $root $sub) 'OpenSSH') 'ssh.exe'
+            if (Test-Path -LiteralPath $exe) {
+                return @{ Ssh = $exe; Keygen = (Join-Path (Split-Path -Parent $exe) 'ssh-keygen.exe') }
+            }
+        }
+    }
+    if (Get-Command ssh.exe -ErrorAction SilentlyContinue) {
+        return @{ Ssh = 'ssh.exe'; Keygen = 'ssh-keygen.exe' }
+    }
+    return @{ Ssh = $null; Keygen = $null }
 }
 
 function Get-KnownHostsPath {
@@ -50,7 +68,7 @@ function Get-SshArguments {
     $result = @('-o', 'StrictHostKeyChecking=accept-new')
     $option = Get-KnownHostsOption -KnownHosts $KnownHosts
     if ($null -ne $option) { $result += @('-o', $option) }
-    $result += @('-o', 'ConnectTimeout=15', "$User@$Address", $Command)
+    $result += @('-o', 'ConnectTimeout=15', '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=4', "$User@$Address", $Command)
     return $result
 }
 
@@ -65,6 +83,18 @@ function Read-RemoteResult {
             return @{ Ok = $false; Error = $line.Substring(6).Trim() }
         }
     }
+    $sawStep = $false
+    foreach ($line in $all) {
+        if ($line -like 'STEP *') { $sawStep = $true }
+    }
+    if ($sawStep) {
+        return @{ Ok = $false; Error = 'The connection to RaceFlag was lost during the update. Wait two minutes, then run this again.' }
+    }
+    foreach ($line in $all) {
+        if ($line -match 'Connection refused|Connection timed out|timed out|Could not resolve') {
+            return @{ Ok = $false; Error = "Couldn't connect to RaceFlag over SSH. Check it's on and on this network. Nothing was changed." }
+        }
+    }
     return @{ Ok = $false; Error = "Could not download the update script. Check the unit's internet connection and the release number." }
 }
 
@@ -77,13 +107,19 @@ function Test-HostKeyChanged {
 }
 
 function Get-UnitVersion {
-    param([string]$Address, [int]$Port)
+    # Returns @{ Version; Reason }: Version is $null if the unit didn't answer; Reason is
+    # 'timeout' (it was slow) or 'unreachable' (refused, unresolvable, odd answer) then.
+    param([string]$Address, [int]$Port, [int]$TimeoutSec = 25)
     try {
-        $r = Invoke-RestMethod -Uri "http://${Address}:${Port}/api/update/check" -TimeoutSec 4 -ErrorAction Stop
-        if ($null -eq $r -or -not $r.current) { return $null }
-        return [string]$r.current
+        $r = Invoke-RestMethod -Uri "http://${Address}:${Port}/api/update/check" -TimeoutSec $TimeoutSec -ErrorAction Stop
+        if ($null -eq $r -or -not $r.current) { return @{ Version = $null; Reason = 'unreachable' } }
+        return @{ Version = [string]$r.current; Reason = '' }
     } catch {
-        return $null
+        $timedOut = $false
+        if ($_.Exception.Status -eq [System.Net.WebExceptionStatus]::Timeout) { $timedOut = $true }
+        if ($_.Exception.Message -match 'timed out') { $timedOut = $true }
+        if ($timedOut) { return @{ Version = $null; Reason = 'timeout' } }
+        return @{ Version = $null; Reason = 'unreachable' }
     }
 }
 
@@ -92,7 +128,7 @@ function Wait-ForRestart {
     $deadline = (Get-Date).AddSeconds($WaitSeconds)
     $seenGone = $false
     while ($true) {
-        $v = Get-UnitVersion -Address $Address -Port $Port
+        $v = (Get-UnitVersion -Address $Address -Port $Port -TimeoutSec 15).Version
         if ($null -eq $v) {
             $seenGone = $true
         } elseif ($seenGone -and $v -eq $Version) {
@@ -133,7 +169,7 @@ function Invoke-RemoteUpdate {
     $old = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        & ssh.exe @SshArgs 2>&1 | ForEach-Object {
+        & $script:SshExe @SshArgs 2>&1 | ForEach-Object {
             $line = ([string]$_).TrimEnd()
             [void]$collected.Add($line)
             if ($line -like 'STEP *') {
@@ -148,7 +184,10 @@ function Invoke-RemoteUpdate {
 }
 
 function Invoke-Main {
-    if (-not (Get-Command ssh.exe -ErrorAction SilentlyContinue)) {
+    $tools = Get-SshTools
+    $script:SshExe = $tools.Ssh
+    $script:KeygenExe = $tools.Keygen
+    if (-not $script:SshExe) {
         Write-Host "Windows' SSH client is missing: Settings > Apps > Optional features > OpenSSH Client."
         return 1
     }
@@ -163,13 +202,18 @@ function Invoke-Main {
             return 1
         }
     }
-    if ($script:Tag -notmatch '^v\d+\.\d+\.\d+$') {
+    if ($script:Tag -cnotmatch '^v\d+\.\d+\.\d+$') {
         Write-Host "That isn't a RaceFlag release number (expected vX.Y.Z)."
         return 1
     }
 
-    $current = Get-UnitVersion -Address $script:Address -Port $script:Port
+    $check = Get-UnitVersion -Address $script:Address -Port $script:Port
+    $current = $check.Version
     if ($null -eq $current) {
+        if ($check.Reason -eq 'timeout') {
+            Write-Host 'RaceFlag answered too slowly - it may not reach the internet. Try again in a minute.'
+            return 1
+        }
         Write-Host "Can't reach RaceFlag at $($script:Address). Check it's on and on this network, or run again with its IP address."
         return 1
     }
@@ -197,7 +241,6 @@ function Invoke-Main {
     }
 
     $dataDir = Join-Path $env:LOCALAPPDATA 'RaceFlag'
-    if (-not (Test-Path $dataDir)) { [void](New-Item -ItemType Directory -Path $dataDir -Force) }
     $knownHosts = Get-KnownHostsPath -KnownHosts (Join-Path $dataDir 'known_hosts')
     $remote = Get-RemoteCommand -Tag $script:Tag -Repo $script:Repo
     $sshArgs = Get-SshArguments -User $script:User -Address $script:Address -KnownHosts $knownHosts -Command $remote
@@ -222,9 +265,9 @@ function Invoke-Main {
             return 1
         }
         if ($null -ne $knownHosts) {
-            & ssh-keygen.exe -R $script:Address -f $knownHosts | Out-Null
+            & $script:KeygenExe -R $script:Address -f $knownHosts | Out-Null
         } else {
-            & ssh-keygen.exe -R $script:Address | Out-Null
+            & $script:KeygenExe -R $script:Address | Out-Null
         }
         $again = Read-Host 'Run the update again now? (Y/N)'
         if ($again -ne 'Y' -and $again -ne 'y') {

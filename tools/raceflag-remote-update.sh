@@ -22,6 +22,9 @@ REBOOT_FALLBACK="${REBOOT_FALLBACK:-reboot}"
 export PIP
 
 trap 'rm -rf "$WORK_DIR"' EXIT
+# Once started, finish (version, then reboot) even if the SSH client goes away. A failed echo
+# to a dead stdout is harmless: nothing here uses set -e.
+trap '' PIPE HUP
 
 fail() {
   echo "ERROR $1"
@@ -117,6 +120,7 @@ asyncio.run(fetch_missing(Path(sys.argv[2]), Path(sys.argv[3]),
 
   # --- version -------------------------------------------------------------------------
   echo "STEP version"
+  mkdir -p "$BOOT_DIR" 2>/dev/null
   if ! { echo "${TAG#v}" > "$BOOT_DIR/version.txt.tmp" \
          && mv "$BOOT_DIR/version.txt.tmp" "$BOOT_DIR/version.txt"; }; then
     fail "The update was installed, but its version number couldn't be saved. Restart RaceFlag and run this again."
@@ -132,7 +136,7 @@ asyncio.run(fetch_missing(Path(sys.argv[2]), Path(sys.argv[3]),
       fail "The update was installed, but RaceFlag couldn't restart itself. Unplug it, wait 10 seconds and plug it back in."
     fi
   fi
-  echo "DONE"
+  echo "DONE" || true
 }
 
 # Everything runs from here, so a truncated "curl | bash" download runs nothing.

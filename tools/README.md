@@ -10,7 +10,10 @@ Use this when the Update button on RaceFlag's own page doesn't work for your uni
 
 ## How to update
 
+Get the files from the link Prometheus Printing gives you: download both `Update RaceFlag.cmd` and `update-raceflag.ps1` into the same folder, or, if you get a zip, extract it completely first.
+
 1. Double-click `Update RaceFlag.cmd`.
+   Windows may show "Windows protected your PC" or an unknown publisher warning. Click "More info", then "Run anyway".
 2. Type the username when asked, then press Enter.
 3. Check the line that says which version will be installed, type `Y` and press Enter.
 4. When asked, type the password and press Enter. Nothing shows on screen while you type; that is normal.
@@ -28,7 +31,7 @@ When it says "RaceFlag updated to ...", you are done and can close the window.
 - "Could not download the update script..." - the unit couldn't reach the internet, or that release doesn't exist. Nothing was changed.
 - "RaceFlag hasn't come back yet" - wait a minute or two, then open RaceFlag's page. If the page doesn't load after 10 minutes, unplug RaceFlag, wait 10 seconds and plug it back in.
 
-Any other message comes from the unit and says what went wrong; nothing is changed unless the window says "Installed".
+Any other message comes from the unit and says what went wrong; nothing on RaceFlag changes unless a message says the update was installed.
 
 ## Finding RaceFlag
 

@@ -317,3 +317,21 @@ def test_runs_with_an_older_python(box):
     r = _run(env, "v9.9.9")
     _assert_clean(env, r, 0)
     assert _main(env) == "NEW"
+
+
+def test_missing_boot_dir_is_created_for_the_version(box):
+    tmp, env = box
+    env["BOOT_DIR"] = (tmp / "newboot" / "raceflag").as_posix()
+    _assert_clean(env, _run(env, "v9.9.9"), 0)
+    assert (Path(env["BOOT_DIR"]) / "version.txt").read_text().strip() == "9.9.9"
+
+
+def test_finishes_when_the_client_goes_away(box):
+    tmp, env = box
+    p = subprocess.Popen([BASH, SCRIPT.as_posix(), "v9.9.9"], env=env, stdout=subprocess.PIPE,
+                         stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+    p.stdout.readline()
+    p.stdout.close()
+    assert p.wait(timeout=120) == 0
+    assert (Path(env["BOOT_DIR"]) / "version.txt").read_text().strip() == "9.9.9"
+    assert Path(env["REBOOT_LOG"]).exists()
