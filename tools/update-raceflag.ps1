@@ -17,15 +17,41 @@ function Get-RemoteCommand {
     return "curl -fsSL https://raw.githubusercontent.com/$Repo/$Tag/tools/raceflag-remote-update.sh | sudo bash -s -- $Tag $Repo"
 }
 
+function Get-KnownHostsPath {
+    # The known_hosts file to give ssh, or $null if no safe spelling of the path exists.
+    # ssh splits UserKnownHostsFile at whitespace and rejects a bare apostrophe ("invalid quotes").
+    # An apostrophe is escaped as backslash-apostrophe, except right after a backslash (that
+    # would read as an escaped backslash): such a path is replaced by its 8.3 short path.
+    param([string]$KnownHosts)
+    if (-not $KnownHosts) { return $null }
+    if (-not $KnownHosts.Contains("\'")) { return $KnownHosts }
+    try {
+        $folder = Split-Path -Parent $KnownHosts
+        if (-not (Test-Path $folder)) { [void](New-Item -ItemType Directory -Path $folder -Force -ErrorAction Stop) }
+        $short = (New-Object -ComObject Scripting.FileSystemObject).GetFolder($folder).ShortPath
+        $candidate = Join-Path $short 'known_hosts'
+        if ($candidate -notmatch "[\s']") { return $candidate }
+    } catch {
+    }
+    return $null
+}
+
+function Get-KnownHostsOption {
+    param([string]$KnownHosts)
+    $path = Get-KnownHostsPath -KnownHosts $KnownHosts
+    if ($null -eq $path) { return $null }
+    $escaped = $path.Replace("'", "\'")
+    if ($path -match '\s') { return "UserKnownHostsFile='$escaped'" }
+    return "UserKnownHostsFile=$escaped"
+}
+
 function Get-SshArguments {
     param([string]$User, [string]$Address, [string]$KnownHosts, [string]$Command)
-    return @(
-        '-o', 'StrictHostKeyChecking=accept-new',
-        '-o', "UserKnownHostsFile='$KnownHosts'",
-        '-o', 'ConnectTimeout=15',
-        "$User@$Address",
-        $Command
-    )
+    $result = @('-o', 'StrictHostKeyChecking=accept-new')
+    $option = Get-KnownHostsOption -KnownHosts $KnownHosts
+    if ($null -ne $option) { $result += @('-o', $option) }
+    $result += @('-o', 'ConnectTimeout=15', "$User@$Address", $Command)
+    return $result
 }
 
 function Read-RemoteResult {
@@ -171,7 +197,8 @@ function Invoke-Main {
     }
 
     $dataDir = Join-Path $env:LOCALAPPDATA 'RaceFlag'
-    $knownHosts = Join-Path $dataDir 'known_hosts'
+    if (-not (Test-Path $dataDir)) { [void](New-Item -ItemType Directory -Path $dataDir -Force) }
+    $knownHosts = Get-KnownHostsPath -KnownHosts (Join-Path $dataDir 'known_hosts')
     $remote = Get-RemoteCommand -Tag $script:Tag -Repo $script:Repo
     $sshArgs = Get-SshArguments -User $script:User -Address $script:Address -KnownHosts $knownHosts -Command $remote
 
@@ -194,7 +221,11 @@ function Invoke-Main {
             Write-Host 'Nothing was changed.'
             return 1
         }
-        & ssh-keygen.exe -R $script:Address -f $knownHosts | Out-Null
+        if ($null -ne $knownHosts) {
+            & ssh-keygen.exe -R $script:Address -f $knownHosts | Out-Null
+        } else {
+            & ssh-keygen.exe -R $script:Address | Out-Null
+        }
         $again = Read-Host 'Run the update again now? (Y/N)'
         if ($again -ne 'Y' -and $again -ne 'y') {
             Write-Host 'Nothing was changed.'

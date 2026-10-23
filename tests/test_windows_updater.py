@@ -218,3 +218,45 @@ def test_known_hosts_option_with_spaces_is_one_file(tmp_path):
     assert len(entries) == 1, r.stdout + r.stderr
     value = entries[0].split(" ", 1)[1].strip()
     assert value.replace("\\", "/").rstrip("'\"").lstrip("'\"") == str(kh).replace("\\", "/")
+
+
+BS = chr(92)
+
+
+def _q(s):
+    return "'" + str(s).replace("'", "''") + "'"
+
+
+def test_known_hosts_option_plain_space_apostrophe_cases():
+    assert ps_json("Get-KnownHostsOption -KnownHosts 'C:/Users/jo/known_hosts'") ==         "UserKnownHostsFile=C:/Users/jo/known_hosts"
+    assert ps_json("Get-KnownHostsOption -KnownHosts 'C:/Users/J S/known_hosts'") ==         "UserKnownHostsFile='C:/Users/J S/known_hosts'"
+    # ssh rejects a bare apostrophe ("invalid quotes"); it must be backslash-escaped.
+    assert ps_json("Get-KnownHostsOption -KnownHosts 'C:/Users/O''Brien/known_hosts'") ==         "UserKnownHostsFile=C:/Users/O" + BS + "'Brien/known_hosts"
+    assert ps_json("Get-KnownHostsOption -KnownHosts 'C:/Users/O''Brien S/known_hosts'") ==         "UserKnownHostsFile='C:/Users/O" + BS + "'Brien S/known_hosts'"
+
+
+def test_known_hosts_option_omitted_when_it_cannot_be_spelled_safely():
+    # An apostrophe right after a backslash cannot be escaped; no 8.3 short path exists here.
+    path = "Z:" + BS + "no such drive" + BS + "'Brien" + BS + "known_hosts"
+    r = ps(f"$o = Get-KnownHostsOption -KnownHosts {_q(path)}; if ($null -eq $o) {{ 'NULL' }} else {{ $o }}")
+    assert r.stdout.strip() == "NULL", r.stdout + r.stderr
+    args = ps_json(f"Get-SshArguments -User u -Address x -KnownHosts {_q(path)} -Command c")
+    assert not [a for a in args if str(a).startswith("UserKnownHostsFile")]
+    assert "StrictHostKeyChecking=accept-new" in args
+    assert args[-1] == "c"
+
+
+@pytest.mark.skipif(not shutil.which("ssh.exe"), reason="needs ssh.exe")
+@pytest.mark.parametrize("folder", ["O'Brien", "O'Brien Smith"])
+def test_known_hosts_option_with_apostrophe_is_one_file(tmp_path, folder):
+    kh = tmp_path / folder / "known_hosts"
+    option = ps_json(f"Get-KnownHostsOption -KnownHosts {_q(kh)}")
+    # Windows' own OpenSSH client (the one customers have); Git's bundled ssh parses differently.
+    exe = os.path.join(os.environ.get("SystemRoot", "C:" + BS + "Windows"), "System32", "OpenSSH", "ssh.exe")
+    if not os.path.exists(exe):
+        pytest.skip("needs Windows' OpenSSH client")
+    r = subprocess.run([exe, "-G", "-o", option, "x"], capture_output=True, text=True, timeout=30)
+    entries = [l for l in r.stdout.splitlines() if l.lower().startswith("userknownhostsfile ")]
+    assert len(entries) == 1, r.stdout + r.stderr
+    value = entries[0].split(" ", 1)[1].strip()
+    assert value.replace(BS, "/") == str(kh).replace(BS, "/")
