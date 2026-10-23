@@ -69,10 +69,10 @@ main() {
     fail "The download is not a RaceFlag release."
   fi
   if ! "$PYTHON" -c '
-  import sys
-  sys.path.insert(0, sys.argv[1])
-  from raceflag.ota_archive import check_archive
-  check_archive(sys.argv[2])
+import sys
+sys.path.insert(0, sys.argv[1])
+from raceflag.ota_archive import check_archive
+check_archive(sys.argv[2])
   ' "$RELEASE_DIR" "$ARCHIVE" >/dev/null 2>&1; then
     fail "The download is not a RaceFlag release."
   fi
@@ -80,12 +80,12 @@ main() {
   # --- packages ------------------------------------------------------------------------
   echo "STEP packages"
   if ! "$PYTHON" -c '
-  import asyncio, os, sys
-  from pathlib import Path
-  sys.path.insert(0, sys.argv[1])
-  from raceflag.ota_deps import fetch_missing
-  asyncio.run(fetch_missing(Path(sys.argv[2]), Path(sys.argv[3]),
-                            pip=os.environ.get("PIP", "pip3")))
+import asyncio, os, sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from raceflag.ota_deps import fetch_missing
+asyncio.run(fetch_missing(Path(sys.argv[2]), Path(sys.argv[3]),
+                          pip=os.environ.get("PIP", "pip3")))
   ' "$RELEASE_DIR" "$RELEASE_DIR/requirements.txt" "$WHEELS" >/dev/null 2>&1; then
     fail "Could not download the packages this update needs."
   fi

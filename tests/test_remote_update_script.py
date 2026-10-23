@@ -288,3 +288,32 @@ def test_download_has_a_timeout(box):
     tmp, env = box
     _assert_clean(env, _run(env, "v9.9.9"), 0)
     assert "--max-time" in Path(env["CURL_LOG"]).read_text()
+
+
+def _snippets():
+    import re
+    return re.findall(r"-c '\n(.*?)\n[^\n']*'", SCRIPT.read_text(), flags=re.S)
+
+
+def test_python_snippets_have_no_leading_indentation():
+    snippets = _snippets()
+    assert len(snippets) == 2
+    for src in snippets:
+        assert src.splitlines()[0] == src.splitlines()[0].lstrip()
+        compile(src + "\n", "snippet", "exec")
+
+
+def test_runs_with_an_older_python(box):
+    tmp, env = box
+    try:
+        out = subprocess.run(["py", "-3.10", "-c", "import sys;print(sys.executable)"],
+                             capture_output=True, text=True)
+    except OSError:
+        pytest.skip("no py launcher")
+    if out.returncode != 0:
+        pytest.skip("Python 3.10 not installed")
+    env["PYTHON"] = Path(out.stdout.strip()).as_posix()
+    Path(env["PROC_MOUNTS"]).write_text("overlayroot / overlay rw 0 0" + chr(10))
+    r = _run(env, "v9.9.9")
+    _assert_clean(env, r, 0)
+    assert _main(env) == "NEW"
