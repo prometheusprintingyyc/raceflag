@@ -100,7 +100,7 @@ def test_ssh_arguments_use_raceflag_known_hosts():
     if isinstance(args, str):
         args = [args]
     assert "StrictHostKeyChecking=accept-new" in args
-    assert "UserKnownHostsFile=C:/x y/known_hosts" in args
+    assert "UserKnownHostsFile='C:/x y/known_hosts'" in args
     assert "bob@raceflag.local" in args
     assert args[-1] == "echo hi"
 
@@ -204,3 +204,17 @@ def test_cmd_wrapper():
     assert "-ExecutionPolicy Bypass" in text
     assert "%~dp0update-raceflag.ps1" in text
     assert "pause" in text
+
+
+@pytest.mark.skipif(not shutil.which("ssh.exe"), reason="needs ssh.exe")
+def test_known_hosts_option_with_spaces_is_one_file(tmp_path):
+    kh = tmp_path / "A  B" / "known_hosts"
+    args = ps_json(f"Get-SshArguments -User u -Address x -KnownHosts '{kh}' -Command c")
+    option = [a for a in args if a.startswith("UserKnownHostsFile=")][0]
+    r = subprocess.run(["powershell", "-NoProfile", "-Command",
+                        f"ssh.exe -G -o \"{option}\" x"],
+                       capture_output=True, text=True, timeout=30)
+    entries = [l for l in r.stdout.splitlines() if l.lower().startswith("userknownhostsfile ")]
+    assert len(entries) == 1, r.stdout + r.stderr
+    value = entries[0].split(" ", 1)[1].strip()
+    assert value.replace("\\", "/").rstrip("'\"").lstrip("'\"") == str(kh).replace("\\", "/")

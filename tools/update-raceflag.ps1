@@ -21,7 +21,7 @@ function Get-SshArguments {
     param([string]$User, [string]$Address, [string]$KnownHosts, [string]$Command)
     return @(
         '-o', 'StrictHostKeyChecking=accept-new',
-        '-o', "UserKnownHostsFile=$KnownHosts",
+        '-o', "UserKnownHostsFile='$KnownHosts'",
         '-o', 'ConnectTimeout=15',
         "$User@$Address",
         $Command
