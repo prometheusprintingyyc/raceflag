@@ -415,36 +415,40 @@ document.getElementById('btn-update').addEventListener('click', async () => {
   btn.disabled = true;
   _showMsg('update-msg', '', false);
   let result = null;
+  let applyFailed = false;
   try {
     const resp = await fetch('/api/update/apply', { method: 'POST' });
     result = await resp.json().catch(() => null);
+    if (!resp.ok || (result && result.success === false)) applyFailed = true;
   } catch (e) { /* the unit may restart before answering; keep polling below */ }
-  if (result && result.success === false) {
-    _showMsg('update-msg', result.detail || "The update didn't install. Nothing was changed.", true);
+  if (applyFailed) {
+    _showMsg('update-msg', (result && result.detail) || "The update didn't install. Nothing was changed.", true);
     loadSettings();  // puts the button back ("Update to vX" or "Up to date")
     return;
   }
 
-  // The unit reboots after an update (2-3 minutes on a Zero): wait for it, then confirm.
-  _showMsg('update-msg', 'Update installed. RaceFlag is restarting — this takes 2–3 minutes.', false);
+  // The unit reboots after an update. On an unprotected unit the old process keeps answering
+  // while pip and the SD card setup run, so first wait to SEE the box go away, then come back.
+  _showMsg('update-msg', "Update installed. RaceFlag is restarting — this can take a few minutes. Don't unplug it.", false);
   const versionEl = document.getElementById('update-current');
-  const deadline = Date.now() + 6 * 60 * 1000;
+  const deadline = Date.now() + 15 * 60 * 1000;
+  let sawDown = false;
   while (Date.now() < deadline) {
     await new Promise(r => setTimeout(r, 5000));
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 4000);
     try {
       const resp = await fetch('/api/update/check', { signal: ctrl.signal });
-      if (!resp.ok) continue;
+      if (!resp.ok) { sawDown = true; continue; }
       const data = await resp.json();
-      if (!data.update_available) {
+      if (sawDown && !data.update_available) {
         versionEl.textContent = data.current || '—';
         btn.textContent = 'Up to date';
         btn.disabled = true;
         _showMsg('update-msg', `Updated to v${data.current}.`, false);
         return;
       }
-    } catch (e) { /* still restarting */ } finally { clearTimeout(timer); }
+    } catch (e) { sawDown = true; /* restarting */ } finally { clearTimeout(timer); }
   }
   _showMsg('update-msg', "RaceFlag hasn't come back yet. Wait a minute, then reload this page.", false);
 });
