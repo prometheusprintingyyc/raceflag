@@ -91,7 +91,7 @@ function Read-RemoteResult {
         return @{ Ok = $false; Error = 'The connection to RaceFlag was lost during the update. Wait two minutes, then run this again.' }
     }
     foreach ($line in $all) {
-        if ($line -match 'Connection refused|Connection timed out|timed out|Could not resolve') {
+        if ($line -match '^ssh: connect to host .*: (Connection refused|Connection timed out|Operation timed out|No route to host|Network is unreachable)' -or $line -match '^ssh: Could not resolve hostname') {
             return @{ Ok = $false; Error = "Couldn't connect to RaceFlag over SSH. Check it's on and on this network. Nothing was changed." }
         }
     }
@@ -207,6 +207,7 @@ function Invoke-Main {
         return 1
     }
 
+    Write-Host "Looking for RaceFlag at $($script:Address)..."
     $check = Get-UnitVersion -Address $script:Address -Port $script:Port
     $current = $check.Version
     if ($null -eq $current) {

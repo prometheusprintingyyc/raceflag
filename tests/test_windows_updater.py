@@ -142,7 +142,20 @@ def test_lost_connection_after_steps_is_explained():
 
 
 @pytest.mark.parametrize("text", [
+    "curl: (6) Could not resolve host: raw.githubusercontent.com",
+    "curl: (28) Failed to connect to raw.githubusercontent.com port 443 after 20001 ms: Connection timed out",
+    "curl: (28) Operation timed out after 120000 milliseconds with 0 bytes received",
+    "curl: (7) Failed to connect to raw.githubusercontent.com port 443 after 3 ms: Connection refused"])
+def test_unit_curl_failure_is_a_download_problem_not_an_ssh_one(text):
+    got = ps_json(f"Read-RemoteResult -Lines {lines_arg([text])}")
+    assert got["Ok"] is False
+    assert got["Error"] == ("Could not download the update script. Check the unit's "
+                            "internet connection and the release number.")
+
+
+@pytest.mark.parametrize("text", [
     "ssh: connect to host raceflag.local port 22: Connection refused",
+    "ssh: connect to host 192.168.1.50 port 22: Connection timed out",
     "ssh: connect to host 10.0.0.9 port 22: Connection timed out",
     "ssh: connect to host 10.0.0.9 port 22: Operation timed out",
     "ssh: Could not resolve hostname raceflag.local: No such host is known."])
@@ -283,6 +296,7 @@ def test_dry_run_changes_nothing(tmp_path):
     out = r.stdout
     assert r.returncode == 0, out + r.stderr
     assert "Install v9.9.9 on RaceFlag v9.9.9 at 127.0.0.1? Its settings are kept. (Y/N)" in out
+    assert "Looking for RaceFlag at 127.0.0.1..." in out
     assert "already" in out
     assert "u@127.0.0.1" in out
     assert "raceflag-remote-update.sh" in out

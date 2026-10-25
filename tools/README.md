@@ -28,6 +28,9 @@ When it says "RaceFlag updated to ...", you are done and can close the window.
 - "RaceFlag is already on ...; this will install it again" - you already have this version. Continuing just installs it again; your settings are kept.
 - "This RaceFlag has a different security key than last time" - normal if the unit was replaced or re-flashed. Answer `Y` to forget the old key and run the update again.
 - "The username or password was not accepted" - nothing was changed. Try again and check the details.
+- "RaceFlag answered too slowly..." - the unit may not reach the internet. Try again in a minute.
+- "The connection to RaceFlag was lost during the update..." - the unit finishes on its own. Wait two minutes, then run the update again.
+- "Couldn't connect to RaceFlag over SSH..." - check it's on and on this network, or use its IP address.
 - "Could not download the update script..." - the unit couldn't reach the internet, or that release doesn't exist. Nothing was changed.
 - "RaceFlag hasn't come back yet" - wait a minute or two, then open RaceFlag's page. If the page doesn't load after 10 minutes, unplug RaceFlag, wait 10 seconds and plug it back in.
 
