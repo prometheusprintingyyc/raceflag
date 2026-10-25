@@ -18,6 +18,12 @@ break it, whatever else the change is for.
   active (`grep overlayroot /proc/mounts`), the update is installed through the page's Update
   button, and after a reboot the unit reports the new version and runs the new code. If any
   step fails, the release is not published. Report the result to the owner before tagging.
+  One-time exception (owner, 2026-10-25): **v0.2.35** can't pass the Update-button step from
+  v0.2.34, whose broken updater is what it fixes. Its gate is instead: the Windows SSH script
+  updating a protected unit from v0.2.34 (done via raceflag-beta), the Update button from
+  0.2.35 to a later release (done, 0.2.35 → 0.2.36 on raceflag-beta), and one Windows-script run
+  against the main repo's real v0.2.35 release before customers are told. Every later release
+  uses the normal gate.
 - Never delete releases, rename the repo, or publish a non-numeric or pre-release tag as latest.
 
 ## Shared specs (../raceflag_specs)
